@@ -6,32 +6,37 @@ namespace AuraTxt.Core.Tests.Services;
 
 public class ConfigServiceTests : IDisposable
 {
-    private readonly string _tmpPath = Path.Combine(Path.GetTempPath(), $"auratxt_test_{Guid.NewGuid()}.json");
+    private readonly string _tmpPath =
+        Path.Combine(Path.GetTempPath(), $"auratxt_test_{Guid.NewGuid()}.json");
     private readonly ConfigService _svc;
 
-    public ConfigServiceTests()
-    {
-        _svc = new ConfigService(_tmpPath);
-    }
+    public ConfigServiceTests() => _svc = new ConfigService(_tmpPath);
 
     [Fact]
-    public void Load_ReturnDefault_WhenFileAbsent()
+    public void Load_CreatesDefaultWithBuiltinProvider_WhenFileAbsent()
     {
         var cfg = _svc.Load();
-        Assert.NotNull(cfg);
-        Assert.Equal("google-translate", cfg.System.GoogleTranslate.Provider);
+        Assert.True(cfg.Models.ContainsKey("default"));
+        var def = cfg.Models["default"];
+        Assert.Equal(2, def.Models.Count);
+        Assert.Equal("Google_Translate", def.Models[0].TargetModel);
+        Assert.Equal("Youdao_Dict",      def.Models[1].TargetModel);
     }
 
     [Fact]
     public void SaveAndLoad_RoundTrip()
     {
         var cfg = _svc.Load();
-        cfg.Models["test"] = new ModelPlatform { DisplayName = "Test", TargetModel = "gpt-4o" };
+        cfg.Models["openai"] = new ProviderConfig
+        {
+            DisplayName = "OpenAI",
+            Models      = new() { new ModelEntry { TargetModel = "gpt-4o", Alias = "4o" } }
+        };
         _svc.Save(cfg);
-
         var loaded = _svc.Load();
-        Assert.True(loaded.Models.ContainsKey("test"));
-        Assert.Equal("Test", loaded.Models["test"].DisplayName);
+        Assert.True(loaded.Models.ContainsKey("openai"));
+        Assert.Equal("OpenAI", loaded.Models["openai"].DisplayName);
+        Assert.Equal("gpt-4o", loaded.Models["openai"].Models[0].TargetModel);
     }
 
     [Fact]
@@ -41,8 +46,39 @@ public class ConfigServiceTests : IDisposable
         Assert.False(File.Exists(_tmpPath + ".tmp"));
     }
 
+    [Fact]
+    public void SaveWithBackup_CreatesBakFile()
+    {
+        var cfg = _svc.Load();
+        _svc.SaveWithBackup(cfg);
+        Assert.True(File.Exists(_tmpPath + ".bak"));
+    }
+
+    [Fact]
+    public void Restore_RestoresFromBak()
+    {
+        var original = _svc.Load();
+        original.Settings.FontSize = 14;
+        _svc.SaveWithBackup(original);
+
+        var changed = _svc.Load();
+        changed.Settings.FontSize = 99;
+        _svc.Save(changed);
+        Assert.Equal(99, _svc.Load().Settings.FontSize);
+
+        _svc.Restore();
+        Assert.Equal(14, _svc.Load().Settings.FontSize);
+    }
+
+    [Fact]
+    public void Restore_ThrowsWhenNoBakExists()
+    {
+        Assert.Throws<FileNotFoundException>(() => _svc.Restore());
+    }
+
     public void Dispose()
     {
-        if (File.Exists(_tmpPath)) File.Delete(_tmpPath);
+        foreach (var f in new[] { _tmpPath, _tmpPath + ".bak", _tmpPath + ".tmp" })
+            if (File.Exists(f)) File.Delete(f);
     }
 }

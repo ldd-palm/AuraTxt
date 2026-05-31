@@ -6,31 +6,72 @@ namespace AuraTxt.Core.Tests.Models;
 public class ModelTests
 {
     [Fact]
-    public void ModelPlatform_Alias_CombinesProviderAndTargetModel()
+    public void ModelEntry_DisableThinking_DefaultsToTrue()
     {
-        var m = new ModelPlatform { Provider = "openai-compatible", TargetModel = "deepseek-chat" };
-        Assert.Equal("openai-compatible/deepseek-chat", m.Alias);
+        var m = new ModelEntry { TargetModel = "gpt-4o", Alias = "gpt-4o" };
+        Assert.True(m.DisableThinking);
     }
 
     [Fact]
-    public void ActionItem_IsSystemModel_TrueWhenDollarPrefix()
+    public void ActionItem_IsSystemModel_TrueForDefaultPrefix()
     {
-        var a = new ActionItem { ModelId = "$google-translate" };
+        var a = new ActionItem { ModelId = "default/Google_Translate" };
         Assert.True(a.IsSystemModel);
     }
 
     [Fact]
-    public void ActionItem_IsSystemModel_FalseForNormalId()
+    public void ActionItem_IsSystemModel_FalseForUserProvider()
     {
-        var a = new ActionItem { ModelId = "deepseek" };
+        var a = new ActionItem { ModelId = "openai/gpt-4o" };
         Assert.False(a.IsSystemModel);
     }
 
     [Fact]
-    public void ConfigRoot_HasSystemDefaults()
+    public void ConfigRoot_ResolveModel_FindsCorrectEntry()
     {
-        var c = new ConfigRoot();
-        Assert.Equal("google-translate", c.System.GoogleTranslate.Provider);
-        Assert.Equal("youdao-dict",      c.System.YoudaoDict.Provider);
+        var cfg = new ConfigRoot();
+        cfg.Models["openai"] = new ProviderConfig
+        {
+            DisplayName = "OpenAI",
+            Models      = new() { new ModelEntry { TargetModel = "gpt-4o", Alias = "gpt-4o" } }
+        };
+        var result = cfg.ResolveModel("openai/gpt-4o");
+        Assert.NotNull(result);
+        Assert.Equal("OpenAI",  result.Value.provider.DisplayName);
+        Assert.Equal("gpt-4o", result.Value.model.TargetModel);
+    }
+
+    [Fact]
+    public void ConfigRoot_ResolveModel_ReturnsNullForMissing()
+    {
+        var cfg = new ConfigRoot();
+        Assert.Null(cfg.ResolveModel("nonexistent/model"));
+        Assert.Null(cfg.ResolveModel("noslash"));
+        Assert.Null(cfg.ResolveModel(""));
+    }
+
+    [Fact]
+    public void ConfigRoot_AllModelRefs_DefaultModelsLast()
+    {
+        var cfg = new ConfigRoot();
+        cfg.Models["openai"] = new ProviderConfig
+        {
+            DisplayName = "OpenAI",
+            Models      = new() { new ModelEntry { TargetModel = "gpt-4o", Alias = "4o" } }
+        };
+        cfg.Models["default"] = new ProviderConfig
+        {
+            DisplayName = "Built-in",
+            Models = new()
+            {
+                new ModelEntry { TargetModel = "Google_Translate", Alias = "GTrans" },
+                new ModelEntry { TargetModel = "Youdao_Dict",      Alias = "Youdao" }
+            }
+        };
+        var refs = cfg.AllModelRefs().ToList();
+        Assert.Equal(3, refs.Count);
+        Assert.Equal("openai/gpt-4o",            refs[0].Ref);
+        Assert.Equal("default/Google_Translate", refs[1].Ref);
+        Assert.Equal("default/Youdao_Dict",      refs[2].Ref);
     }
 }

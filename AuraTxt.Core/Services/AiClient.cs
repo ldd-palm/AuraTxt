@@ -13,19 +13,25 @@ public class AiClient
         => _http = http ?? new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
 
     public async Task<string> CompleteAsync(
-        ModelPlatform model, string prompt, CancellationToken ct = default)
+        ProviderConfig provider, ModelEntry model, string prompt, CancellationToken ct = default)
     {
         using var req = new HttpRequestMessage(
             HttpMethod.Post,
-            $"{model.BaseUrl.TrimEnd('/')}/chat/completions");
+            $"{provider.BaseUrl.TrimEnd('/')}/chat/completions");
 
-        req.Headers.Add("Authorization", $"Bearer {model.ApiKey}");
-        req.Content = JsonContent.Create(new
+        req.Headers.Add("Authorization", $"Bearer {provider.ApiKey}");
+
+        var body = new Dictionary<string, object>
         {
-            model    = model.TargetModel,
-            messages = new[] { new { role = "user", content = prompt } },
-            stream   = false
-        });
+            ["model"]    = model.TargetModel,
+            ["messages"] = new[] { new { role = "user", content = prompt } },
+            ["stream"]   = (object)false
+        };
+
+        if (model.DisableThinking)
+            body["thinking"] = new { type = "disabled" };
+
+        req.Content = JsonContent.Create(body);
 
         var resp = await _http.SendAsync(req, ct);
         resp.EnsureSuccessStatusCode();
