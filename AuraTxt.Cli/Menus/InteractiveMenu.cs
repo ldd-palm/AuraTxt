@@ -1,215 +1,675 @@
 using AuraTxt.Cli.Commands;
+using AuraTxt.Core.Models;
 using AuraTxt.Core.Services;
 
 namespace AuraTxt.Cli.Menus;
 
-public class InteractiveMenu(ConfigService config)
+public class InteractiveMenu(ConfigService configService)
 {
+    private ConfigRoot _cfg = null!;
+    private bool _dirty;
+
     public async Task RunAsync()
+    {
+        _cfg   = configService.Load();
+        _dirty = false;
+
+        while (true)
+        {
+            Console.Clear();
+            H1("AuraTxt Config Tool");
+            Item("1", "Model Platform");
+            Item("2", "Action Features");
+            Item("3", "UI Settings");
+            Item("D", "Doctor — Validate Config");
+            Item("X", "Exit");
+            Prompt();
+
+            var key = char.ToUpper(ReadKey());
+            switch (key)
+            {
+                case '1': ModelPlatformMenu(); break;
+                case '2': ActionFeaturesMenu(); break;
+                case '3': UiSettingsMenu(); break;
+                case 'D': RunDoctor(); break;
+                case 'X': await ExitAsync(); return;
+            }
+        }
+    }
+
+    // ──────────────────────────── MODEL PLATFORM ────────────────────────────
+
+    private void ModelPlatformMenu()
     {
         while (true)
         {
             Console.Clear();
-            Console.WriteLine("AuraTxt 配置工具 (auracfg)");
-            Console.WriteLine(new string('─', 30));
-            Console.WriteLine(" [1] 模型平台管理");
-            Console.WriteLine(" [2] 功能动作管理");
-            Console.WriteLine(" [3] 界面设置");
-            Console.WriteLine(" [0] 退出");
-            Console.Write("\n请选择：");
+            H1("Model Platform");
+            var providers = _cfg.Models
+                .Where(kv => kv.Key != "default")
+                .OrderBy(kv => kv.Key)
+                .ToList();
 
-            var key = Console.ReadKey(true).KeyChar;
-            if (key == '0') break;
-            if (key == '1') await ModelMenuAsync();
-            else if (key == '2') await ActionMenuAsync();
-            else if (key == '3') SettingsMenu();
+            for (int i = 0; i < providers.Count; i++)
+            {
+                var (id, p) = providers[i];
+                var aliases = string.Join(", ", p.Models.Select(m => m.Alias));
+                Item((i + 1).ToString(), $"{p.DisplayName,-16}", $"({aliases})");
+            }
+
+            Sep();
+            Item("0", "Back");
+            Item("A", "Add Provider");
+            Item("D", "Delete Provider");
+            Item("T", "Test Model");
+            Item("X", "Exit");
+            Prompt();
+
+            var input = Console.ReadLine()?.Trim().ToUpper() ?? "";
+
+            if (input == "0") return;
+            if (input == "X") Environment.Exit(0);
+            if (input == "A") { AddProviderFlow(); continue; }
+            if (input == "D") { DeleteProviderFlow(providers); continue; }
+            if (input == "T") { TestModelFlow(); continue; }
+
+            if (int.TryParse(input, out var idx) && idx >= 1 && idx <= providers.Count)
+                ProviderDetailMenu(providers[idx - 1].Key);
         }
     }
 
-    private async Task ModelMenuAsync()
+    private void AddProviderFlow()
     {
         Console.Clear();
-        Console.WriteLine("── 模型平台管理 ──");
-        Console.WriteLine("[1] 查看所有 [2] 添加 [3] 修改 [4] 删除 [0] 返回");
-        Console.Write("选择：");
-        var key = Console.ReadKey(true).KeyChar;
+        H2("Add Provider");
+        var id = Ask("Provider ID (e.g. openai)");
+        if (string.IsNullOrWhiteSpace(id)) return;
+        if (_cfg.Models.ContainsKey(id)) { WriteError($"Provider '{id}' already exists."); Pause(); return; }
+
+        var display = Ask("Display Name");
+        var url     = Ask("Base URL (e.g. https://api.openai.com/v1)");
+        var key     = AskSecret("API Key");
+
         Console.WriteLine();
-        var cmd = new ModelCommand(config);
-        if (key == '1') await cmd.ExecuteAsync(["--list"]);
-        else if (key == '2') await AddModelInteractive(cmd);
-        else if (key == '3') await EditModelInteractive(cmd);
-        else if (key == '4') await DeleteModelInteractive(cmd);
-        if (key != '0') { Console.Write("\n按任意键继续…"); Console.ReadKey(true); }
-    }
+        H3("Add first model");
+        var targetModel = Ask("Model full name (e.g. gpt-4o)");
+        var alias       = Ask($"Alias/short name [{targetModel}]");
+        if (string.IsNullOrWhiteSpace(alias)) alias = targetModel;
 
-    private static async Task AddModelInteractive(ModelCommand cmd)
-    {
-        Console.Write("平台 ID: ");      var id    = Console.ReadLine()?.Trim() ?? "";
-        Console.Write("显示名称: ");     var name  = Console.ReadLine()?.Trim() ?? "";
-        Console.Write("API Base URL: "); var url   = Console.ReadLine()?.Trim() ?? "";
-        Console.Write("API Key: ");      var key   = Console.ReadLine()?.Trim() ?? "";
-        Console.Write("模型名称: ");     var model = Console.ReadLine()?.Trim() ?? "";
-        await cmd.ExecuteAsync(["--set","--id",id,"--display",name,"--url",url,"--key",key,"--model",model]);
-    }
+        var provider = new ProviderConfig
+        {
+            DisplayName = display,
+            BaseUrl     = url,
+            ApiKey      = key,
+            Models      = new() { new ModelEntry { TargetModel = targetModel, Alias = alias } }
+        };
 
-    private async Task EditModelInteractive(ModelCommand cmd)
-    {
-        await cmd.ExecuteAsync(["--list"]);
-        Console.Write("\n输入要修改的 ID: ");
-        var id = Console.ReadLine()?.Trim() ?? "";
-        if (string.IsNullOrEmpty(id)) return;
-        Console.WriteLine("（直接回车保持原值）");
-        Console.Write("新显示名称: "); var name  = Console.ReadLine()?.Trim();
-        Console.Write("新 URL: ");     var url   = Console.ReadLine()?.Trim();
-        Console.Write("新 Key: ");     var key   = Console.ReadLine()?.Trim();
-        Console.Write("新模型名: ");   var mdl   = Console.ReadLine()?.Trim();
-        var a = new List<string> { "--update", "--id", id };
-        if (!string.IsNullOrEmpty(name)) { a.Add("--display"); a.Add(name); }
-        if (!string.IsNullOrEmpty(url))  { a.Add("--url");     a.Add(url);  }
-        if (!string.IsNullOrEmpty(key))  { a.Add("--key");     a.Add(key);  }
-        if (!string.IsNullOrEmpty(mdl))  { a.Add("--model");   a.Add(mdl);  }
-        await cmd.ExecuteAsync(a.ToArray());
-    }
-
-    private async Task DeleteModelInteractive(ModelCommand cmd)
-    {
-        await cmd.ExecuteAsync(["--list"]);
-        Console.Write("\n输入要删除的 ID: ");
-        var id = Console.ReadLine()?.Trim() ?? "";
-        if (string.IsNullOrEmpty(id)) return;
-        Console.Write($"确认删除 '{id}'？(y/N) ");
-        if (Console.ReadLine()?.Trim().ToLower() == "y")
-            await cmd.ExecuteAsync(["--delete", "--id", id]);
-    }
-
-    private async Task ActionMenuAsync()
-    {
-        Console.Clear();
-        Console.WriteLine("── 功能动作管理 ──");
-        Console.WriteLine("[1] 查看所有 [2] 添加 [3] 修改 [4] 删除 [0] 返回");
-        Console.Write("选择：");
-        var key = Console.ReadKey(true).KeyChar;
-        Console.WriteLine();
-        var cmd = new ActionCommand(config);
-        if (key == '1') await cmd.ExecuteAsync(["--list"]);
-        else if (key == '2') await AddActionInteractive(cmd);
-        else if (key == '3') await EditActionInteractive(cmd);
-        else if (key == '4') await DeleteActionInteractive(cmd);
-        if (key != '0') { Console.Write("\n按任意键继续…"); Console.ReadKey(true); }
-    }
-
-    private async Task AddActionInteractive(ActionCommand cmd)
-    {
-        var hv  = new HotkeyValidator();
-        var cfg = config.Load();
-        Console.Write("动作 ID: ");        var id        = Console.ReadLine()?.Trim() ?? "";
-        Console.Write("动作名称: ");       var name      = Console.ReadLine()?.Trim() ?? "";
-        Console.Write("图标 (lucide): ");  var icon      = Console.ReadLine()?.Trim() ?? "";
-        Console.WriteLine("可用模型：");
-        Console.WriteLine("  $google-translate  $youdao-dict");
-        foreach (var (mid, m) in cfg.Models) Console.WriteLine($"  {mid} ({m.Alias})");
-        Console.Write("绑定模型 ID: ");    var modelId   = Console.ReadLine()?.Trim() ?? "";
-        Console.Write("是否交互式 (y/N): ");
-        var interactive = (Console.ReadLine()?.Trim().ToLower() == "y").ToString().ToLower();
-        Console.Write("Prompt 内容: ");    var prompt    = Console.ReadLine()?.Trim() ?? "";
-
-        string hotkey = "";
         while (true)
         {
-            Console.Write("快捷键 (留空跳过, Esc取消): ");
-            var line = ReadLineWithEsc();
-            if (line is null) { Console.WriteLine("已取消"); return; }
-            if (string.IsNullOrEmpty(line)) break;
-            var (res, conflict) = hv.Validate(line, cfg.Actions);
-            if (res == HotkeyValidationResult.InvalidFormat)    { Console.WriteLine("格式无效，示例：Alt+T"); continue; }
-            if (res == HotkeyValidationResult.SystemReserved)   { Console.WriteLine("系统保留热键"); continue; }
-            if (res == HotkeyValidationResult.Conflict)         { Console.WriteLine($"已被「{conflict}」使用"); continue; }
-            Console.Write($"设置快捷键为 {line}？(y/N) ");
-            if (Console.ReadLine()?.Trim().ToLower() == "y") { hotkey = line; break; }
+            Console.Write("  Add another model? (Y/n): ");
+            var ans = char.ToLower(ReadKey());
+            Console.WriteLine();
+            if (ans == 'n') break;
+            var tm2 = Ask("  Model full name");
+            var al2 = Ask($"  Alias [{tm2}]");
+            if (string.IsNullOrWhiteSpace(al2)) al2 = tm2;
+            provider.Models.Add(new ModelEntry { TargetModel = tm2, Alias = al2 });
         }
 
-        var args = new List<string>
-            { "--set","--id",id,"--name",name,"--icon",icon,
-              "--model-id",modelId,"--interactive",interactive,"--prompt",prompt };
-        if (!string.IsNullOrEmpty(hotkey)) { args.Add("--hotkey"); args.Add(hotkey); }
-        await cmd.ExecuteAsync(args.ToArray());
+        _cfg.Models[id] = provider;
+        _dirty = true;
+        WriteSuccess($"Provider '{id}' added ({provider.Models.Count} model(s)).");
+        Pause();
     }
 
-    private async Task EditActionInteractive(ActionCommand cmd)
+    private void DeleteProviderFlow(List<KeyValuePair<string, ProviderConfig>> providers)
     {
-        await cmd.ExecuteAsync(["--list"]);
-        Console.Write("\n输入要修改的 ID: ");
-        var id = Console.ReadLine()?.Trim() ?? "";
-        if (string.IsNullOrEmpty(id)) return;
-        Console.WriteLine("（直接回车保持原值）");
-        Console.Write("新名称: ");    var name   = Console.ReadLine()?.Trim();
-        Console.Write("新图标: ");    var icon   = Console.ReadLine()?.Trim();
-        Console.Write("新 Prompt: "); var prompt = Console.ReadLine()?.Trim();
+        if (!providers.Any()) { WriteError("No user providers to delete."); Pause(); return; }
+        Console.WriteLine("  Enter number of provider to delete (0 to cancel): ");
+        for (int i = 0; i < providers.Count; i++)
+            Console.WriteLine($"    [{i + 1}] {providers[i].Value.DisplayName} ({providers[i].Key})");
+        Console.Write("  Select: ");
+        if (!int.TryParse(Console.ReadLine()?.Trim(), out var idx) || idx < 1 || idx > providers.Count) return;
 
-        var cfg = config.Load();
-        var hv  = new HotkeyValidator();
-        string hotkey = "";
+        var (pid, _) = providers[idx - 1];
+        var bound = _cfg.Actions.Where(a => a.ModelId.StartsWith($"{pid}/")).ToList();
+        if (bound.Any())
+        {
+            WriteWarning($"Provider '{pid}' is used by {bound.Count} action(s): " +
+                         string.Join(", ", bound.Select(a => a.Name)));
+            Console.Write("  Delete provider and all bound actions? (y/N): ");
+            if (char.ToLower(ReadKey()) != 'y') { Console.WriteLine(); return; }
+            Console.WriteLine();
+            _cfg.Actions.RemoveAll(a => a.ModelId.StartsWith($"{pid}/"));
+        }
+
+        _cfg.Models.Remove(pid);
+        _dirty = true;
+        WriteSuccess($"Provider '{pid}' deleted.");
+        Pause();
+    }
+
+    private void ProviderDetailMenu(string providerId)
+    {
         while (true)
         {
-            Console.Write("新快捷键 (留空跳过, Esc取消): ");
-            var line = ReadLineWithEsc();
-            if (line is null) break;
-            if (string.IsNullOrEmpty(line)) break;
-            var (res, conflict) = hv.Validate(line, cfg.Actions, excludeId: id);
-            if (res == HotkeyValidationResult.InvalidFormat)  { Console.WriteLine("格式无效"); continue; }
-            if (res == HotkeyValidationResult.SystemReserved) { Console.WriteLine("系统保留热键"); continue; }
-            if (res == HotkeyValidationResult.Conflict)       { Console.WriteLine($"已被「{conflict}」使用"); continue; }
-            Console.Write($"设置快捷键为 {line}？(y/N) ");
-            if (Console.ReadLine()?.Trim().ToLower() == "y") { hotkey = line; break; }
+            Console.Clear();
+            var p = _cfg.Models[providerId];
+            H2($"Provider: {p.DisplayName}");
+
+            Item("1", "Base URL ", $": {p.BaseUrl}");
+            Item("2", "API Key  ", $": {MaskKey(p.ApiKey)}");
+
+            for (int i = 0; i < p.Models.Count; i++)
+            {
+                var m  = p.Models[i];
+                var th = m.DisableThinking ? "off" : "on";
+                Item((i + 3).ToString(), $"Model    ", $": {m.TargetModel,-20} (alias: {m.Alias,-10} | thinking: {th})");
+            }
+
+            Sep();
+            Item("0", "Back");
+            Item("A", "Add Model");
+            Item("D", "Delete Model");
+            Item("X", "Exit");
+            Prompt();
+
+            var input = Console.ReadLine()?.Trim().ToUpper() ?? "";
+            if (input == "0") return;
+            if (input == "X") Environment.Exit(0);
+
+            if (input == "1")
+            {
+                var newUrl = Ask($"New Base URL [{p.BaseUrl}]");
+                if (!string.IsNullOrWhiteSpace(newUrl)) { p.BaseUrl = newUrl; _dirty = true; }
+                continue;
+            }
+            if (input == "2")
+            {
+                var newKey = AskSecret("New API Key");
+                if (!string.IsNullOrWhiteSpace(newKey)) { p.ApiKey = newKey; _dirty = true; }
+                continue;
+            }
+            if (input == "A")
+            {
+                var tm = Ask("Model full name");
+                var al = Ask($"Alias [{tm}]");
+                if (string.IsNullOrWhiteSpace(al)) al = tm;
+                p.Models.Add(new ModelEntry { TargetModel = tm, Alias = al });
+                _dirty = true;
+                WriteSuccess("Model added.");
+                Pause();
+                continue;
+            }
+            if (input == "D")
+            {
+                if (!p.Models.Any()) { WriteError("No models to delete."); Pause(); continue; }
+                Console.Write("  Enter model number to delete: ");
+                if (int.TryParse(Console.ReadLine()?.Trim(), out var mi))
+                {
+                    var modelIdx = mi - 3;
+                    if (modelIdx >= 0 && modelIdx < p.Models.Count)
+                    {
+                        var removed = p.Models[modelIdx].TargetModel;
+                        p.Models.RemoveAt(modelIdx);
+                        _cfg.Actions.RemoveAll(a => a.ModelId == $"{providerId}/{removed}");
+                        _dirty = true;
+                        WriteSuccess($"Model '{removed}' removed.");
+                        Pause();
+                    }
+                }
+                continue;
+            }
+
+            if (int.TryParse(input, out var num) && num >= 3 && num < 3 + p.Models.Count)
+                ModelDetailMenu(p.Models[num - 3]);
         }
-
-        var args = new List<string> { "--update", "--id", id };
-        if (!string.IsNullOrEmpty(name))   { args.Add("--name");   args.Add(name);   }
-        if (!string.IsNullOrEmpty(icon))   { args.Add("--icon");   args.Add(icon);   }
-        if (!string.IsNullOrEmpty(prompt)) { args.Add("--prompt"); args.Add(prompt); }
-        if (!string.IsNullOrEmpty(hotkey)) { args.Add("--hotkey"); args.Add(hotkey); }
-        await cmd.ExecuteAsync(args.ToArray());
     }
 
-    private async Task DeleteActionInteractive(ActionCommand cmd)
+    private void ModelDetailMenu(ModelEntry model)
     {
-        await cmd.ExecuteAsync(["--list"]);
-        Console.Write("\n输入要删除的 ID: ");
-        var id = Console.ReadLine()?.Trim() ?? "";
-        if (string.IsNullOrEmpty(id)) return;
-        Console.Write($"确认删除 '{id}'？(y/N) ");
-        if (Console.ReadLine()?.Trim().ToLower() == "y")
-            await cmd.ExecuteAsync(["--delete", "--id", id]);
+        while (true)
+        {
+            Console.Clear();
+            H2($"Model: {model.TargetModel}");
+            Item("1", "Full Name       ", $": {model.TargetModel}");
+            Item("2", "Alias           ", $": {model.Alias}");
+            Item("3", "Disable Thinking", $": {(model.DisableThinking ? "on" : "off")}");
+            Sep();
+            Item("0", "Back");
+            Prompt();
+
+            var input = Console.ReadLine()?.Trim() ?? "";
+            if (input == "0") return;
+            if (input == "1")
+            {
+                var v = Ask($"New full name [{model.TargetModel}]");
+                if (!string.IsNullOrWhiteSpace(v)) { model.TargetModel = v; _dirty = true; }
+            }
+            else if (input == "2")
+            {
+                var v = Ask($"New alias [{model.Alias}]");
+                if (!string.IsNullOrWhiteSpace(v)) { model.Alias = v; _dirty = true; }
+            }
+            else if (input == "3")
+            {
+                model.DisableThinking = !model.DisableThinking;
+                _dirty = true;
+                WriteSuccess($"Disable Thinking → {(model.DisableThinking ? "on" : "off")}");
+                Pause();
+            }
+        }
     }
 
-    private void SettingsMenu()
+    private void TestModelFlow()
+    {
+        var testable = _cfg.Models
+            .Where(kv => kv.Key != "default")
+            .SelectMany(kv => kv.Value.Models.Select(m => (Ref: $"{kv.Key}/{m.TargetModel}", Provider: kv.Value, Model: m)))
+            .ToList();
+
+        if (!testable.Any()) { WriteError("No user models to test. Add a provider first."); Pause(); return; }
+
+        Console.Clear();
+        H2("Test Model");
+        for (int i = 0; i < testable.Count; i++)
+            Item((i + 1).ToString(), testable[i].Ref);
+        Item("0", "Cancel");
+        Prompt();
+
+        if (!int.TryParse(Console.ReadLine()?.Trim(), out var idx) || idx < 1 || idx > testable.Count) return;
+        var (modelRef, prov, mod) = testable[idx - 1];
+
+        Console.Write($"  Testing {modelRef}...");
+        try
+        {
+            var sw     = System.Diagnostics.Stopwatch.StartNew();
+            var client = new AiClient();
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            var result = client.CompleteAsync(prov, mod, "Hello, respond with OK only.", cts.Token).GetAwaiter().GetResult();
+            sw.Stop();
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.WriteLine($" ✓ Response: {result.Trim()} ({sw.Elapsed.TotalSeconds:F1}s)");
+            Console.ResetColor();
+        }
+        catch (Exception ex)
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine($" ✗ {ex.Message}");
+            Console.ResetColor();
+        }
+        Pause();
+    }
+
+    // ──────────────────────────── ACTION FEATURES ────────────────────────────
+
+    private void ActionFeaturesMenu()
+    {
+        while (true)
+        {
+            Console.Clear();
+            H1("Action Features");
+            for (int i = 0; i < _cfg.Actions.Count; i++)
+            {
+                var a  = _cfg.Actions[i];
+                var hk = string.IsNullOrEmpty(a.Hotkey) ? "—" : a.Hotkey;
+                Item((i + 1).ToString(), $"{a.Name,-18}", $"({hk} | {a.ModelId})");
+            }
+
+            Sep();
+            Item("0", "Back");
+            Item("A", "Add Action");
+            Item("D", "Delete Action");
+            Item("X", "Exit");
+            Prompt();
+
+            var input = Console.ReadLine()?.Trim().ToUpper() ?? "";
+            if (input == "0") return;
+            if (input == "X") Environment.Exit(0);
+            if (input == "A") { AddActionFlow(); continue; }
+            if (input == "D") { DeleteActionFlow(); continue; }
+
+            if (int.TryParse(input, out var idx) && idx >= 1 && idx <= _cfg.Actions.Count)
+                ActionDetailMenu(_cfg.Actions[idx - 1]);
+        }
+    }
+
+    private void AddActionFlow()
     {
         Console.Clear();
-        new SettingsCommand(config).ExecuteAsync(["--show"]).Wait();
-        Console.WriteLine("\n修改设置（留空保持原值）：");
-        Console.Write("字体大小: ");     var fs = Console.ReadLine()?.Trim();
-        Console.Write("透明度 (0-1): "); var op = Console.ReadLine()?.Trim();
-        Console.Write("触发延迟(ms): "); var dm = Console.ReadLine()?.Trim();
-        var args = new List<string> { "--set" };
-        if (!string.IsNullOrEmpty(fs)) { args.Add("--font-size"); args.Add(fs); }
-        if (!string.IsNullOrEmpty(op)) { args.Add("--opacity");   args.Add(op); }
-        if (!string.IsNullOrEmpty(dm)) { args.Add("--delay-ms");  args.Add(dm); }
-        if (args.Count > 1)
-            new SettingsCommand(config).ExecuteAsync(args.ToArray()).Wait();
-        Console.Write("按任意键继续…"); Console.ReadKey(true);
+        H2("Add Action");
+
+        var id = Ask("Action ID (unique key, e.g. translate)");
+        if (string.IsNullOrWhiteSpace(id)) return;
+        if (_cfg.Actions.Any(a => a.Id == id)) { WriteError($"Action '{id}' already exists."); Pause(); return; }
+
+        var name = Ask("Display Name (e.g. Quick Translate)");
+        Console.WriteLine("  💡 Find icons at https://lucide.dev/icons/");
+        var icon = Ask("Icon name (e.g. languages)");
+
+        var modelId = SelectModel();
+        if (modelId is null) return;
+
+        Console.Write("  Interactive action? (y/N): ");
+        var isInteractive = char.ToLower(ReadKey()) == 'y';
+        Console.WriteLine();
+
+        string prompt = "";
+        if (!modelId.StartsWith("default/"))
+            prompt = Ask("Prompt text (use {SelectedText} and {UserInput} placeholders)");
+        else
+            WriteGray("  (No prompt needed — selected text passed directly to built-in service)");
+
+        var hotkey = HotkeyCapture.Capture(_cfg.Actions);
+
+        _cfg.Actions.Add(new ActionItem
+        {
+            Id            = id,
+            Name          = name,
+            Icon          = icon,
+            ModelId       = modelId,
+            IsInteractive = isInteractive,
+            Prompt        = prompt,
+            Hotkey        = hotkey
+        });
+        _dirty = true;
+        WriteSuccess($"Action '{name}' added.");
+        Pause();
     }
 
-    private static string? ReadLineWithEsc()
+    private void DeleteActionFlow()
     {
+        if (!_cfg.Actions.Any()) { WriteError("No actions to delete."); Pause(); return; }
+        for (int i = 0; i < _cfg.Actions.Count; i++)
+            Console.WriteLine($"    [{i + 1}] {_cfg.Actions[i].Name} ({_cfg.Actions[i].Id})");
+        Console.Write("  Enter number to delete (0 to cancel): ");
+        if (!int.TryParse(Console.ReadLine()?.Trim(), out var idx) || idx < 1 || idx > _cfg.Actions.Count) return;
+        var name = _cfg.Actions[idx - 1].Name;
+        _cfg.Actions.RemoveAt(idx - 1);
+        _dirty = true;
+        WriteSuccess($"Action '{name}' deleted.");
+        Pause();
+    }
+
+    private void ActionDetailMenu(ActionItem action)
+    {
+        while (true)
+        {
+            Console.Clear();
+            var hk = string.IsNullOrEmpty(action.Hotkey) ? "(none)" : action.Hotkey;
+            H2($"Action: {action.Name}");
+            Item("1", "Name       ", $": {action.Name}");
+            Item("2", "Icon       ", $": {action.Icon}");
+            Item("3", "Model      ", $": {action.ModelId}");
+            Item("4", "Prompt     ", $": {Truncate(action.Prompt, 50)}");
+            Item("5", "Hotkey     ", $": {hk}");
+            Item("6", "Interactive", $": {action.IsInteractive}");
+            Sep();
+            Item("0", "Back");
+            Item("X", "Exit");
+            Prompt();
+
+            var input = Console.ReadLine()?.Trim() ?? "";
+            if (input == "0") return;
+            if (input.ToUpper() == "X") Environment.Exit(0);
+
+            switch (input)
+            {
+                case "1":
+                    var n = Ask($"New name [{action.Name}]");
+                    if (!string.IsNullOrWhiteSpace(n)) { action.Name = n; _dirty = true; }
+                    break;
+                case "2":
+                    Console.WriteLine("  💡 Find icons at https://lucide.dev/icons/");
+                    var ic = Ask($"New icon [{action.Icon}]");
+                    if (!string.IsNullOrWhiteSpace(ic)) { action.Icon = ic; _dirty = true; }
+                    break;
+                case "3":
+                    var mid = SelectModel();
+                    if (mid is not null) { action.ModelId = mid; _dirty = true; }
+                    break;
+                case "4":
+                    if (action.ModelId.StartsWith("default/"))
+                    { WriteGray("  Built-in service: no prompt needed."); Pause(); break; }
+                    var pr = Ask($"New prompt (current: {Truncate(action.Prompt, 40)})");
+                    if (!string.IsNullOrWhiteSpace(pr)) { action.Prompt = pr; _dirty = true; }
+                    break;
+                case "5":
+                    var newHk = HotkeyCapture.Capture(_cfg.Actions, excludeId: action.Id);
+                    action.Hotkey = newHk;
+                    _dirty = true;
+                    if (!string.IsNullOrEmpty(newHk)) WriteSuccess($"Hotkey set to {newHk}.");
+                    Pause();
+                    break;
+                case "6":
+                    action.IsInteractive = !action.IsInteractive;
+                    _dirty = true;
+                    WriteSuccess($"Interactive → {action.IsInteractive}");
+                    Pause();
+                    break;
+            }
+        }
+    }
+
+    // ──────────────────────────── UI SETTINGS ────────────────────────────
+
+    private void UiSettingsMenu()
+    {
+        while (true)
+        {
+            Console.Clear();
+            var s = _cfg.Settings;
+            H1("UI Settings");
+            Item("1", "Font Size      ", $": {s.FontSize}");
+            Item("2", "Window Opacity ", $": {s.ResultWindowOpacity}");
+            Item("3", "Trigger Delay  ", $": {s.MenuTriggerDelayMs} ms");
+            Sep();
+            Item("0", "Back");
+            Item("X", "Exit");
+            Prompt();
+
+            var input = Console.ReadLine()?.Trim() ?? "";
+            if (input == "0") return;
+            if (input.ToUpper() == "X") Environment.Exit(0);
+
+            switch (input)
+            {
+                case "1":
+                    Console.Write($"  Font size [{s.FontSize}]: ");
+                    if (int.TryParse(Console.ReadLine()?.Trim(), out var fs) && fs > 0)
+                    { s.FontSize = fs; _dirty = true; WriteSuccess($"Font size → {fs}"); Pause(); }
+                    break;
+                case "2":
+                    Console.Write($"  Opacity (0.1–1.0) [{s.ResultWindowOpacity}]: ");
+                    if (double.TryParse(Console.ReadLine()?.Trim(),
+                        System.Globalization.NumberStyles.Any,
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        out var op))
+                    {
+                        s.ResultWindowOpacity = Math.Clamp(op, 0.1, 1.0);
+                        _dirty = true;
+                        WriteSuccess($"Opacity → {s.ResultWindowOpacity}");
+                        Pause();
+                    }
+                    break;
+                case "3":
+                    Console.Write($"  Trigger delay ms [{s.MenuTriggerDelayMs}]: ");
+                    if (int.TryParse(Console.ReadLine()?.Trim(), out var dm) && dm >= 0)
+                    { s.MenuTriggerDelayMs = dm; _dirty = true; WriteSuccess($"Delay → {dm} ms"); Pause(); }
+                    break;
+            }
+        }
+    }
+
+    // ──────────────────────────── HELPERS ────────────────────────────
+
+    private void RunDoctor()
+    {
+        Console.Clear();
+        var tmpPath = Path.GetTempFileName();
+        try
+        {
+            var tmpSvc = new ConfigService(tmpPath);
+            tmpSvc.Save(_cfg);
+            new DoctorCommand(tmpSvc).Execute();
+        }
+        finally { File.Delete(tmpPath); }
+        Pause();
+    }
+
+    private async Task ExitAsync()
+    {
+        if (!_dirty) return;
+        Console.WriteLine();
+        Console.Write("  Changes detected. Save before exit? (Y/n): ");
+        var ans = char.ToLower(ReadKey());
+        Console.WriteLine();
+        if (ans == 'n' || ans == 'q')
+        {
+            WriteGray("  Changes discarded.");
+            return;
+        }
+        configService.SaveWithBackup(_cfg);
+        WriteSuccess("  Config saved (backup written to config.json.bak).");
+        await Task.Delay(800);
+    }
+
+    private string? SelectModel()
+    {
+        var all = new List<(string Ref, string Label)>(_cfg.AllModelRefs());
+        if (!all.Any()) { WriteError("No models available. Add a provider first."); Pause(); return null; }
+
+        Console.WriteLine("  Available models:");
+        for (int i = 0; i < all.Count; i++)
+            Console.WriteLine($"    [{i + 1}] {all[i].Label}");
+        Console.Write("  Select model (0 to cancel): ");
+        if (!int.TryParse(Console.ReadLine()?.Trim(), out var idx) || idx < 1 || idx > all.Count) return null;
+        return all[idx - 1].Ref;
+    }
+
+    // ──── Console UI primitives ────
+
+    private static void H1(string title)
+    {
+        Console.ForegroundColor = ConsoleColor.White;
+        Console.WriteLine($"=== {title} ===");
+        Console.ResetColor();
+        Console.WriteLine();
+    }
+
+    private static void H2(string title)
+    {
+        Console.ForegroundColor = ConsoleColor.White;
+        Console.WriteLine($"--- {title} ---");
+        Console.ResetColor();
+        Console.WriteLine();
+    }
+
+    private static void H3(string title)
+    {
+        Console.ForegroundColor = ConsoleColor.DarkGray;
+        Console.WriteLine($"  {title}");
+        Console.ResetColor();
+    }
+
+    private static void Item(string key, string label, string? value = null)
+    {
+        Console.ForegroundColor = ConsoleColor.DarkGray;
+        Console.Write($"  [{key}] ");
+        Console.ForegroundColor = ConsoleColor.White;
+        Console.Write(label);
+        if (value is not null)
+        {
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.Write(value);
+        }
+        Console.ResetColor();
+        Console.WriteLine();
+    }
+
+    private static void Sep()
+    {
+        Console.ForegroundColor = ConsoleColor.DarkGray;
+        Console.WriteLine("  ─────────────────────");
+        Console.ResetColor();
+    }
+
+    private static void Prompt()
+    {
+        Console.WriteLine();
+        Console.ForegroundColor = ConsoleColor.Yellow;
+        Console.Write("  Select: ");
+        Console.ResetColor();
+    }
+
+    private static void WriteSuccess(string msg)
+    {
+        Console.ForegroundColor = ConsoleColor.Green;
+        Console.WriteLine($"  ✓ {msg}");
+        Console.ResetColor();
+    }
+
+    private static void WriteError(string msg)
+    {
+        Console.ForegroundColor = ConsoleColor.Red;
+        Console.WriteLine($"  ✗ {msg}");
+        Console.ResetColor();
+    }
+
+    private static void WriteWarning(string msg)
+    {
+        Console.ForegroundColor = ConsoleColor.Yellow;
+        Console.WriteLine($"  ! {msg}");
+        Console.ResetColor();
+    }
+
+    private static void WriteGray(string msg)
+    {
+        Console.ForegroundColor = ConsoleColor.DarkGray;
+        Console.WriteLine(msg);
+        Console.ResetColor();
+    }
+
+    private static void Pause()
+    {
+        Console.ForegroundColor = ConsoleColor.DarkGray;
+        Console.Write("  Press any key to continue...");
+        Console.ResetColor();
+        Console.ReadKey(true);
+    }
+
+    private static char ReadKey() => Console.ReadKey(intercept: true).KeyChar;
+
+    private static string Ask(string prompt)
+    {
+        Console.ForegroundColor = ConsoleColor.Yellow;
+        Console.Write($"  {prompt}: ");
+        Console.ResetColor();
+        return Console.ReadLine()?.Trim() ?? "";
+    }
+
+    private static string AskSecret(string prompt)
+    {
+        Console.ForegroundColor = ConsoleColor.Yellow;
+        Console.Write($"  {prompt}: ");
+        Console.ResetColor();
         var sb = new System.Text.StringBuilder();
         while (true)
         {
-            var k = Console.ReadKey(true);
-            if (k.Key == ConsoleKey.Escape) { Console.WriteLine(); return null; }
-            if (k.Key == ConsoleKey.Enter)  { Console.WriteLine(); return sb.ToString(); }
+            var k = Console.ReadKey(intercept: true);
+            if (k.Key == ConsoleKey.Enter) { Console.WriteLine(); break; }
             if (k.Key == ConsoleKey.Backspace && sb.Length > 0)
             { sb.Remove(sb.Length - 1, 1); Console.Write("\b \b"); continue; }
-            if (k.KeyChar != '\0') { sb.Append(k.KeyChar); Console.Write(k.KeyChar); }
+            if (k.KeyChar != '\0') { sb.Append(k.KeyChar); Console.Write('•'); }
         }
+        return sb.ToString();
     }
+
+    private static string MaskKey(string key) =>
+        string.IsNullOrEmpty(key) ? "(not set)" :
+        key.Length <= 8 ? new string('•', key.Length) :
+        key[..4] + new string('•', Math.Min(8, key.Length - 4));
+
+    private static string Truncate(string s, int max) =>
+        s.Length <= max ? s : s[..max] + "…";
 }

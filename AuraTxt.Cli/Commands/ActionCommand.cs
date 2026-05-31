@@ -31,21 +31,25 @@ public class ActionCommand(ConfigService config)
 
     private int Set(Dictionary<string, string> opts)
     {
-        if (!opts.TryGetValue("id", out var id)) return Err("缺少 --id");
+        if (!opts.TryGetValue("id", out var id)) return Err("Missing --id");
         var cfg = config.Load();
 
         if (opts.TryGetValue("hotkey", out var hk) && !string.IsNullOrEmpty(hk))
         {
             var (res, conflict) = _hv.Validate(hk, cfg.Actions.Where(a => a.Id != id));
             if (res == HotkeyValidationResult.InvalidFormat)
-                return Err($"快捷键格式无效：{hk}（示例：Alt+T）");
+                return Err($"Invalid hotkey format: {hk} (example: Alt+T)");
             if (res == HotkeyValidationResult.SystemReserved)
-                return Err($"系统保留热键，无法注册：{hk}", 2);
+                return Err($"System reserved key: {hk}", 2);
             if (res == HotkeyValidationResult.Conflict)
-                return Err($"快捷键 {hk} 已被「{conflict}」使用", 2);
+                return Err($"Hotkey {hk} already used by \"{conflict}\"", 2);
         }
 
-        var idx = cfg.Actions.FindIndex(a => a.Id == id);
+        if (opts.TryGetValue("model-id", out var mid) && !string.IsNullOrEmpty(mid)
+            && !mid.StartsWith("$") && !mid.Contains('/'))
+            return Err($"ModelId \"{mid}\" must use format providerId/TargetModel (e.g. openai/gpt-4o)", 1);
+
+        var idx  = cfg.Actions.FindIndex(a => a.Id == id);
         var item = new ActionItem
         {
             Id            = id,
@@ -60,7 +64,7 @@ public class ActionCommand(ConfigService config)
         if (idx >= 0) cfg.Actions[idx] = item;
         else          cfg.Actions.Add(item);
         config.Save(cfg);
-        Console.WriteLine($"✓ 动作 '{id}' 已保存");
+        Console.WriteLine($"✓ Action '{id}' saved");
         return 0;
     }
 

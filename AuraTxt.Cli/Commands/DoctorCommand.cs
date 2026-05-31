@@ -1,0 +1,116 @@
+using AuraTxt.Core.Models;
+using AuraTxt.Core.Services;
+
+namespace AuraTxt.Cli.Commands;
+
+public class DoctorCommand(ConfigService config)
+{
+    private int _errors, _warnings;
+
+    public int Execute()
+    {
+        _errors = _warnings = 0;
+        Console.WriteLine("Running config diagnostics...");
+
+        ConfigRoot cfg;
+        try
+        {
+            cfg = config.Load();
+            Ok("JSON syntax valid");
+        }
+        catch (Exception ex)
+        {
+            Error($"JSON parse error: {ex.Message}");
+            PrintSummary();
+            return 2;
+        }
+
+        var dupIds = cfg.Actions
+            .GroupBy(a => a.Id, StringComparer.OrdinalIgnoreCase)
+            .Where(g => g.Count() > 1)
+            .Select(g => g.Key)
+            .ToList();
+        foreach (var id in dupIds)
+            Error($"Duplicate Action ID: \"{id}\"");
+        if (!dupIds.Any())
+            Ok("No duplicate Action IDs");
+
+        int badRefs = 0;
+        foreach (var action in cfg.Actions)
+        {
+            if (!action.ModelId.Contains('/'))
+            {
+                Error($"Action \"{action.Id}\": ModelId \"{action.ModelId}\" missing '/' — expected format providerId/TargetModel");
+                badRefs++;
+                continue;
+            }
+            if (cfg.ResolveModel(action.ModelId) is null)
+            {
+                Error($"Action \"{action.Id}\": ModelId \"{action.ModelId}\" — provider or model not found");
+                badRefs++;
+            }
+        }
+        if (badRefs == 0 && cfg.Actions.Any())
+            Ok("All Action ModelIds resolve correctly");
+
+        foreach (var (id, p) in cfg.Models.Where(kv => kv.Key != "default"))
+            if (p.Models.Count == 0)
+                Warn($"Provider \"{id}\": has no models configured");
+
+        var hv   = new HotkeyValidator();
+        var seen = new List<ActionItem>();
+        foreach (var a in cfg.Actions.Where(a => !string.IsNullOrEmpty(a.Hotkey)))
+        {
+            var (res, conflictName) = hv.Validate(a.Hotkey, seen);
+            if (res == HotkeyValidationResult.InvalidFormat)
+                Error($"Action \"{a.Id}\": invalid hotkey format \"{a.Hotkey}\"");
+            else if (res == HotkeyValidationResult.Conflict)
+                Warn($"Action \"{a.Id}\" and \"{conflictName}\" share hotkey {a.Hotkey}");
+            seen.Add(a);
+        }
+
+        PrintSummary();
+        return _errors > 0 ? 2 : _warnings > 0 ? 1 : 0;
+    }
+
+    private void PrintSummary()
+    {
+        Console.WriteLine();
+        if (_errors == 0 && _warnings == 0)
+        {
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.WriteLine("✓ 0 errors, 0 warnings — config is healthy");
+        }
+        else
+        {
+            Console.WriteLine($"{_errors} error(s), {_warnings} warning(s) found. Edit config.json manually to fix.");
+        }
+        Console.ResetColor();
+    }
+
+    private void Ok(string msg)
+    {
+        Console.ForegroundColor = ConsoleColor.Green;
+        Console.Write("  [OK]    ");
+        Console.ResetColor();
+        Console.WriteLine(msg);
+    }
+
+    private void Warn(string msg)
+    {
+        _warnings++;
+        Console.ForegroundColor = ConsoleColor.Yellow;
+        Console.Write("  [WARN]  ");
+        Console.ResetColor();
+        Console.WriteLine(msg);
+    }
+
+    private void Error(string msg)
+    {
+        _errors++;
+        Console.ForegroundColor = ConsoleColor.Red;
+        Console.Write("  [ERROR] ");
+        Console.ResetColor();
+        Console.WriteLine(msg);
+    }
+}
