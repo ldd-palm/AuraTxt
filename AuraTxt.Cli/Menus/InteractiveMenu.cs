@@ -313,7 +313,7 @@ public class InteractiveMenu(ConfigService configService)
             {
                 var a  = _cfg.Actions[i];
                 var hk = string.IsNullOrEmpty(a.Hotkey) ? "—" : a.Hotkey;
-                Item((i + 1).ToString(), $"{a.Name,-18}", $"({hk} | {a.ModelId})");
+                Item((i + 1).ToString(), $"{a.Id,-18}", $"({hk} | {ModelLabel(a.ModelId)})");
             }
 
             Sep();
@@ -350,15 +350,21 @@ public class InteractiveMenu(ConfigService configService)
         var modelId = SelectModel();
         if (modelId is null) return;
 
-        Console.Write("  Interactive action? (y/N): ");
-        var isInteractive = char.ToLower(ReadKey()) == 'y';
-        Console.WriteLine();
+        bool isBuiltin     = modelId.StartsWith("default/");
+        bool isInteractive = false;
+        string prompt      = "";
 
-        string prompt = "";
-        if (!modelId.StartsWith("default/"))
-            prompt = Ask("Prompt text (use {SelectedText} and {UserInput} placeholders)");
+        if (isBuiltin)
+        {
+            WriteGray("  (Built-in service — no prompt or interaction needed; selected text is sent directly.)");
+        }
         else
-            WriteGray("  (No prompt needed — selected text passed directly to built-in service)");
+        {
+            Console.Write("  Interactive action? (y/N): ");
+            isInteractive = char.ToLower(ReadKey()) == 'y';
+            Console.WriteLine();
+            prompt = AskPrompt(isInteractive);
+        }
 
         var hotkey = HotkeyCapture.Capture(_cfg.Actions);
 
@@ -396,13 +402,14 @@ public class InteractiveMenu(ConfigService configService)
         while (true)
         {
             Console.Clear();
-            var hk = string.IsNullOrEmpty(action.Hotkey) ? "(none)" : action.Hotkey;
+            var hk        = string.IsNullOrEmpty(action.Hotkey) ? "(none)" : action.Hotkey;
+            var isBuiltin = action.ModelId.StartsWith("default/");
             H2($"Action: {action.Id}");
             Item("1", "Icon       ", $": {action.Icon}");
-            Item("2", "Model      ", $": {action.ModelId}");
-            Item("3", "Prompt     ", $": {Truncate(action.Prompt, 50)}");
+            Item("2", "Model      ", $": {ModelLabel(action.ModelId)}");
+            Item("3", "Prompt     ", $": {(isBuiltin ? "(n/a — built-in)" : Truncate(action.Prompt, 50))}");
             Item("4", "Hotkey     ", $": {hk}");
-            Item("5", "Interactive", $": {action.IsInteractive}");
+            Item("5", "Interactive", $": {(isBuiltin ? "(n/a — built-in)" : action.IsInteractive.ToString())}");
             Sep();
             Item("0", "Back");
             Item("X", "Exit");
@@ -421,12 +428,18 @@ public class InteractiveMenu(ConfigService configService)
                     break;
                 case "2":
                     var mid = SelectModel();
-                    if (mid is not null) { action.ModelId = mid; _dirty = true; }
+                    if (mid is not null)
+                    {
+                        action.ModelId = mid;
+                        if (mid.StartsWith("default/")) { action.IsInteractive = false; action.Prompt = ""; }
+                        _dirty = true;
+                    }
                     break;
                 case "3":
-                    if (action.ModelId.StartsWith("default/"))
+                    if (isBuiltin)
                     { WriteGray("  Built-in service: no prompt needed."); Pause(); break; }
-                    var pr = Ask($"New prompt (current: {Truncate(action.Prompt, 40)})");
+                    Console.WriteLine();
+                    var pr = AskPrompt(action.IsInteractive);
                     if (!string.IsNullOrWhiteSpace(pr)) { action.Prompt = pr; _dirty = true; }
                     break;
                 case "4":
@@ -437,6 +450,8 @@ public class InteractiveMenu(ConfigService configService)
                     Pause();
                     break;
                 case "5":
+                    if (isBuiltin)
+                    { WriteGray("  Built-in service: interaction not applicable."); Pause(); break; }
                     action.IsInteractive = !action.IsInteractive;
                     _dirty = true;
                     WriteSuccess($"Interactive → {action.IsInteractive}");
@@ -546,6 +561,26 @@ public class InteractiveMenu(ConfigService configService)
         Console.Write("  Select model (0 to cancel): ");
         if (!int.TryParse(Console.ReadLine()?.Trim(), out var idx) || idx < 1 || idx > all.Count) return null;
         return all[idx - 1].Ref;
+    }
+
+    /// Friendly label for a model ref like "default/Google_Translate" → "Built-in / GTrans".
+    private string ModelLabel(string modelRef)
+    {
+        var r = _cfg.ResolveModel(modelRef);
+        return r is null ? modelRef : $"{r.Value.provider.DisplayName} / {r.Value.model.Alias}";
+    }
+
+    /// Prompts for prompt text, showing placeholder examples appropriate to the action mode.
+    private static string AskPrompt(bool interactive)
+    {
+        Console.ForegroundColor = ConsoleColor.DarkGray;
+        Console.WriteLine("  Placeholders: {SelectedText} = highlighted text" +
+                          (interactive ? "   {UserInput} = text you type in the popup" : ""));
+        Console.WriteLine(interactive
+            ? "  Example: Based on \"{SelectedText}\", write a reply that: {UserInput}"
+            : "  Example: Translate {SelectedText} into Chinese.");
+        Console.ResetColor();
+        return Ask("Prompt text");
     }
 
     // ──── Console UI primitives ────
