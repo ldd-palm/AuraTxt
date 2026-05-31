@@ -9,7 +9,7 @@ public class InteractiveMenu(ConfigService configService)
     private ConfigRoot _cfg = null!;
     private bool _dirty;
 
-    public async Task RunAsync()
+    public Task RunAsync()
     {
         _cfg   = configService.Load();
         _dirty = false;
@@ -32,7 +32,7 @@ public class InteractiveMenu(ConfigService configService)
                 case '2': ActionFeaturesMenu(); break;
                 case '3': UiSettingsMenu(); break;
                 case 'D': RunDoctor(); break;
-                case 'X': await ExitAsync(); return;
+                case 'X': ExitFlow(); break;
             }
         }
     }
@@ -68,7 +68,7 @@ public class InteractiveMenu(ConfigService configService)
             var input = Console.ReadLine()?.Trim().ToUpper() ?? "";
 
             if (input == "0") return;
-            if (input == "X") Environment.Exit(0);
+            if (input == "X") ExitFlow();
             if (input == "A") { AddProviderFlow(); continue; }
             if (input == "D") { DeleteProviderFlow(providers); continue; }
             if (input == "T") { TestModelFlow(); continue; }
@@ -82,13 +82,13 @@ public class InteractiveMenu(ConfigService configService)
     {
         Console.Clear();
         H2("Add Provider");
-        var id = Ask("Provider ID (e.g. openai)");
+        var id = Ask("Provider ID (no spaces, e.g. openai)");
         if (string.IsNullOrWhiteSpace(id)) return;
+        if (id.Contains(' ')) { WriteError("Provider ID cannot contain spaces."); Pause(); return; }
         if (_cfg.Models.ContainsKey(id)) { WriteError($"Provider '{id}' already exists."); Pause(); return; }
 
-        var display = Ask("Display Name");
-        var url     = Ask("Base URL (e.g. https://api.openai.com/v1)");
-        var key     = AskSecret("API Key");
+        var url = Ask("Base URL (e.g. https://api.openai.com/v1)");
+        var key = AskSecret("API Key");
 
         Console.WriteLine();
         H3("Add first model");
@@ -98,7 +98,7 @@ public class InteractiveMenu(ConfigService configService)
 
         var provider = new ProviderConfig
         {
-            DisplayName = display,
+            DisplayName = id,
             BaseUrl     = url,
             ApiKey      = key,
             Models      = new() { new ModelEntry { TargetModel = targetModel, Alias = alias } }
@@ -176,7 +176,7 @@ public class InteractiveMenu(ConfigService configService)
 
             var input = Console.ReadLine()?.Trim().ToUpper() ?? "";
             if (input == "0") return;
-            if (input == "X") Environment.Exit(0);
+            if (input == "X") ExitFlow();
 
             if (input == "1")
             {
@@ -325,7 +325,7 @@ public class InteractiveMenu(ConfigService configService)
 
             var input = Console.ReadLine()?.Trim().ToUpper() ?? "";
             if (input == "0") return;
-            if (input == "X") Environment.Exit(0);
+            if (input == "X") ExitFlow();
             if (input == "A") { AddActionFlow(); continue; }
             if (input == "D") { DeleteActionFlow(); continue; }
 
@@ -339,11 +339,11 @@ public class InteractiveMenu(ConfigService configService)
         Console.Clear();
         H2("Add Action");
 
-        var id = Ask("Action ID (unique key, e.g. translate)");
+        var id = Ask("Action ID (no spaces, e.g. translate)");
         if (string.IsNullOrWhiteSpace(id)) return;
+        if (id.Contains(' ')) { WriteError("Action ID cannot contain spaces."); Pause(); return; }
         if (_cfg.Actions.Any(a => a.Id == id)) { WriteError($"Action '{id}' already exists."); Pause(); return; }
 
-        var name = Ask("Display Name (e.g. Quick Translate)");
         Console.WriteLine("  💡 Find icons at https://lucide.dev/icons/");
         var icon = Ask("Icon name (e.g. languages)");
 
@@ -365,7 +365,7 @@ public class InteractiveMenu(ConfigService configService)
         _cfg.Actions.Add(new ActionItem
         {
             Id            = id,
-            Name          = name,
+            Name          = id,
             Icon          = icon,
             ModelId       = modelId,
             IsInteractive = isInteractive,
@@ -373,7 +373,7 @@ public class InteractiveMenu(ConfigService configService)
             Hotkey        = hotkey
         });
         _dirty = true;
-        WriteSuccess($"Action '{name}' added.");
+        WriteSuccess($"Action '{id}' added.");
         Pause();
     }
 
@@ -397,13 +397,12 @@ public class InteractiveMenu(ConfigService configService)
         {
             Console.Clear();
             var hk = string.IsNullOrEmpty(action.Hotkey) ? "(none)" : action.Hotkey;
-            H2($"Action: {action.Name}");
-            Item("1", "Name       ", $": {action.Name}");
-            Item("2", "Icon       ", $": {action.Icon}");
-            Item("3", "Model      ", $": {action.ModelId}");
-            Item("4", "Prompt     ", $": {Truncate(action.Prompt, 50)}");
-            Item("5", "Hotkey     ", $": {hk}");
-            Item("6", "Interactive", $": {action.IsInteractive}");
+            H2($"Action: {action.Id}");
+            Item("1", "Icon       ", $": {action.Icon}");
+            Item("2", "Model      ", $": {action.ModelId}");
+            Item("3", "Prompt     ", $": {Truncate(action.Prompt, 50)}");
+            Item("4", "Hotkey     ", $": {hk}");
+            Item("5", "Interactive", $": {action.IsInteractive}");
             Sep();
             Item("0", "Back");
             Item("X", "Exit");
@@ -411,37 +410,33 @@ public class InteractiveMenu(ConfigService configService)
 
             var input = Console.ReadLine()?.Trim() ?? "";
             if (input == "0") return;
-            if (input.ToUpper() == "X") Environment.Exit(0);
+            if (input.ToUpper() == "X") ExitFlow();
 
             switch (input)
             {
                 case "1":
-                    var n = Ask($"New name [{action.Name}]");
-                    if (!string.IsNullOrWhiteSpace(n)) { action.Name = n; _dirty = true; }
-                    break;
-                case "2":
                     Console.WriteLine("  💡 Find icons at https://lucide.dev/icons/");
                     var ic = Ask($"New icon [{action.Icon}]");
                     if (!string.IsNullOrWhiteSpace(ic)) { action.Icon = ic; _dirty = true; }
                     break;
-                case "3":
+                case "2":
                     var mid = SelectModel();
                     if (mid is not null) { action.ModelId = mid; _dirty = true; }
                     break;
-                case "4":
+                case "3":
                     if (action.ModelId.StartsWith("default/"))
                     { WriteGray("  Built-in service: no prompt needed."); Pause(); break; }
                     var pr = Ask($"New prompt (current: {Truncate(action.Prompt, 40)})");
                     if (!string.IsNullOrWhiteSpace(pr)) { action.Prompt = pr; _dirty = true; }
                     break;
-                case "5":
+                case "4":
                     var newHk = HotkeyCapture.Capture(_cfg.Actions, excludeId: action.Id);
                     action.Hotkey = newHk;
                     _dirty = true;
                     if (!string.IsNullOrEmpty(newHk)) WriteSuccess($"Hotkey set to {newHk}.");
                     Pause();
                     break;
-                case "6":
+                case "5":
                     action.IsInteractive = !action.IsInteractive;
                     _dirty = true;
                     WriteSuccess($"Interactive → {action.IsInteractive}");
@@ -470,7 +465,7 @@ public class InteractiveMenu(ConfigService configService)
 
             var input = Console.ReadLine()?.Trim() ?? "";
             if (input == "0") return;
-            if (input.ToUpper() == "X") Environment.Exit(0);
+            if (input.ToUpper() == "X") ExitFlow();
 
             switch (input)
             {
@@ -517,21 +512,27 @@ public class InteractiveMenu(ConfigService configService)
         Pause();
     }
 
-    private async Task ExitAsync()
+    /// Save-aware exit. Callable from ANY menu level so X always offers to save.
+    private void ExitFlow()
     {
-        if (!_dirty) return;
-        Console.WriteLine();
-        Console.Write("  Changes detected. Save before exit? (Y/n): ");
-        var ans = char.ToLower(ReadKey());
-        Console.WriteLine();
-        if (ans == 'n' || ans == 'q')
+        if (_dirty)
         {
-            WriteGray("  Changes discarded.");
-            return;
+            Console.WriteLine();
+            Console.Write("  Changes detected. Save before exit? (Y/n): ");
+            var ans = char.ToLower(ReadKey());
+            Console.WriteLine();
+            if (ans == 'n' || ans == 'q')
+            {
+                WriteGray("  Changes discarded.");
+            }
+            else
+            {
+                configService.SaveWithBackup(_cfg);
+                WriteSuccess("  Config saved (backup written to config.json.bak).");
+                System.Threading.Thread.Sleep(800);
+            }
         }
-        configService.SaveWithBackup(_cfg);
-        WriteSuccess("  Config saved (backup written to config.json.bak).");
-        await Task.Delay(800);
+        Environment.Exit(0);
     }
 
     private string? SelectModel()
