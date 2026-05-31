@@ -1,0 +1,84 @@
+using System.Windows;
+using System.Windows.Input;
+using NHotkey;
+using NHotkey.Wpf;
+using AuraTxt.Core.Models;
+using AuraTxt.Core.Services;
+using AuraTxt.Windows;
+
+namespace AuraTxt.Services;
+
+public class HotkeyService
+{
+    private readonly ConfigService _config;
+    private readonly List<string> _registered = new();
+
+    public HotkeyService(ConfigService config) => _config = config;
+
+    public void RegisterAll(ConfigRoot cfg)
+    {
+        UnregisterAll();
+        foreach (var action in cfg.Actions.Where(a => !string.IsNullOrEmpty(a.Hotkey)))
+        {
+            if (!TryParseHotkey(action.Hotkey, out var key, out var mods)) continue;
+            try
+            {
+                var captured = action;
+                HotkeyManager.Current.AddOrReplace(action.Id, key, mods,
+                    (_, _) => _ = FireActionAsync(captured));
+                _registered.Add(action.Id);
+            }
+            catch
+            {
+                // Another app owns this hotkey — silently skip (tray notification not implemented yet)
+            }
+        }
+    }
+
+    public void UnregisterAll()
+    {
+        foreach (var id in _registered)
+            try { HotkeyManager.Current.Remove(id); } catch { }
+        _registered.Clear();
+    }
+
+    private async Task FireActionAsync(ActionItem action)
+    {
+        var cfg  = _config.Load();
+        var text = await ClipboardService.GetSelectedTextAsync(50);
+        if (string.IsNullOrWhiteSpace(text)) return;
+
+        await Application.Current.Dispatcher.InvokeAsync(() =>
+            ShowResultFor(action, text, cfg));
+    }
+
+    public static void ShowResultFor(ActionItem action, string selectedText, ConfigRoot cfg)
+    {
+        if (action.IsInteractive)
+            new InteractiveWindow(action, selectedText, cfg).Show();
+        else
+            new ResultWindow(action, selectedText, cfg).Show();
+    }
+
+    private static bool TryParseHotkey(string hotkey, out Key key, out ModifierKeys mods)
+    {
+        key  = Key.None;
+        mods = ModifierKeys.None;
+        var parts = hotkey.Split('+');
+        if (parts.Length < 2) return false;
+
+        foreach (var mod in parts[..^1])
+        {
+            mods |= mod.Trim().ToLower() switch
+            {
+                "ctrl"  => ModifierKeys.Control,
+                "alt"   => ModifierKeys.Alt,
+                "shift" => ModifierKeys.Shift,
+                "win"   => ModifierKeys.Windows,
+                _       => ModifierKeys.None
+            };
+        }
+
+        return Enum.TryParse(parts[^1].Trim(), true, out key) && key != Key.None;
+    }
+}
