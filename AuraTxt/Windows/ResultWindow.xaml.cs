@@ -9,10 +9,10 @@ namespace AuraTxt.Windows;
 
 public partial class ResultWindow : Window
 {
-    private readonly ActionItem _action;
-    private readonly string _selectedText;
-    private readonly ConfigRoot _cfg;
-    private string _currentPrompt;
+    private readonly ActionItem   _action;
+    private readonly string       _selectedText;
+    private readonly ConfigRoot   _cfg;
+    private string                _currentPrompt;
 
     public ResultWindow(ActionItem action, string selectedText, ConfigRoot cfg)
     {
@@ -22,7 +22,7 @@ public partial class ResultWindow : Window
         _cfg           = cfg;
         _currentPrompt = action.Prompt;
 
-        TitleLabel.Text     = $"{action.Name} · {GetModelDisplayName(action, cfg)}";
+        TitleLabel.Text     = $"{action.Name} · {GetModelLabel(action, cfg)}";
         ResultText.FontSize = cfg.Settings.FontSize;
         Opacity             = cfg.Settings.ResultWindowOpacity;
 
@@ -31,34 +31,33 @@ public partial class ResultWindow : Window
 
     private async Task RunAsync()
     {
-        ResultText.Text = "正在处理…";
+        ResultText.Text = "Processing…";
         try { ResultText.Text = await CallModelAsync(); }
-        catch (Exception ex) { ResultText.Text = $"[错误] {ex.Message}"; }
+        catch (Exception ex) { ResultText.Text = $"[Error] {ex.Message}"; }
     }
 
     private async Task<string> CallModelAsync()
     {
+        var resolved = _cfg.ResolveModel(_action.ModelId);
+
+        if (resolved?.model.TargetModel == "Google_Translate")
+            return await new GoogleTranslateClient().TranslateAsync(_selectedText);
+        if (resolved?.model.TargetModel == "Youdao_Dict")
+            return await new YoudaoClient().TranslateAsync(_selectedText);
+
+        if (resolved is null)
+            throw new InvalidOperationException($"Model not found: {_action.ModelId}");
+
         var prompt = _currentPrompt
             .Replace("{SelectedText}", _selectedText)
             .Replace("{UserInput}", "");
 
-        if (_action.ModelId == "$google-translate")
-            return await new GoogleTranslateClient().TranslateAsync(_selectedText);
-        if (_action.ModelId == "$youdao-dict")
-            return await new YoudaoClient().TranslateAsync(_selectedText);
-
-        if (!_cfg.Models.TryGetValue(_action.ModelId, out var model))
-            throw new InvalidOperationException($"未找到模型：{_action.ModelId}");
-
-        return await new AiClient().CompleteAsync(model, prompt);
+        return await new AiClient().CompleteAsync(resolved.Value.provider, resolved.Value.model, prompt);
     }
 
     private void CloseBtn_Click(object sender, RoutedEventArgs e) => Close();
-
     private async void RegenBtn_Click(object sender, RoutedEventArgs e) => await RunAsync();
-
-    private void CopyBtn_Click(object sender, RoutedEventArgs e) =>
-        Clipboard.SetText(ResultText.Text);
+    private void CopyBtn_Click(object sender, RoutedEventArgs e) => Clipboard.SetText(ResultText.Text);
 
     private void EditBtn_Click(object sender, RoutedEventArgs e)
     {
@@ -78,10 +77,10 @@ public partial class ResultWindow : Window
         if (e.ChangedButton == MouseButton.Left) DragMove();
     }
 
-    private static string GetModelDisplayName(ActionItem action, ConfigRoot cfg)
+    private static string GetModelLabel(ActionItem action, ConfigRoot cfg)
     {
-        if (action.ModelId == "$google-translate") return "Google 翻译";
-        if (action.ModelId == "$youdao-dict")      return "有道词典";
-        return cfg.Models.TryGetValue(action.ModelId, out var m) ? m.DisplayName : action.ModelId;
+        var resolved = cfg.ResolveModel(action.ModelId);
+        if (resolved is null) return action.ModelId;
+        return $"{resolved.Value.provider.DisplayName} / {resolved.Value.model.Alias}";
     }
 }

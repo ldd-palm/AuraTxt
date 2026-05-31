@@ -10,10 +10,10 @@ namespace AuraTxt.Windows;
 public partial class InteractiveWindow : Window
 {
     private readonly ActionItem _action;
-    private readonly string _selectedText;
+    private readonly string     _selectedText;
     private readonly ConfigRoot _cfg;
-    private string _currentPrompt;
-    private ModelPlatform? _activeModel;
+    private string              _currentPrompt;
+    private (ProviderConfig provider, ModelEntry model)? _activeModel;
 
     public InteractiveWindow(ActionItem action, string selectedText, ConfigRoot cfg)
     {
@@ -27,25 +27,26 @@ public partial class InteractiveWindow : Window
         ResultText.FontSize = cfg.Settings.FontSize;
         Opacity             = cfg.Settings.ResultWindowOpacity;
 
-        // Populate model picker
-        var items = cfg.Models
-            .Select(kv => new ModelPickerItem(kv.Key, kv.Value.Alias))
+        var items = cfg.AllModelRefs()
+            .Where(r => !r.Ref.StartsWith("default/"))
+            .Select(r => new ModelPickerItem(r.Ref, r.Label))
             .ToList();
         ModelPicker.ItemsSource       = items;
         ModelPicker.DisplayMemberPath = "Label";
         ModelPicker.SelectedValuePath = "Id";
 
-        if (cfg.Models.ContainsKey(action.ModelId))
+        var initial = cfg.ResolveModel(action.ModelId);
+        if (initial is not null && !action.ModelId.StartsWith("default/"))
         {
             ModelPicker.SelectedValue = action.ModelId;
-            _activeModel = cfg.Models[action.ModelId];
+            _activeModel = initial;
         }
     }
 
     private void ModelPicker_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
     {
-        if (ModelPicker.SelectedValue is string id && _cfg.Models.TryGetValue(id, out var m))
-            _activeModel = m;
+        if (ModelPicker.SelectedValue is string id)
+            _activeModel = _cfg.ResolveModel(id);
     }
 
     private async void SendBtn_Click(object sender, RoutedEventArgs e)  => await GenerateAsync();
@@ -55,19 +56,18 @@ public partial class InteractiveWindow : Window
     {
         if (_activeModel is null)
         {
-            ResultText.Text = "[错误] 请先选择模型";
+            ResultText.Text = "[Error] Please select a model first.";
             return;
         }
-        ResultText.Text = "正在处理…";
+        ResultText.Text = "Processing…";
         var prompt = _currentPrompt
             .Replace("{SelectedText}", _selectedText)
             .Replace("{UserInput}", UserInput.Text);
-        try { ResultText.Text = await new AiClient().CompleteAsync(_activeModel, prompt); }
-        catch (Exception ex) { ResultText.Text = $"[错误] {ex.Message}"; }
+        try { ResultText.Text = await new AiClient().CompleteAsync(_activeModel.Value.provider, _activeModel.Value.model, prompt); }
+        catch (Exception ex) { ResultText.Text = $"[Error] {ex.Message}"; }
     }
 
-    private void CopyBtn_Click(object sender, RoutedEventArgs e) =>
-        Clipboard.SetText(ResultText.Text);
+    private void CopyBtn_Click(object sender, RoutedEventArgs e) => Clipboard.SetText(ResultText.Text);
 
     private void EditBtn_Click(object sender, RoutedEventArgs e)
     {
