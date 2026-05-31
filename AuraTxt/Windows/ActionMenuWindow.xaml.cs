@@ -33,21 +33,21 @@ public partial class ActionMenuWindow : Window
 
     private async Task BuildMenuAsync()
     {
-        // Fixed left: Copy
-        IconPanel.Children.Add(MakeEmojiButton("📋", "复制", () =>
-        {
-            Clipboard.SetText(_selectedText);
-            Close();
-        }));
+        // Fixed left: Copy (Lucide: clipboard-copy)
+        var copyImg = await IconCacheService.GetIconAsync("clipboard-copy");
+        var copyBtn = copyImg is not null
+            ? MakeImageButton(copyImg, "复制", () => { Clipboard.SetText(_selectedText); Close(); })
+            : MakeEmojiButton("📋", "复制", () => { Clipboard.SetText(_selectedText); Close(); });
+        IconPanel.Children.Add(copyBtn);
         IconPanel.Children.Add(MakeSeparator());
 
         // Dynamic: actions from config
         foreach (var action in _cfg.Actions)
         {
-            var a    = action;
-            var img  = await IconCacheService.GetIconAsync(a.Icon);
-            var tip  = $"{a.Name}{(string.IsNullOrEmpty(a.Hotkey) ? "" : $" ({a.Hotkey})")}";
-            var btn  = img is not null
+            var a   = action;
+            var img = await IconCacheService.GetIconAsync(a.Icon);
+            var tip = $"{a.Name}{(string.IsNullOrEmpty(a.Hotkey) ? "" : $" ({a.Hotkey})")}";
+            var btn = img is not null
                 ? MakeImageButton(img, tip, () => { Close(); HotkeyService.ShowResultFor(a, _selectedText, _cfg); })
                 : MakeEmojiButton("?", tip, () => { Close(); HotkeyService.ShowResultFor(a, _selectedText, _cfg); });
             IconPanel.Children.Add(btn);
@@ -55,13 +55,22 @@ public partial class ActionMenuWindow : Window
 
         IconPanel.Children.Add(MakeSeparator());
 
-        // Fixed right: Settings
-        IconPanel.Children.Add(MakeEmojiButton("⚙️", "设置 (auracfg)", () =>
-        {
-            var exe = System.IO.Path.Combine(AppContext.BaseDirectory, "auracfg.exe");
-            if (System.IO.File.Exists(exe)) System.Diagnostics.Process.Start(exe);
-            Close();
-        }));
+        // Fixed right: Settings (Lucide: settings)
+        var settingsImg = await IconCacheService.GetIconAsync("settings");
+        var settingsBtn = settingsImg is not null
+            ? MakeImageButton(settingsImg, "设置 (auracfg)", () =>
+              {
+                  var exe = System.IO.Path.Combine(AppContext.BaseDirectory, "auracfg.exe");
+                  if (System.IO.File.Exists(exe)) System.Diagnostics.Process.Start(exe);
+                  Close();
+              })
+            : MakeEmojiButton("⚙️", "设置 (auracfg)", () =>
+              {
+                  var exe = System.IO.Path.Combine(AppContext.BaseDirectory, "auracfg.exe");
+                  if (System.IO.File.Exists(exe)) System.Diagnostics.Process.Start(exe);
+                  Close();
+              });
+        IconPanel.Children.Add(settingsBtn);
     }
 
     private static Button MakeEmojiButton(string emoji, string tooltip, Action onClick)
