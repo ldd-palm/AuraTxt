@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AuraTxt.Core.Tests", "AuraT
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AuraTxt.Cli", "AuraTxt.Cli\AuraTxt.Cli.csproj", "{E19374D7-EBE6-45BD-B314-DFFEAC0E68B9}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AuraTxt", "AuraTxt\AuraTxt.csproj", "{76D7A120-7E5D-469F-B89D-73625041694F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -55,6 +57,18 @@ Global
 		{E19374D7-EBE6-45BD-B314-DFFEAC0E68B9}.Release|x64.Build.0 = Release|Any CPU
 		{E19374D7-EBE6-45BD-B314-DFFEAC0E68B9}.Release|x86.ActiveCfg = Release|Any CPU
 		{E19374D7-EBE6-45BD-B314-DFFEAC0E68B9}.Release|x86.Build.0 = Release|Any CPU
+		{76D7A120-7E5D-469F-B89D-73625041694F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{76D7A120-7E5D-469F-B89D-73625041694F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{76D7A120-7E5D-469F-B89D-73625041694F}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{76D7A120-7E5D-469F-B89D-73625041694F}.Debug|x64.Build.0 = Debug|Any CPU
+		{76D7A120-7E5D-469F-B89D-73625041694F}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{76D7A120-7E5D-469F-B89D-73625041694F}.Debug|x86.Build.0 = Debug|Any CPU
+		{76D7A120-7E5D-469F-B89D-73625041694F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{76D7A120-7E5D-469F-B89D-73625041694F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{76D7A120-7E5D-469F-B89D-73625041694F}.Release|x64.ActiveCfg = Release|Any CPU
+		{76D7A120-7E5D-469F-B89D-73625041694F}.Release|x64.Build.0 = Release|Any CPU
+		{76D7A120-7E5D-469F-B89D-73625041694F}.Release|x86.ActiveCfg = Release|Any CPU
+		{76D7A120-7E5D-469F-B89D-73625041694F}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
