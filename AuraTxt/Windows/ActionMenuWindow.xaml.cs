@@ -19,6 +19,7 @@ public partial class ActionMenuWindow : Window
     private readonly string _selectedText;
     private readonly System.Drawing.Point _physicalCursor;
     private bool _closing;
+    private bool _ready;
 
     public ActionMenuWindow(ConfigRoot cfg, string selectedText, System.Drawing.Point physicalCursor)
     {
@@ -30,6 +31,9 @@ public partial class ActionMenuWindow : Window
         // Fallback position before DPI conversion (corrected in Loaded)
         Left = physicalCursor.X + 4;
         Top  = physicalCursor.Y - 44;
+
+        // Allow dragging the borderless window (button clicks don't bubble here)
+        MouseLeftButtonDown += (_, _) => DragMove();
 
         Loaded      += OnLoaded;
         Deactivated += (_, _) => SafeClose();
@@ -43,11 +47,12 @@ public partial class ActionMenuWindow : Window
         Top  = _physicalCursor.Y / dpi.DpiScaleY - 44;
 
         await BuildMenuAsync();
+        _ready = true;
     }
 
     private void SafeClose()
     {
-        if (_closing) return;
+        if (!_ready || _closing) return;
         _closing = true;
         // Suppress menu re-trigger for 2s (the mouse-up that clicked us fires globally)
         AppState.MenuSuppressUntil = DateTime.UtcNow.AddSeconds(2);
@@ -56,8 +61,14 @@ public partial class ActionMenuWindow : Window
 
     private async Task BuildMenuAsync()
     {
-        // Dynamic: enabled actions from config (includes system actions like copy, speech)
-        foreach (var action in _cfg.Actions.Where(a => a.Enabled))
+        // Order: copy first, speech last, user actions in between
+        var ordered = _cfg.Actions
+            .Where(a => a.Enabled)
+            .OrderBy(a => a.Id == "copy" ? 0 : a.Id == "speech" ? 2 : 1)
+            .ThenBy(a => a.Id)
+            .ToList();
+
+        foreach (var action in ordered)
         {
             var a   = action;
             var img = await IconCacheService.GetIconAsync(a.Icon);

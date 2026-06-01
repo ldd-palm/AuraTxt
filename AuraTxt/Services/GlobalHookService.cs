@@ -36,22 +36,17 @@ public class GlobalHookService
     {
         if (AppState.IsMonitoringPaused || AppState.IsMenuHidden || e.Button != System.Windows.Forms.MouseButtons.Left) return;
         if (DateTime.UtcNow < AppState.MenuSuppressUntil) return;
+
         var pos = new System.Drawing.Point(e.X, e.Y);
-        _ = TryShowMenuAsync(pos);
-    }
-
-    private async Task TryShowMenuAsync(System.Drawing.Point cursorPos)
-    {
         var cfg = _config.Load();
-        string? text = null;
 
-        // Clipboard must be accessed on STA/UI thread
-        await Application.Current.Dispatcher.InvokeAsync(async () =>
+        // Dispatch entire clipboard + menu flow to UI thread
+        Application.Current.Dispatcher.BeginInvoke(async () =>
         {
-            text = await ClipboardService.GetSelectedTextAsync(cfg.Settings.MenuTriggerDelayMs);
+            var text = await ClipboardService.GetSelectedTextAsync(cfg.Settings.MenuTriggerDelayMs);
             if (string.IsNullOrWhiteSpace(text)) return;
 
-            var menu = new ActionMenuWindow(cfg, text, cursorPos);
+            var menu = new ActionMenuWindow(cfg, text, pos);
             menu.Show();
         });
     }
