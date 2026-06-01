@@ -58,7 +58,8 @@ public class ActionCommand(ConfigService config)
             ModelId       = opts.GetValueOrDefault("model-id", ""),
             IsInteractive = opts.GetValueOrDefault("interactive", "false") == "true",
             Hotkey        = opts.GetValueOrDefault("hotkey", ""),
-            Prompt        = opts.GetValueOrDefault("prompt", "")
+            Prompt        = opts.GetValueOrDefault("prompt", ""),
+            Enabled       = opts.GetValueOrDefault("enabled", "true") == "true"
         };
 
         if (idx >= 0) cfg.Actions[idx] = item;
@@ -92,6 +93,7 @@ public class ActionCommand(ConfigService config)
         if (opts.TryGetValue("model-id",    out var m))  item.ModelId       = m;
         if (opts.TryGetValue("prompt",      out var p))  item.Prompt        = p;
         if (opts.TryGetValue("interactive", out var iv)) item.IsInteractive = iv == "true";
+        if (opts.TryGetValue("enabled",     out var en)) item.Enabled      = en == "true";
 
         config.Save(cfg);
         Console.WriteLine($"✓ 动作 '{id}' 已更新");
@@ -100,12 +102,16 @@ public class ActionCommand(ConfigService config)
 
     private int Delete(Dictionary<string, string> opts)
     {
-        if (!opts.TryGetValue("id", out var id)) return Err("缺少 --id");
-        var cfg     = config.Load();
-        var removed = cfg.Actions.RemoveAll(a => a.Id == id);
-        if (removed == 0) return Err($"未找到动作 '{id}'", 2);
+        if (!opts.TryGetValue("id", out var id)) return Err("Missing --id");
+        var cfg  = config.Load();
+        var item = cfg.Actions.FirstOrDefault(a => a.Id == id);
+        if (item is null) return Err($"Action '{id}' not found", 2);
+
+        if (item.IsSystem) return Err($"Cannot delete system action '{id}'", 2);
+
+        cfg.Actions.RemoveAll(a => a.Id == id);
         config.Save(cfg);
-        Console.WriteLine("✓ 已删除");
+        Console.WriteLine("✓ Deleted");
         return 0;
     }
 
@@ -118,8 +124,8 @@ public class ActionCommand(ConfigService config)
     private static int PrintHelp()
     {
         Console.WriteLine("auracfg action --list");
-        Console.WriteLine("auracfg action --set    --id <id> --name <name> --icon <lucide> --model-id <id> --interactive <true|false> --prompt \"<text>\" [--hotkey <key>]");
-        Console.WriteLine("auracfg action --update --id <id> [任意字段]");
+        Console.WriteLine("auracfg action --set    --id <id> --name <name> --icon <lucide> --model-id <id> --interactive <true|false> --prompt \"<text>\" [--hotkey <key>] [--enabled <true|false>]");
+        Console.WriteLine("auracfg action --update --id <id> [any field including --enabled]");
         Console.WriteLine("auracfg action --delete --id <id>");
         return 1;
     }
