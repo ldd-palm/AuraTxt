@@ -12,6 +12,12 @@ public static class HotkeyCapture
         var validator  = new HotkeyValidator();
         var actionList = actions.ToList();
 
+        // Prevent Ctrl+C from killing the process during key capture
+        void CancelHandler(object? _, ConsoleCancelEventArgs e) => e.Cancel = true;
+        Console.CancelKeyPress += CancelHandler;
+
+        try
+        {
         while (true)
         {
             Console.Write("  Press shortcut key (ESC to skip — optional): ");
@@ -73,6 +79,11 @@ public static class HotkeyCapture
             }
             if (confirm.Key == ConsoleKey.Enter || char.ToLower(confirm.KeyChar) == 'y')
                 return hotkey;
+        }
+        }
+        finally
+        {
+            Console.CancelKeyPress -= CancelHandler;
         }
     }
 

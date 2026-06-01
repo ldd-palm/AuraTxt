@@ -718,6 +718,14 @@ public class InteractiveMenu(ConfigService configService)
                 if (sb.Length == 0) return "";
                 break;
             }
+            // Empty first line → cancel, keep existing prompt
+            if (sb.Length == 0 && string.IsNullOrEmpty(line))
+            {
+                Console.ForegroundColor = ConsoleColor.DarkGray;
+                Console.WriteLine("  (cancelled — existing prompt kept)");
+                Console.ResetColor();
+                return "";
+            }
 
             if (sb.Length > 0) sb.Append('\n');
             sb.Append(line);
