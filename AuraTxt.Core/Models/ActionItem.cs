@@ -9,6 +9,8 @@ public class ActionItem
     public bool   IsInteractive { get; set; }
     public string Hotkey        { get; set; } = "";
     public string Prompt        { get; set; } = "";
+    public bool   Enabled       { get; set; } = true;
+    public bool   IsSystem      { get; set; }
 
     public bool IsSystemModel => ModelId.StartsWith("default/", StringComparison.OrdinalIgnoreCase);
 }
