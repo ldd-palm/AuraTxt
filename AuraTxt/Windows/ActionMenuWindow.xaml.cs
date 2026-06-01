@@ -17,39 +17,67 @@ public partial class ActionMenuWindow : Window
 {
     private readonly ConfigRoot _cfg;
     private readonly string _selectedText;
+    private readonly System.Drawing.Point _physicalCursor;
+    private bool _closing;
 
-    public ActionMenuWindow(ConfigRoot cfg, string selectedText, System.Drawing.Point cursor)
+    public ActionMenuWindow(ConfigRoot cfg, string selectedText, System.Drawing.Point physicalCursor)
     {
         InitializeComponent();
-        _cfg          = cfg;
-        _selectedText = selectedText;
+        _cfg            = cfg;
+        _selectedText   = selectedText;
+        _physicalCursor = physicalCursor;
 
-        Left = cursor.X + 4;
-        Top  = cursor.Y - 44;
+        // Fallback position before DPI conversion (corrected in Loaded)
+        Left = physicalCursor.X + 4;
+        Top  = physicalCursor.Y - 44;
 
-        Loaded      += async (_, _) => await BuildMenuAsync();
-        Deactivated += (_, _) => Close();
+        Loaded      += OnLoaded;
+        Deactivated += (_, _) => SafeClose();
+    }
+
+    private async void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        // Convert physical screen pixels → WPF device-independent pixels
+        var dpi = System.Windows.Media.VisualTreeHelper.GetDpi(this);
+        Left = _physicalCursor.X / dpi.DpiScaleX + 4;
+        Top  = _physicalCursor.Y / dpi.DpiScaleY - 44;
+
+        await BuildMenuAsync();
+    }
+
+    private void SafeClose()
+    {
+        if (_closing) return;
+        _closing = true;
+        // Suppress menu re-trigger for 2s (the mouse-up that clicked us fires globally)
+        AppState.MenuSuppressUntil = DateTime.UtcNow.AddSeconds(2);
+        Close();
     }
 
     private async Task BuildMenuAsync()
     {
-        // Fixed left: Copy (Lucide: clipboard-copy)
-        var copyImg = await IconCacheService.GetIconAsync("clipboard-copy");
-        var copyBtn = copyImg is not null
-            ? MakeImageButton(copyImg, "复制", () => { Clipboard.SetText(_selectedText); Close(); })
-            : MakeEmojiButton("📋", "复制", () => { Clipboard.SetText(_selectedText); Close(); });
-        IconPanel.Children.Add(copyBtn);
-        IconPanel.Children.Add(MakeSeparator());
-
-        // Dynamic: actions from config
-        foreach (var action in _cfg.Actions)
+        // Dynamic: enabled actions from config (includes system actions like copy, speech)
+        foreach (var action in _cfg.Actions.Where(a => a.Enabled))
         {
             var a   = action;
             var img = await IconCacheService.GetIconAsync(a.Icon);
             var tip = $"{a.Name}{(string.IsNullOrEmpty(a.Hotkey) ? "" : $" ({a.Hotkey})")}";
-            var btn = img is not null
-                ? MakeImageButton(img, tip, () => { Close(); HotkeyService.ShowResultFor(a, _selectedText, _cfg); })
-                : MakeEmojiButton("?", tip, () => { Close(); HotkeyService.ShowResultFor(a, _selectedText, _cfg); });
+
+            Button btn;
+            if (string.IsNullOrEmpty(a.ModelId))
+            {
+                // System action — route by ID
+                btn = img is not null
+                    ? MakeImageButton(img, tip, () => ExecuteSystemAction(a.Id))
+                    : MakeEmojiButton("?", tip, () => ExecuteSystemAction(a.Id));
+            }
+            else
+            {
+                // Normal action
+                btn = img is not null
+                    ? MakeImageButton(img, tip, () => { SafeClose(); HotkeyService.ShowResultFor(a, _selectedText, _cfg); })
+                    : MakeEmojiButton("?", tip, () => { SafeClose(); HotkeyService.ShowResultFor(a, _selectedText, _cfg); });
+            }
             IconPanel.Children.Add(btn);
         }
 
@@ -58,19 +86,34 @@ public partial class ActionMenuWindow : Window
         // Fixed right: Settings (Lucide: settings)
         var settingsImg = await IconCacheService.GetIconAsync("settings");
         var settingsBtn = settingsImg is not null
-            ? MakeImageButton(settingsImg, "设置 (auracfg)", () =>
+            ? MakeImageButton(settingsImg, "Settings (auracfg)", () =>
               {
+                  SafeClose();
                   var exe = System.IO.Path.Combine(AppContext.BaseDirectory, "auracfg.exe");
                   if (System.IO.File.Exists(exe)) System.Diagnostics.Process.Start(exe);
-                  Close();
               })
-            : MakeEmojiButton("⚙️", "设置 (auracfg)", () =>
+            : MakeEmojiButton("⚙️", "Settings (auracfg)", () =>
               {
+                  SafeClose();
                   var exe = System.IO.Path.Combine(AppContext.BaseDirectory, "auracfg.exe");
                   if (System.IO.File.Exists(exe)) System.Diagnostics.Process.Start(exe);
-                  Close();
               });
         IconPanel.Children.Add(settingsBtn);
+    }
+
+    private void ExecuteSystemAction(string id)
+    {
+        switch (id)
+        {
+            case "copy":
+                Clipboard.SetText(_selectedText);
+                break;
+            case "speech":
+                var synthesizer = new System.Speech.Synthesis.SpeechSynthesizer();
+                synthesizer.SpeakAsync(_selectedText);
+                break;
+        }
+        SafeClose();
     }
 
     private static Button MakeEmojiButton(string emoji, string tooltip, Action onClick)
