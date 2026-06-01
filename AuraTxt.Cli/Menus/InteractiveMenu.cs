@@ -58,7 +58,7 @@ public class InteractiveMenu(ConfigService configService)
             }
 
             Sep();
-            Item("0", "Back");
+            Item("B", "Back");
             Item("A", "Add Provider");
             Item("D", "Delete Provider");
             Item("T", "Test Model");
@@ -68,7 +68,7 @@ public class InteractiveMenu(ConfigService configService)
 
             var input = Console.ReadLine()?.Trim().ToUpper() ?? "";
 
-            if (input == "0") return;
+            if (input == "B") return;
             if (input == "X") ExitFlow();
             if (input == "A") { AddProviderFlow(); continue; }
             if (input == "D") { DeleteProviderFlow(providers); continue; }
@@ -173,13 +173,13 @@ public class InteractiveMenu(ConfigService configService)
             }
 
             Sep();
-            Item("0", "Back");
+            Item("B", "Back");
             Item("A", "Add Model");
             Item("D", "Delete Model");
             Prompt();
 
             var input = Console.ReadLine()?.Trim().ToUpper() ?? "";
-            if (input == "0") return;
+            if (input == "B") return;
 
             if (input == "1")
             {
@@ -251,11 +251,11 @@ public class InteractiveMenu(ConfigService configService)
             Item("2", "Alias           ", $": {model.Alias}");
             Item("3", "Disable Thinking", $": {(model.DisableThinking ? "on" : "off")}");
             Sep();
-            Item("0", "Back");
+            Item("B", "Back");
             Prompt();
 
             var input = Console.ReadLine()?.Trim() ?? "";
-            if (input == "0") return;
+            if (input == "B") return;
             if (input == "1")
             {
                 var v = Ask("New full name", model.TargetModel);
@@ -351,7 +351,7 @@ public class InteractiveMenu(ConfigService configService)
             }
 
             Sep();
-            Item("0", "Back");
+            Item("B", "Back");
             Item("A", "Add Action");
             Item("D", "Delete Action");
             Item("S", "Save Config");
@@ -359,7 +359,7 @@ public class InteractiveMenu(ConfigService configService)
             Prompt();
 
             var input = Console.ReadLine()?.Trim().ToUpper() ?? "";
-            if (input == "0") return;
+            if (input == "B") return;
             if (input == "X") ExitFlow();
             if (input == "A") { AddActionFlow(); continue; }
             if (input == "D") { DeleteActionFlow(); continue; }
@@ -475,11 +475,11 @@ public class InteractiveMenu(ConfigService configService)
             }
 
             Sep();
-            Item("0", "Back");
+            Item("B", "Back");
             Prompt();
 
             var input = Console.ReadLine()?.Trim() ?? "";
-            if (input == "0") return;
+            if (input == "B") return;
 
             if (isSystem)
             {
@@ -569,12 +569,12 @@ public class InteractiveMenu(ConfigService configService)
             Item("2", "Window Opacity ", $": {s.ResultWindowOpacity}");
             Item("3", "Trigger Delay  ", $": {s.MenuTriggerDelayMs} ms");
             Sep();
-            Item("0", "Back");
+            Item("B", "Back");
             Item("X", "Exit");
             Prompt();
 
             var input = Console.ReadLine()?.Trim() ?? "";
-            if (input == "0") return;
+            if (input == "B") return;
             if (input.ToUpper() == "X") ExitFlow();
 
             switch (input)
