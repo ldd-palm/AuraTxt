@@ -62,6 +62,7 @@ public class InteractiveMenu(ConfigService configService)
             Item("A", "Add Provider");
             Item("D", "Delete Provider");
             Item("T", "Test Model");
+            Item("S", "Save Config");
             Item("X", "Exit");
             Prompt();
 
@@ -72,6 +73,7 @@ public class InteractiveMenu(ConfigService configService)
             if (input == "A") { AddProviderFlow(); continue; }
             if (input == "D") { DeleteProviderFlow(providers); continue; }
             if (input == "T") { TestModelFlow(); continue; }
+            if (input == "S") { SaveNow(); continue; }
 
             if (int.TryParse(input, out var idx) && idx >= 1 && idx <= providers.Count)
                 ProviderDetailMenu(providers[idx - 1].Key);
@@ -354,6 +356,7 @@ public class InteractiveMenu(ConfigService configService)
             Item("0", "Back");
             Item("A", "Add Action");
             Item("D", "Delete Action");
+            Item("S", "Save Config");
             Item("X", "Exit");
             Prompt();
 
@@ -362,6 +365,7 @@ public class InteractiveMenu(ConfigService configService)
             if (input == "X") ExitFlow();
             if (input == "A") { AddActionFlow(); continue; }
             if (input == "D") { DeleteActionFlow(); continue; }
+            if (input == "S") { SaveNow(); continue; }
 
             if (int.TryParse(input, out var idx) && idx >= 1 && idx <= _cfg.Actions.Count)
                 ActionDetailMenu(_cfg.Actions[idx - 1]);
@@ -623,6 +627,15 @@ public class InteractiveMenu(ConfigService configService)
     }
 
     /// Save-aware exit. Callable from ANY menu level so X always offers to save.
+    private void SaveNow()
+    {
+        Console.WriteLine();
+        configService.SaveWithBackup(_cfg);
+        _dirty = false;
+        WriteSuccess("Config saved (backup written to config.json.bak).");
+        Pause();
+    }
+
     private void ExitFlow()
     {
         if (_dirty)
@@ -669,7 +682,7 @@ public class InteractiveMenu(ConfigService configService)
     private static string AskPrompt(bool interactive)
     {
         Console.ForegroundColor = ConsoleColor.DarkGray;
-        Console.WriteLine("  Prompt text (type or paste, Ctrl+D to finish, Esc to cancel):");
+        Console.WriteLine("  Prompt text (type or paste, empty line to finish):");
         Console.WriteLine("  Placeholders: {SelectedText} = highlighted text" +
                           (interactive ? "   {UserInput} = text you type in the popup" : ""));
         Console.WriteLine(interactive
@@ -677,25 +690,22 @@ public class InteractiveMenu(ConfigService configService)
             : "  Example: Translate {SelectedText} into Chinese.");
         Console.ResetColor();
 
-        Console.ForegroundColor = ConsoleColor.Yellow;
-        Console.Write("  > ");
-        Console.ResetColor();
+        var sb = new System.Text.StringBuilder();
 
-        var sb   = new System.Text.StringBuilder();
-        var line = Console.ReadLine();
-
-        // First line null (Ctrl+D immediately) → cancel
-        if (line is null) return "";
-
-        sb.Append(line);
         while (true)
         {
             Console.ForegroundColor = ConsoleColor.Yellow;
             Console.Write("  > ");
             Console.ResetColor();
-            var next = Console.ReadLine();
-            if (next is null) break;  // Ctrl+D / EOF → done
-            sb.Append('\n').Append(next);
+            var line = Console.ReadLine();
+
+            // Empty line (just Enter) on first prompt → cancel
+            if (sb.Length == 0 && string.IsNullOrEmpty(line)) return "";
+            // Empty line after content → done
+            if (sb.Length > 0 && string.IsNullOrEmpty(line)) break;
+
+            if (sb.Length > 0) sb.Append('\n');
+            sb.Append(line);
         }
 
         var result = sb.ToString().TrimEnd('\n', '\r');
