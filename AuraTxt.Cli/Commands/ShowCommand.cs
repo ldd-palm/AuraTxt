@@ -104,6 +104,19 @@ public class ShowCommand(ConfigService config)
         Console.WriteLine($"    Font Size:         {s.FontSize}");
         Console.WriteLine($"    Window Opacity:    {s.ResultWindowOpacity}");
         Console.WriteLine($"    Trigger Delay:     {s.MenuTriggerDelayMs} ms");
+        Console.WriteLine();
+        Bold(); Console.Write("System Prompt"); Reset();
+        Console.WriteLine(" (global wrapper — prepended before each action prompt)");
+        Console.WriteLine();
+        if (string.IsNullOrEmpty(s.SystemPrompt))
+        {
+            Dim(); Console.WriteLine("    (not set)"); Reset();
+        }
+        else
+        {
+            foreach (var line in s.SystemPrompt.Split('\n'))
+                Console.WriteLine($"    │ {line}");
+        }
 
         Console.WriteLine();
         return 0;

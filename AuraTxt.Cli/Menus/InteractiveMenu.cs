@@ -20,7 +20,7 @@ public class InteractiveMenu(ConfigService configService)
             H1("AuraTxt Config Tool");
             Item("1", "Model Platform");
             Item("2", "Action Features");
-            Item("3", "UI Settings");
+            Item("3", "General Settings");
             Item("D", "Doctor — Validate Config");
             Item("X", "Exit");
             Prompt();
@@ -30,7 +30,7 @@ public class InteractiveMenu(ConfigService configService)
             {
                 case '1': ModelPlatformMenu(); break;
                 case '2': ActionFeaturesMenu(); break;
-                case '3': UiSettingsMenu(); break;
+                case '3': GeneralSettingsMenu(); break;
                 case 'D': RunDoctor(); break;
                 case 'X': ExitFlow(); break;
             }
@@ -556,18 +556,19 @@ public class InteractiveMenu(ConfigService configService)
         }
     }
 
-    // ──────────────────────────── UI SETTINGS ────────────────────────────
+    // ──────────────────────────── GENERAL SETTINGS ────────────────────────────
 
-    private void UiSettingsMenu()
+    private void GeneralSettingsMenu()
     {
         while (true)
         {
             Console.Clear();
             var s = _cfg.Settings;
-            H1("UI Settings");
+            H1("General Settings");
             Item("1", "Font Size      ", $": {s.FontSize}");
             Item("2", "Window Opacity ", $": {s.ResultWindowOpacity}");
             Item("3", "Trigger Delay  ", $": {s.MenuTriggerDelayMs} ms");
+            Item("4", "System Prompt  ", $": {Truncate(s.SystemPrompt, 60)}");
             Sep();
             Item("B", "Back");
             Item("X", "Exit");
@@ -601,6 +602,16 @@ public class InteractiveMenu(ConfigService configService)
                     Console.Write($"  Trigger delay ms [{s.MenuTriggerDelayMs}]: ");
                     if (int.TryParse(Console.ReadLine()?.Trim(), out var dm) && dm >= 0)
                     { s.MenuTriggerDelayMs = dm; _dirty = true; WriteSuccess($"Delay → {dm} ms"); Pause(); }
+                    break;
+                case "4":
+                    Console.WriteLine();
+                    Console.ForegroundColor = ConsoleColor.DarkGray;
+                    Console.WriteLine("  System Prompt acts as a global wrapper — it provides security guardrails");
+                    Console.WriteLine("  and output format constraints. It is prepended before each action prompt.");
+                    Console.ResetColor();
+                    Console.WriteLine();
+                    var sp = AskPrompt(false, s.SystemPrompt);
+                    if (!string.IsNullOrWhiteSpace(sp)) { s.SystemPrompt = sp; _dirty = true; }
                     break;
             }
         }
