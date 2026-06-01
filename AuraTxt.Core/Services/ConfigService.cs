@@ -70,6 +70,27 @@ public class ConfigService
                 new ModelEntry { TargetModel = "Youdao_Dict",      Alias = "Youdao",  DisableThinking = false }
             }
         };
+
+        // System actions — undeletable, model-less, routed by WPF
+        cfg.Actions.Add(new ActionItem
+        {
+            Id       = "copy",
+            Name     = "Copy",
+            Icon     = "clipboard-copy",
+            Hotkey   = "Ctrl+C",
+            Enabled  = true,
+            IsSystem = true
+        });
+        cfg.Actions.Add(new ActionItem
+        {
+            Id       = "speech",
+            Name     = "Speech",
+            Icon     = "speech",
+            Hotkey   = "Ctrl+E",
+            Enabled  = true,
+            IsSystem = true
+        });
+
         Save(cfg);
         return cfg;
     }
