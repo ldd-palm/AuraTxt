@@ -686,6 +686,10 @@ public class InteractiveMenu(ConfigService configService)
             foreach (var line in existing.Split('\n'))
                 Console.WriteLine($"    │ {line}");
             Console.WriteLine();
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine("  ⚡ Press Enter to keep the existing prompt unchanged.");
+            Console.ResetColor();
+            Console.WriteLine();
         }
 
         Console.ForegroundColor = ConsoleColor.DarkGray;
@@ -722,7 +726,7 @@ public class InteractiveMenu(ConfigService configService)
             if (sb.Length == 0 && string.IsNullOrEmpty(line))
             {
                 Console.ForegroundColor = ConsoleColor.DarkGray;
-                Console.WriteLine("  (cancelled — existing prompt kept)");
+                Console.WriteLine("  (existing prompt kept)");
                 Console.ResetColor();
                 return "";
             }
