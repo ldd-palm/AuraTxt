@@ -176,12 +176,10 @@ public class InteractiveMenu(ConfigService configService)
             Item("0", "Back");
             Item("A", "Add Model");
             Item("D", "Delete Model");
-            Item("X", "Exit");
             Prompt();
 
             var input = Console.ReadLine()?.Trim().ToUpper() ?? "";
             if (input == "0") return;
-            if (input == "X") ExitFlow();
 
             if (input == "1")
             {
@@ -302,7 +300,7 @@ public class InteractiveMenu(ConfigService configService)
         {
             var sw     = System.Diagnostics.Stopwatch.StartNew();
             var client = new AiClient();
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(120));
             var result = client.CompleteAsync(prov, mod, "Hello, respond with OK only.", cts.Token).GetAwaiter().GetResult();
             sw.Stop();
             Console.ForegroundColor = ConsoleColor.Green;
@@ -478,12 +476,10 @@ public class InteractiveMenu(ConfigService configService)
 
             Sep();
             Item("0", "Back");
-            Item("X", "Exit");
             Prompt();
 
             var input = Console.ReadLine()?.Trim() ?? "";
             if (input == "0") return;
-            if (input.ToUpper() == "X") ExitFlow();
 
             if (isSystem)
             {
@@ -539,7 +535,7 @@ public class InteractiveMenu(ConfigService configService)
                         if (action.ModelId.StartsWith("default/"))
                         { WriteGray("  Built-in service: no prompt needed."); Pause(); break; }
                         Console.WriteLine();
-                        var pr = AskPrompt(action.IsInteractive);
+                        var pr = AskPrompt(action.IsInteractive, action.Prompt);
                         if (!string.IsNullOrWhiteSpace(pr)) { action.Prompt = pr; _dirty = true; }
                         break;
                     case "5":
@@ -679,8 +675,19 @@ public class InteractiveMenu(ConfigService configService)
     }
 
     /// Reads multi-line prompt text. Ctrl+D (EOF) to finish.
-    private static string AskPrompt(bool interactive)
+    private static string AskPrompt(bool interactive, string? existing = null)
     {
+        // Show existing prompt if editing
+        if (!string.IsNullOrEmpty(existing))
+        {
+            Console.ForegroundColor = ConsoleColor.DarkGray;
+            Console.WriteLine("  Current prompt:");
+            Console.ResetColor();
+            foreach (var line in existing.Split('\n'))
+                Console.WriteLine($"    │ {line}");
+            Console.WriteLine();
+        }
+
         Console.ForegroundColor = ConsoleColor.DarkGray;
         Console.WriteLine("  Prompt text (type or paste, empty line to finish):");
         Console.WriteLine("  Placeholders: {SelectedText} = highlighted text" +
