@@ -689,7 +689,7 @@ public class InteractiveMenu(ConfigService configService)
         }
 
         Console.ForegroundColor = ConsoleColor.DarkGray;
-        Console.WriteLine("  Prompt text (type or paste, press Enter twice to finish):");
+        Console.WriteLine("  Prompt text (type or paste, then Ctrl+D to finish):");
         Console.WriteLine("  Placeholders: {SelectedText} = highlighted text" +
                           (interactive ? "   {UserInput} = text you type in the popup" : ""));
         Console.WriteLine(interactive
@@ -697,8 +697,7 @@ public class InteractiveMenu(ConfigService configService)
             : "  Example: Translate {SelectedText} into Chinese.");
         Console.ResetColor();
 
-        var sb       = new System.Text.StringBuilder();
-        var prevEmpty = false;
+        var sb = new System.Text.StringBuilder();
 
         while (true)
         {
@@ -707,23 +706,15 @@ public class InteractiveMenu(ConfigService configService)
             Console.ResetColor();
             var line = Console.ReadLine();
 
-            // Ctrl+Z / EOF → cancel if nothing entered, else finish
+            // Ctrl+D / EOF → cancel if nothing entered, else finish
             if (line is null)
             {
                 if (sb.Length == 0) return "";
                 break;
             }
 
-            var isEmpty = string.IsNullOrEmpty(line);
-
-            // Double empty line → finish
-            if (isEmpty && prevEmpty) break;
-            // Single empty line on first prompt → cancel
-            if (isEmpty && sb.Length == 0) return "";
-
             if (sb.Length > 0) sb.Append('\n');
             sb.Append(line);
-            prevEmpty = isEmpty;
         }
 
         var result = sb.ToString().TrimEnd('\n', '\r');
