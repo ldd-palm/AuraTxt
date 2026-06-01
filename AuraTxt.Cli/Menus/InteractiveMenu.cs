@@ -95,7 +95,7 @@ public class InteractiveMenu(ConfigService configService)
         Console.WriteLine();
         H3("Add first model");
         var targetModel = Ask("Model full name (e.g. gpt-4o)");
-        var alias       = Ask($"Alias/short name [{targetModel}]");
+        var alias       = Ask("Alias/short name", targetModel);
         if (string.IsNullOrWhiteSpace(alias)) alias = targetModel;
 
         var provider = new ProviderConfig
@@ -113,7 +113,7 @@ public class InteractiveMenu(ConfigService configService)
             Console.WriteLine();
             if (ans == 'n') break;
             var tm2 = Ask("  Model full name");
-            var al2 = Ask($"  Alias [{tm2}]");
+            var al2 = Ask("  Alias", tm2);
             if (string.IsNullOrWhiteSpace(al2)) al2 = tm2;
             provider.Models.Add(new ModelEntry { TargetModel = tm2, Alias = al2 });
         }
@@ -183,7 +183,7 @@ public class InteractiveMenu(ConfigService configService)
 
             if (input == "1")
             {
-                var newUrl = Ask($"New Base URL [{p.BaseUrl}]");
+                var newUrl = Ask("New Base URL", p.BaseUrl);
                 if (!string.IsNullOrWhiteSpace(newUrl)) { p.BaseUrl = newUrl; _dirty = true; }
                 continue;
             }
@@ -196,7 +196,7 @@ public class InteractiveMenu(ConfigService configService)
             if (input == "A")
             {
                 var tm = Ask("Model full name");
-                var al = Ask($"Alias [{tm}]");
+                var al = Ask("Alias", tm);
                 if (string.IsNullOrWhiteSpace(al)) al = tm;
                 p.Models.Add(new ModelEntry { TargetModel = tm, Alias = al });
                 _dirty = true;
@@ -258,12 +258,12 @@ public class InteractiveMenu(ConfigService configService)
             if (input == "0") return;
             if (input == "1")
             {
-                var v = Ask($"New full name [{model.TargetModel}]");
+                var v = Ask("New full name", model.TargetModel);
                 if (!string.IsNullOrWhiteSpace(v)) { model.TargetModel = v; _dirty = true; }
             }
             else if (input == "2")
             {
-                var v = Ask($"New alias [{model.Alias}]");
+                var v = Ask("New alias", model.Alias);
                 if (!string.IsNullOrWhiteSpace(v)) { model.Alias = v; _dirty = true; }
             }
             else if (input == "3")
@@ -487,7 +487,7 @@ public class InteractiveMenu(ConfigService configService)
                 {
                     case "1":
                         Console.WriteLine("  💡 Find icons at https://lucide.dev/icons/");
-                        var ic = Ask($"New icon [{action.Icon}]");
+                        var ic = Ask("New icon", action.Icon);
                         if (!string.IsNullOrWhiteSpace(ic)) { action.Icon = ic; _dirty = true; }
                         break;
                     case "2":
@@ -511,7 +511,7 @@ public class InteractiveMenu(ConfigService configService)
                 {
                     case "1":
                         Console.WriteLine("  💡 Find icons at https://lucide.dev/icons/");
-                        var ic = Ask($"New icon [{action.Icon}]");
+                        var ic = Ask("New icon", action.Icon);
                         if (!string.IsNullOrWhiteSpace(ic)) { action.Icon = ic; _dirty = true; }
                         break;
                     case "2":
@@ -835,11 +835,17 @@ public class InteractiveMenu(ConfigService configService)
 
     private static char ReadKey() => Console.ReadKey(intercept: true).KeyChar;
 
-    private static string Ask(string prompt)
+    private static string Ask(string prompt, string? defaultValue = null)
     {
         Console.ForegroundColor = ConsoleColor.Yellow;
         Console.Write($"  {prompt}: ");
         Console.ResetColor();
+        if (!string.IsNullOrEmpty(defaultValue))
+        {
+            // Escape SendKeys special chars: + ^ % ~ ( )
+            var escaped = System.Text.RegularExpressions.Regex.Replace(defaultValue, @"([+^%~()])", "{$1}");
+            SendKeys.SendWait(escaped);
+        }
         return Console.ReadLine()?.Trim() ?? "";
     }
 
