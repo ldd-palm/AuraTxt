@@ -34,19 +34,23 @@ public class GlobalHookService
 
     private void OnMouseUp(object? sender, MouseEventExtArgs e)
     {
-        if (AppState.IsMonitoringPaused || e.Button != System.Windows.Forms.MouseButtons.Left) return;
+        if (AppState.IsMonitoringPaused || AppState.IsMenuHidden || e.Button != System.Windows.Forms.MouseButtons.Left) return;
+        if (DateTime.UtcNow < AppState.MenuSuppressUntil) return;
         var pos = new System.Drawing.Point(e.X, e.Y);
         _ = TryShowMenuAsync(pos);
     }
 
     private async Task TryShowMenuAsync(System.Drawing.Point cursorPos)
     {
-        var cfg  = _config.Load();
-        var text = await ClipboardService.GetSelectedTextAsync(cfg.Settings.MenuTriggerDelayMs);
-        if (string.IsNullOrWhiteSpace(text)) return;
+        var cfg = _config.Load();
+        string? text = null;
 
-        await Application.Current.Dispatcher.InvokeAsync(() =>
+        // Clipboard must be accessed on STA/UI thread
+        await Application.Current.Dispatcher.InvokeAsync(async () =>
         {
+            text = await ClipboardService.GetSelectedTextAsync(cfg.Settings.MenuTriggerDelayMs);
+            if (string.IsNullOrWhiteSpace(text)) return;
+
             var menu = new ActionMenuWindow(cfg, text, cursorPos);
             menu.Show();
         });

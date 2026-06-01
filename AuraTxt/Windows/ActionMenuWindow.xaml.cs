@@ -80,25 +80,6 @@ public partial class ActionMenuWindow : Window
             }
             IconPanel.Children.Add(btn);
         }
-
-        IconPanel.Children.Add(MakeSeparator());
-
-        // Fixed right: Settings (Lucide: settings)
-        var settingsImg = await IconCacheService.GetIconAsync("settings");
-        var settingsBtn = settingsImg is not null
-            ? MakeImageButton(settingsImg, "Settings (auracfg)", () =>
-              {
-                  SafeClose();
-                  var exe = System.IO.Path.Combine(AppContext.BaseDirectory, "auracfg.exe");
-                  if (System.IO.File.Exists(exe)) System.Diagnostics.Process.Start(exe);
-              })
-            : MakeEmojiButton("⚙️", "Settings (auracfg)", () =>
-              {
-                  SafeClose();
-                  var exe = System.IO.Path.Combine(AppContext.BaseDirectory, "auracfg.exe");
-                  if (System.IO.File.Exists(exe)) System.Diagnostics.Process.Start(exe);
-              });
-        IconPanel.Children.Add(settingsBtn);
     }
 
     private void ExecuteSystemAction(string id)
