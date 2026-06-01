@@ -407,9 +407,9 @@ public class InteractiveMenu(ConfigService configService)
             H2($"Action: {action.Id}");
             Item("1", "Icon       ", $": {action.Icon}");
             Item("2", "Model      ", $": {ModelLabel(action.ModelId)}");
-            Item("3", "Prompt     ", $": {(isBuiltin ? "(n/a — built-in)" : Truncate(action.Prompt, 50))}");
-            Item("4", "Hotkey     ", $": {hk}");
-            Item("5", "Interactive", $": {(isBuiltin ? "(n/a — built-in)" : action.IsInteractive.ToString())}");
+            Item("3", "Interactive", $": {(isBuiltin ? "(n/a — built-in)" : action.IsInteractive.ToString())}");
+            Item("4", "Prompt     ", $": {(isBuiltin ? "(n/a — built-in)" : Truncate(action.Prompt, 50))}");
+            Item("5", "Hotkey     ", $": {hk}");
             Sep();
             Item("0", "Back");
             Item("X", "Exit");
@@ -437,24 +437,24 @@ public class InteractiveMenu(ConfigService configService)
                     break;
                 case "3":
                     if (isBuiltin)
+                    { WriteGray("  Built-in service: interaction not applicable."); Pause(); break; }
+                    action.IsInteractive = !action.IsInteractive;
+                    _dirty = true;
+                    WriteSuccess($"Interactive → {action.IsInteractive}");
+                    Pause();
+                    break;
+                case "4":
+                    if (isBuiltin)
                     { WriteGray("  Built-in service: no prompt needed."); Pause(); break; }
                     Console.WriteLine();
                     var pr = AskPrompt(action.IsInteractive);
                     if (!string.IsNullOrWhiteSpace(pr)) { action.Prompt = pr; _dirty = true; }
                     break;
-                case "4":
+                case "5":
                     var newHk = HotkeyCapture.Capture(_cfg.Actions, excludeId: action.Id);
                     action.Hotkey = newHk;
                     _dirty = true;
                     if (!string.IsNullOrEmpty(newHk)) WriteSuccess($"Hotkey set to {newHk}.");
-                    Pause();
-                    break;
-                case "5":
-                    if (isBuiltin)
-                    { WriteGray("  Built-in service: interaction not applicable."); Pause(); break; }
-                    action.IsInteractive = !action.IsInteractive;
-                    _dirty = true;
-                    WriteSuccess($"Interactive → {action.IsInteractive}");
                     Pause();
                     break;
             }
