@@ -135,12 +135,15 @@ public class InteractiveMenu(ConfigService configService)
         var bound = _cfg.Actions.Where(a => a.ModelId.StartsWith($"{pid}/")).ToList();
         if (bound.Any())
         {
-            WriteWarning($"Provider '{pid}' is used by {bound.Count} action(s): " +
-                         string.Join(", ", bound.Select(a => a.Name)));
-            Console.Write("  Delete provider and all bound actions? (y/N): ");
-            if (char.ToLower(ReadKey()) != 'y') { Console.WriteLine(); return; }
-            Console.WriteLine();
-            _cfg.Actions.RemoveAll(a => a.ModelId.StartsWith($"{pid}/"));
+            WriteWarning($"Provider '{pid}' is used by {bound.Count} action(s):");
+            foreach (var a in bound)
+            {
+                var mLabel = ModelLabel(a.ModelId);
+                Console.WriteLine($"      — {a.Name} ({a.Id}) → {mLabel}");
+            }
+            WriteError("Update or delete those actions first before removing this provider.");
+            Pause();
+            return;
         }
 
         _cfg.Models.Remove(pid);
@@ -210,12 +213,24 @@ public class InteractiveMenu(ConfigService configService)
                     var modelIdx = mi - 3;
                     if (modelIdx >= 0 && modelIdx < p.Models.Count)
                     {
-                        var removed = p.Models[modelIdx].TargetModel;
-                        p.Models.RemoveAt(modelIdx);
-                        _cfg.Actions.RemoveAll(a => a.ModelId == $"{providerId}/{removed}");
-                        _dirty = true;
-                        WriteSuccess($"Model '{removed}' removed.");
-                        Pause();
+                        var target    = p.Models[modelIdx].TargetModel;
+                        var modelRef  = $"{providerId}/{target}";
+                        var bound = _cfg.Actions.Where(a => a.ModelId == modelRef).ToList();
+                        if (bound.Any())
+                        {
+                            WriteWarning($"Model '{target}' is used by {bound.Count} action(s):");
+                            foreach (var a in bound)
+                                Console.WriteLine($"      — {a.Name} ({a.Id})");
+                            WriteError("Update or delete those actions first before removing this model.");
+                            Pause();
+                        }
+                        else
+                        {
+                            p.Models.RemoveAt(modelIdx);
+                            _dirty = true;
+                            WriteSuccess($"Model '{target}' removed.");
+                            Pause();
+                        }
                     }
                 }
                 continue;
