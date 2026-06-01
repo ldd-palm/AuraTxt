@@ -313,7 +313,26 @@ public class InteractiveMenu(ConfigService configService)
             {
                 var a  = _cfg.Actions[i];
                 var hk = string.IsNullOrEmpty(a.Hotkey) ? "—" : a.Hotkey;
-                Item((i + 1).ToString(), $"{a.Id,-18}", $"({hk} | {ModelLabel(a.ModelId)})");
+                var model = string.IsNullOrEmpty(a.ModelId) ? "—" : ModelLabel(a.ModelId);
+
+                Console.Write($"  [{i + 1}] ");
+                Console.ForegroundColor = ConsoleColor.White;
+                Console.Write($"{a.Id,-18}");
+                Console.ResetColor();
+                Console.Write($"({hk} | {model} | ");
+
+                if (a.Enabled)
+                {
+                    Console.ForegroundColor = ConsoleColor.Green;
+                    Console.Write("enabled");
+                }
+                else
+                {
+                    Console.ForegroundColor = ConsoleColor.DarkGray;
+                    Console.Write("disabled");
+                }
+                Console.ResetColor();
+                Console.WriteLine(")");
             }
 
             Sep();
@@ -368,6 +387,11 @@ public class InteractiveMenu(ConfigService configService)
 
         var hotkey = HotkeyCapture.Capture(_cfg.Actions);
 
+        Console.Write("  Enable this action? (Y/n): ");
+        var enableAns = char.ToLower(ReadKey());
+        Console.WriteLine();
+        var enabled = enableAns != 'n';
+
         _cfg.Actions.Add(new ActionItem
         {
             Id            = id,
@@ -376,7 +400,8 @@ public class InteractiveMenu(ConfigService configService)
             ModelId       = modelId,
             IsInteractive = isInteractive,
             Prompt        = prompt,
-            Hotkey        = hotkey
+            Hotkey        = hotkey,
+            Enabled       = enabled
         });
         _dirty = true;
         WriteSuccess($"Action '{id}' added.");
@@ -385,13 +410,14 @@ public class InteractiveMenu(ConfigService configService)
 
     private void DeleteActionFlow()
     {
-        if (!_cfg.Actions.Any()) { WriteError("No actions to delete."); Pause(); return; }
-        for (int i = 0; i < _cfg.Actions.Count; i++)
-            Console.WriteLine($"    [{i + 1}] {_cfg.Actions[i].Name} ({_cfg.Actions[i].Id})");
+        var deletable = _cfg.Actions.Where(a => !a.IsSystem).ToList();
+        if (!deletable.Any()) { WriteError("No user actions to delete."); Pause(); return; }
+        for (int i = 0; i < deletable.Count; i++)
+            Console.WriteLine($"    [{i + 1}] {deletable[i].Name} ({deletable[i].Id})");
         Console.Write("  Enter number to delete (0 to cancel): ");
-        if (!int.TryParse(Console.ReadLine()?.Trim(), out var idx) || idx < 1 || idx > _cfg.Actions.Count) return;
-        var name = _cfg.Actions[idx - 1].Name;
-        _cfg.Actions.RemoveAt(idx - 1);
+        if (!int.TryParse(Console.ReadLine()?.Trim(), out var idx) || idx < 1 || idx > deletable.Count) return;
+        var name = deletable[idx - 1].Name;
+        _cfg.Actions.Remove(deletable[idx - 1]);
         _dirty = true;
         WriteSuccess($"Action '{name}' deleted.");
         Pause();
@@ -399,17 +425,38 @@ public class InteractiveMenu(ConfigService configService)
 
     private void ActionDetailMenu(ActionItem action)
     {
+        var isSystem = action.IsSystem;
+
         while (true)
         {
             Console.Clear();
-            var hk        = string.IsNullOrEmpty(action.Hotkey) ? "(none)" : action.Hotkey;
-            var isBuiltin = action.ModelId.StartsWith("default/");
-            H2($"Action: {action.Id}");
-            Item("1", "Icon       ", $": {action.Icon}");
-            Item("2", "Model      ", $": {ModelLabel(action.ModelId)}");
-            Item("3", "Interactive", $": {(isBuiltin ? "(n/a — built-in)" : action.IsInteractive.ToString())}");
-            Item("4", "Prompt     ", $": {(isBuiltin ? "(n/a — built-in)" : Truncate(action.Prompt, 50))}");
-            Item("5", "Hotkey     ", $": {hk}");
+            var hk  = string.IsNullOrEmpty(action.Hotkey) ? "(none)" : action.Hotkey;
+            var tag = isSystem ? " (system)" : "";
+
+            H2($"Action: {action.Id}{tag}");
+
+            if (isSystem)
+            {
+                // System action: only icon, hotkey, status
+                Item("1", "Icon  ", $": {action.Icon}");
+                Item("2", "Hotkey", $": {hk}");
+                Console.Write("  [3] Status  : ");
+                PrintStatus(action.Enabled);
+                Console.WriteLine();
+            }
+            else
+            {
+                var isBuiltin = action.ModelId.StartsWith("default/");
+                Item("1", "Icon       ", $": {action.Icon}");
+                Item("2", "Model      ", $": {ModelLabel(action.ModelId)}");
+                Item("3", "Interactive", $": {(isBuiltin ? "(n/a — built-in)" : action.IsInteractive.ToString())}");
+                Item("4", "Prompt     ", $": {(isBuiltin ? "(n/a — built-in)" : Truncate(action.Prompt, 50))}");
+                Item("5", "Hotkey     ", $": {hk}");
+                Console.Write("  [6] Status     : ");
+                PrintStatus(action.Enabled);
+                Console.WriteLine();
+            }
+
             Sep();
             Item("0", "Back");
             Item("X", "Exit");
@@ -419,44 +466,77 @@ public class InteractiveMenu(ConfigService configService)
             if (input == "0") return;
             if (input.ToUpper() == "X") ExitFlow();
 
-            switch (input)
+            if (isSystem)
             {
-                case "1":
-                    Console.WriteLine("  💡 Find icons at https://lucide.dev/icons/");
-                    var ic = Ask($"New icon [{action.Icon}]");
-                    if (!string.IsNullOrWhiteSpace(ic)) { action.Icon = ic; _dirty = true; }
-                    break;
-                case "2":
-                    var mid = SelectModel();
-                    if (mid is not null)
-                    {
-                        action.ModelId = mid;
-                        if (mid.StartsWith("default/")) { action.IsInteractive = false; action.Prompt = ""; }
+                switch (input)
+                {
+                    case "1":
+                        Console.WriteLine("  💡 Find icons at https://lucide.dev/icons/");
+                        var ic = Ask($"New icon [{action.Icon}]");
+                        if (!string.IsNullOrWhiteSpace(ic)) { action.Icon = ic; _dirty = true; }
+                        break;
+                    case "2":
+                        var newHk = HotkeyCapture.Capture(_cfg.Actions, excludeId: action.Id);
+                        action.Hotkey = newHk;
                         _dirty = true;
-                    }
-                    break;
-                case "3":
-                    if (isBuiltin)
-                    { WriteGray("  Built-in service: interaction not applicable."); Pause(); break; }
-                    action.IsInteractive = !action.IsInteractive;
-                    _dirty = true;
-                    WriteSuccess($"Interactive → {action.IsInteractive}");
-                    Pause();
-                    break;
-                case "4":
-                    if (isBuiltin)
-                    { WriteGray("  Built-in service: no prompt needed."); Pause(); break; }
-                    Console.WriteLine();
-                    var pr = AskPrompt(action.IsInteractive);
-                    if (!string.IsNullOrWhiteSpace(pr)) { action.Prompt = pr; _dirty = true; }
-                    break;
-                case "5":
-                    var newHk = HotkeyCapture.Capture(_cfg.Actions, excludeId: action.Id);
-                    action.Hotkey = newHk;
-                    _dirty = true;
-                    if (!string.IsNullOrEmpty(newHk)) WriteSuccess($"Hotkey set to {newHk}.");
-                    Pause();
-                    break;
+                        if (!string.IsNullOrEmpty(newHk)) WriteSuccess($"Hotkey set to {newHk}.");
+                        Pause();
+                        break;
+                    case "3":
+                        action.Enabled = !action.Enabled;
+                        _dirty = true;
+                        WriteSuccess($"Status → {(action.Enabled ? "enabled" : "disabled")}");
+                        Pause();
+                        break;
+                }
+            }
+            else
+            {
+                switch (input)
+                {
+                    case "1":
+                        Console.WriteLine("  💡 Find icons at https://lucide.dev/icons/");
+                        var ic = Ask($"New icon [{action.Icon}]");
+                        if (!string.IsNullOrWhiteSpace(ic)) { action.Icon = ic; _dirty = true; }
+                        break;
+                    case "2":
+                        var mid = SelectModel();
+                        if (mid is not null)
+                        {
+                            action.ModelId = mid;
+                            if (mid.StartsWith("default/")) { action.IsInteractive = false; action.Prompt = ""; }
+                            _dirty = true;
+                        }
+                        break;
+                    case "3":
+                        if (action.ModelId.StartsWith("default/"))
+                        { WriteGray("  Built-in service: interaction not applicable."); Pause(); break; }
+                        action.IsInteractive = !action.IsInteractive;
+                        _dirty = true;
+                        WriteSuccess($"Interactive → {action.IsInteractive}");
+                        Pause();
+                        break;
+                    case "4":
+                        if (action.ModelId.StartsWith("default/"))
+                        { WriteGray("  Built-in service: no prompt needed."); Pause(); break; }
+                        Console.WriteLine();
+                        var pr = AskPrompt(action.IsInteractive);
+                        if (!string.IsNullOrWhiteSpace(pr)) { action.Prompt = pr; _dirty = true; }
+                        break;
+                    case "5":
+                        var newHk = HotkeyCapture.Capture(_cfg.Actions, excludeId: action.Id);
+                        action.Hotkey = newHk;
+                        _dirty = true;
+                        if (!string.IsNullOrEmpty(newHk)) WriteSuccess($"Hotkey set to {newHk}.");
+                        Pause();
+                        break;
+                    case "6":
+                        action.Enabled = !action.Enabled;
+                        _dirty = true;
+                        WriteSuccess($"Status → {(action.Enabled ? "enabled" : "disabled")}");
+                        Pause();
+                        break;
+                }
             }
         }
     }
@@ -570,17 +650,44 @@ public class InteractiveMenu(ConfigService configService)
         return r is null ? modelRef : $"{r.Value.provider.DisplayName} / {r.Value.model.Alias}";
     }
 
-    /// Prompts for prompt text, showing placeholder examples appropriate to the action mode.
+    /// Reads multi-line prompt text. Ctrl+D (EOF) to finish.
     private static string AskPrompt(bool interactive)
     {
         Console.ForegroundColor = ConsoleColor.DarkGray;
+        Console.WriteLine("  Prompt text (type or paste, Ctrl+D to finish, Esc to cancel):");
         Console.WriteLine("  Placeholders: {SelectedText} = highlighted text" +
                           (interactive ? "   {UserInput} = text you type in the popup" : ""));
         Console.WriteLine(interactive
             ? "  Example: Based on \"{SelectedText}\", write a reply that: {UserInput}"
             : "  Example: Translate {SelectedText} into Chinese.");
         Console.ResetColor();
-        return Ask("Prompt text");
+
+        Console.ForegroundColor = ConsoleColor.Yellow;
+        Console.Write("  > ");
+        Console.ResetColor();
+
+        var sb   = new System.Text.StringBuilder();
+        var line = Console.ReadLine();
+
+        // First line null (Ctrl+D immediately) → cancel
+        if (line is null) return "";
+
+        sb.Append(line);
+        while (true)
+        {
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.Write("  > ");
+            Console.ResetColor();
+            var next = Console.ReadLine();
+            if (next is null) break;  // Ctrl+D / EOF → done
+            sb.Append('\n').Append(next);
+        }
+
+        var result = sb.ToString().TrimEnd('\n', '\r');
+        Console.ForegroundColor = ConsoleColor.DarkGray;
+        Console.WriteLine($"  ({result.Split('\n').Length} line(s) saved)");
+        Console.ResetColor();
+        return result;
     }
 
     // ──── Console UI primitives ────
@@ -705,6 +812,21 @@ public class InteractiveMenu(ConfigService configService)
         string.IsNullOrEmpty(key) ? "(not set)" :
         key.Length <= 8 ? new string('•', key.Length) :
         key[..4] + new string('•', Math.Min(8, key.Length - 4));
+
+    private static void PrintStatus(bool enabled)
+    {
+        if (enabled)
+        {
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.Write("enabled");
+        }
+        else
+        {
+            Console.ForegroundColor = ConsoleColor.DarkGray;
+            Console.Write("disabled");
+        }
+        Console.ResetColor();
+    }
 
     private static string Truncate(string s, int max) =>
         s.Length <= max ? s : s[..max] + "…";
