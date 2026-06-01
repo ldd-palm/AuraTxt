@@ -15,6 +15,7 @@ return args[0] switch
     "provider" => await new ProviderCommand(configService).ExecuteAsync(args[1..]),
     "model"    => await new ProviderCommand(configService).ExecuteAsync(args[1..]),
     "action"   => await new ActionCommand(configService).ExecuteAsync(args[1..]),
+    "show"     => await new ShowCommand(configService).ExecuteAsync(args[1..]),
     "settings" => await new SettingsCommand(configService).ExecuteAsync(args[1..]),
     "doctor"   => new DoctorCommand(configService).Execute(),
     "restore"  => Restore(configService),
@@ -45,6 +46,9 @@ static int Help()
     Console.WriteLine("auracfg — AuraTxt Config Tool");
     Console.WriteLine("Usage:");
     Console.WriteLine("  auracfg                        Interactive menu");
+    Console.WriteLine("  auracfg show                   Overview all config");
+    Console.WriteLine("  auracfg show provider [id]     Show provider details");
+    Console.WriteLine("  auracfg show action [id]       Show action details");
     Console.WriteLine("  auracfg provider  [options]    Manage model providers");
     Console.WriteLine("  auracfg action    [options]    Manage actions");
     Console.WriteLine("  auracfg settings  [options]    Manage UI settings");
