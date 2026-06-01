@@ -717,9 +717,13 @@ public class InteractiveMenu(ConfigService configService)
             sb.Append(line);
         }
 
-        var result = sb.ToString().TrimEnd('\n', '\r');
+        var raw  = sb.ToString().TrimEnd('\n', '\r');
+        var lines = raw.Split('\n').Where(l => !string.IsNullOrEmpty(l)).ToArray();
+        var result = string.Join('\n', lines);
+        var removed = raw.Split('\n').Length - lines.Length;
         Console.ForegroundColor = ConsoleColor.DarkGray;
-        Console.WriteLine($"  ({result.Split('\n').Length} line(s) saved)");
+        Console.WriteLine($"  ({lines.Length} line(s) saved)" +
+                          (removed > 0 ? $" — {removed} empty line(s) removed" : ""));
         Console.ResetColor();
         return result;
     }
