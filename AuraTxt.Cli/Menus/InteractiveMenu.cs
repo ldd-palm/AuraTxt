@@ -689,7 +689,7 @@ public class InteractiveMenu(ConfigService configService)
         }
 
         Console.ForegroundColor = ConsoleColor.DarkGray;
-        Console.WriteLine("  Prompt text (type or paste, then Ctrl+D to finish):");
+        Console.WriteLine("  Prompt text (type or paste, then '---' on a line to finish):");
         Console.WriteLine("  Placeholders: {SelectedText} = highlighted text" +
                           (interactive ? "   {UserInput} = text you type in the popup" : ""));
         Console.WriteLine(interactive
@@ -706,8 +706,14 @@ public class InteractiveMenu(ConfigService configService)
             Console.ResetColor();
             var line = Console.ReadLine();
 
-            // Ctrl+D / EOF → cancel if nothing entered, else finish
+            // Ctrl+Z / EOF — fallback finish
             if (line is null)
+            {
+                if (sb.Length == 0) return "";
+                break;
+            }
+            // "---" sentinel line → finish (or cancel if first line)
+            if (line == "---")
             {
                 if (sb.Length == 0) return "";
                 break;
