@@ -26,4 +26,8 @@ public class AppSettings
     /// Theme ID (filename without .json) — e.g. "light", "dark", or a user custom file.
     /// Defaults to "light".
     public string Theme { get; set; } = "light";
+
+    /// TTS voice for the Speech action. Empty = system default.
+    /// Defaults to "Microsoft Ava" (Win11 Natural English voice).
+    public string SpeechVoice { get; set; } = "Microsoft Ava";
 }

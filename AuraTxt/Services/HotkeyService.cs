@@ -54,8 +54,7 @@ public class HotkeyService
             switch (action.Id)
             {
                 case "speech":
-                    var synth = new System.Speech.Synthesis.SpeechSynthesizer();
-                    synth.SpeakAsync(text);
+                    SpeechService.Speak(text, cfg.Settings.SpeechVoice);
                     break;
                 case "copy":
                     System.Windows.Clipboard.SetText(text);

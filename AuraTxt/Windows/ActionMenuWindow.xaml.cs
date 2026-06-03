@@ -2,6 +2,7 @@ using System.Threading;
 using System.Windows;
 using System.Windows.Media;
 using AuraTxt.Core.Models;
+using AuraTxt.Core.Services;
 using AuraTxt.Services;
 using Brushes = System.Windows.Media.Brushes;
 using Button = System.Windows.Controls.Button;
@@ -189,8 +190,7 @@ public partial class ActionMenuWindow : Window
                 Clipboard.SetText(_selectedText);
                 break;
             case "speech":
-                var synthesizer = new System.Speech.Synthesis.SpeechSynthesizer();
-                synthesizer.SpeakAsync(_selectedText);
+                SpeechService.Speak(_selectedText, _cfg.Settings.SpeechVoice);
                 break;
         }
         SafeClose();

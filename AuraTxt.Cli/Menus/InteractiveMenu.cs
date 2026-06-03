@@ -860,6 +860,7 @@ public class InteractiveMenu(ConfigService configService)
             Item("4", "System Prompt  ", $": {PromptLabel(s.SystemPrompt)}");
             Item("5", "Target Language", $": {LangLabel(s.TargetLanguage)}");
             Item("6", "Theme          ", $": {s.Theme}");
+            Item("7", "Speech Voice   ", $": {s.SpeechVoice}");
             Sep();
             Item("B", "Back");
             Item("X", "Exit");
@@ -902,6 +903,9 @@ public class InteractiveMenu(ConfigService configService)
                     break;
                 case "6":
                     SelectTheme(s);
+                    break;
+                case "7":
+                    SelectVoice(s);
                     break;
             }
         }
@@ -1016,6 +1020,31 @@ public class InteractiveMenu(ConfigService configService)
         s.Theme = id;
         _dirty = true;
         WriteSuccess($"Theme → {id}");
+        Pause();
+    }
+
+    private void SelectVoice(AppSettings s)
+    {
+        var voices = SpeechService.GetInstalledVoices();
+
+        Console.WriteLine();
+        Console.WriteLine($"  Select speech voice (current: {s.SpeechVoice}):");
+        for (int i = 0; i < voices.Count; i++)
+            Console.WriteLine($"    {i + 1}. {voices[i]}");
+        Console.WriteLine("  Or type a voice name directly.");
+        Console.Write("  Selection (blank to cancel): ");
+        var input = Console.ReadLine()?.Trim() ?? "";
+        if (input.Length == 0) return;
+
+        string voice;
+        if (int.TryParse(input, out var idx) && idx >= 1 && idx <= voices.Count)
+            voice = voices[idx - 1];
+        else
+            voice = input;
+
+        s.SpeechVoice = voice;
+        _dirty = true;
+        WriteSuccess($"Speech Voice → {voice}");
         Pause();
     }
 

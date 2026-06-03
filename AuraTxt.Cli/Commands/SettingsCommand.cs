@@ -16,6 +16,7 @@ public class SettingsCommand(ConfigService config)
         Console.WriteLine($"delay-ms:      {s.MenuTriggerDelayMs}");
         Console.WriteLine($"target-lang:   {s.TargetLanguage}");
         Console.WriteLine($"theme:         {s.Theme}");
+        Console.WriteLine($"voice:         {s.SpeechVoice}");
         return 0;
     }
 
@@ -33,6 +34,8 @@ public class SettingsCommand(ConfigService config)
             s.TargetLanguage = tl.Trim();
         if (opts.TryGetValue("theme", out var th) && !string.IsNullOrWhiteSpace(th))
             s.Theme = th.Trim();
+        if (opts.TryGetValue("voice", out var vc) && !string.IsNullOrWhiteSpace(vc))
+            s.SpeechVoice = vc.Trim();
         config.Save(cfg);
         Console.WriteLine("✓ Settings saved");
         return 0;
@@ -41,7 +44,7 @@ public class SettingsCommand(ConfigService config)
     private static int PrintHelp()
     {
         Console.WriteLine("auracfg settings --show");
-        Console.WriteLine("auracfg settings --set [--font-size <n>] [--opacity <0-1>] [--delay-ms <n>] [--target-lang <code>] [--theme <id>]");
+        Console.WriteLine("auracfg settings --set [--font-size <n>] [--opacity <0-1>] [--delay-ms <n>] [--target-lang <code>] [--theme <id>] [--voice <name>]");
         return 1;
     }
 }
