@@ -7,6 +7,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>AuraTxt</AssemblyName>
+    <ApplicationIcon>Resources\aruatxt_active.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\AuraTxt.Core\AuraTxt.Core.csproj" />
@@ -22,5 +23,7 @@
     <Resource Include="Resources\tray.ico" />
     <Resource Include="Resources\aruatxt_active.ico" />
     <Resource Include="Resources\aruatxt_paused.ico" />
+    <Resource Include="Resources\icons\*.svg" />
+    <Resource Include="..\images\aruatxt_custom.png" Link="Resources\aruatxt_logo.png" />
   </ItemGroup>
 </Project>

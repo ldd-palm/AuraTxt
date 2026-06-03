@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Input;
 using AuraTxt.Core.Models;
 using AuraTxt.Core.Services;
+using AuraTxt.Services;
 using Clipboard = System.Windows.Clipboard;
 using KeyEventArgs = System.Windows.Input.KeyEventArgs;
 
@@ -14,6 +15,8 @@ public partial class InteractiveWindow : Window
     private readonly ConfigRoot _cfg;
     private string              _currentPrompt;
     private (ProviderConfig provider, ModelEntry model)? _activeModel;
+    private bool _closing;
+    private bool _editing;
 
     public InteractiveWindow(ActionItem action, string selectedText, ConfigRoot cfg)
     {
@@ -21,18 +24,29 @@ public partial class InteractiveWindow : Window
         _action        = action;
         _selectedText  = selectedText;
         _cfg           = cfg;
-        _currentPrompt = action.Prompt;
+        _currentPrompt = PromptService.Resolve(action.Prompt);   // path → file content (or inline)
+
+        // Allow resize by dragging window edges
+        System.Windows.Shell.WindowChrome.SetWindowChrome(this, new System.Windows.Shell.WindowChrome
+        {
+            ResizeBorderThickness = new Thickness(6),
+            CaptionHeight = 0,
+            GlassFrameThickness = new Thickness(0),
+            CornerRadius = new CornerRadius(8),
+            UseAeroCaptionButtons = false
+        });
+        MinWidth = 320;
+        MinHeight = 200;
 
         TitleLabel.Text     = action.Name;
         ResultText.FontSize = cfg.Settings.FontSize;
         Opacity             = cfg.Settings.ResultWindowOpacity;
 
-        var items = cfg.AllModelRefs()
+        var items = cfg.AllEnabledModelAliases()
             .Where(r => !r.Ref.StartsWith("default/"))
-            .Select(r => new ModelPickerItem(r.Ref, r.Label))
+            .Select(r => new ModelPickerItem(r.Ref, r.Label, false))
             .ToList();
         ModelPicker.ItemsSource       = items;
-        ModelPicker.DisplayMemberPath = "Label";
         ModelPicker.SelectedValuePath = "Id";
 
         var initial = cfg.ResolveModel(action.ModelId);
@@ -41,12 +55,26 @@ public partial class InteractiveWindow : Window
             ModelPicker.SelectedValue = action.ModelId;
             _activeModel = initial;
         }
+
+        AppState.IsResultWindowOpen = true;
+        // Keep LastProcessedText on close (re-armed only on deselect — see GlobalHookService).
+        Closed += (_, _) =>
+        {
+            AppState.IsResultWindowOpen = false;
+            AppState.MenuSuppressUntil  = DateTime.UtcNow.AddSeconds(2);
+        };
+        Deactivated += (_, _) => SafeClose();
     }
 
     private void ModelPicker_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
     {
         if (ModelPicker.SelectedValue is string id)
+        {
             _activeModel = _cfg.ResolveModel(id);
+            _action.ModelId = id;
+            try { new ConfigService().Save(_cfg); }
+            catch (Exception ex) { LogService.Error($"Failed to persist model selection", ex); }
+        }
     }
 
     private async void SendBtn_Click(object sender, RoutedEventArgs e)  => await GenerateAsync();
@@ -60,33 +88,70 @@ public partial class InteractiveWindow : Window
             return;
         }
         ResultText.Text = "Processing…";
-        var prompt = _currentPrompt
+
+        var userPrompt = _currentPrompt
             .Replace("{SelectedText}", _selectedText)
             .Replace("{UserInput}", UserInput.Text);
-        try { ResultText.Text = await new AiClient().CompleteAsync(_activeModel.Value.provider, _activeModel.Value.model, prompt); }
-        catch (Exception ex) { ResultText.Text = $"[Error] {ex.Message}"; }
+
+        var sysText = PromptService.Resolve(_cfg.Settings.SystemPrompt);
+        var systemPrompt = string.IsNullOrWhiteSpace(sysText)
+            ? null
+            : sysText
+                .Replace("{SelectedText}", _selectedText)
+                .Replace("{UserInput}", UserInput.Text);
+
+        LogService.Info($"ACTION [{_action.Id}] model={_action.ModelId} text_len={_selectedText.Length} user_input_len={UserInput.Text.Length}");
+        try
+        {
+            ResultText.Text = await new AiClient().CompleteAsync(
+                _activeModel.Value.provider, _activeModel.Value.model, userPrompt, systemPrompt);
+        }
+        catch (Exception ex)
+        {
+            LogService.Error($"GenerateAsync failed for action [{_action.Id}]", ex);
+            ResultText.Text = FormatError(ex);
+        }
     }
 
-    private void CopyBtn_Click(object sender, RoutedEventArgs e) => Clipboard.SetText(ResultText.Text);
+    private void CopyBtn_Click(object sender, RoutedEventArgs e)
+    {
+        try { Clipboard.SetText(ResultText.Text); }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Copy failed: {ex.Message}"); }
+    }
 
     private void EditBtn_Click(object sender, RoutedEventArgs e)
     {
-        var dlg = new PromptEditDialog(_currentPrompt);
-        if (dlg.ShowDialog() == true) _currentPrompt = dlg.Result;
+        _editing = true;
+        try
+        {
+            var dlg = new PromptEditDialog(_currentPrompt) { Owner = this };
+            if (dlg.ShowDialog() == true) _currentPrompt = dlg.Result;
+        }
+        finally { _editing = false; }
     }
 
-    private void CloseBtn_Click(object sender, RoutedEventArgs e) => Close();
+    private void CloseBtn_Click(object sender, RoutedEventArgs e) { _closing = true; Close(); }
+    private void SafeClose() { if (_closing || _editing) return; _closing = true; Close(); }
 
     private void TitleBar_MouseDown(object sender, MouseButtonEventArgs e)
     {
         if (e.ChangedButton == MouseButton.Left) DragMove();
     }
 
-    private void Window_KeyDown(object sender, KeyEventArgs e)
+    private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.P) EditBtn_Click(sender, new RoutedEventArgs());
-        else if (e.Key == Key.R) RegenBtn_Click(sender, new RoutedEventArgs());
-        else if (e.Key == Key.C) CopyBtn_Click(sender, new RoutedEventArgs());
+        if (e.Key == Key.Escape)             { SafeClose(); e.Handled = true; }
+        else if (e.Key == Key.P) { EditBtn_Click(sender, new RoutedEventArgs()); e.Handled = true; }
+        else if (e.Key == Key.R) { RegenBtn_Click(sender, new RoutedEventArgs()); e.Handled = true; }
+        else if (e.Key == Key.C) { CopyBtn_Click(sender, new RoutedEventArgs()); e.Handled = true; }
+    }
+
+    private static string FormatError(Exception ex)
+    {
+        var msg = $"[Error] {ex.Message}";
+        if (ex.InnerException is not null)
+            msg += $"\n→ {ex.InnerException.Message}";
+        return msg;
     }
 
     private void UserInput_KeyDown(object sender, KeyEventArgs e)
@@ -98,5 +163,5 @@ public partial class InteractiveWindow : Window
         }
     }
 
-    private record ModelPickerItem(string Id, string Label);
+    private record ModelPickerItem(string Id, string Label, bool IsBuiltIn);
 }

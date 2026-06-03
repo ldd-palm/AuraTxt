@@ -1,0 +1,144 @@
+<h2>设计方案 · 第二节：config.json 结构 + 三个核心窗口</h2>
+<p class="subtitle">数据模型与 UI 组件设计</p>
+
+<!-- config.json schema -->
+<div class="mockup" style="margin-bottom: 24px;">
+  <div class="mockup-header">config.json 数据结构</div>
+  <div class="mockup-body" style="font-family: 'Cascadia Code', Consolas, monospace; font-size: 12px; line-height: 1.7; color: #e2e8f0;">
+<pre style="margin:0; white-space: pre-wrap;">{
+  <span style="color:#86efac">"System"</span>: {                          <span style="color:#64748b">// 只读，硬编码，不可通过任何工具修改</span>
+    <span style="color:#86efac">"GoogleTranslate"</span>: { <span style="color:#fbbf24">"Provider"</span>: <span style="color:#f87171">"google-translate"</span>, <span style="color:#fbbf24">"DisplayName"</span>: <span style="color:#f87171">"Google 翻译"</span> },
+    <span style="color:#86efac">"YoudaoDict"</span>:      { <span style="color:#fbbf24">"Provider"</span>: <span style="color:#f87171">"youdao-dict"</span>,      <span style="color:#fbbf24">"DisplayName"</span>: <span style="color:#f87171">"有道词典"</span>   }
+  },
+  <span style="color:#86efac">"Models"</span>: {                           <span style="color:#64748b">// auracfg model --set/update/delete 管理</span>
+    <span style="color:#86efac">"deepseek"</span>: {
+      <span style="color:#fbbf24">"DisplayName"</span>: <span style="color:#f87171">"DeepSeek-V3"</span>,
+      <span style="color:#fbbf24">"Provider"</span>:    <span style="color:#f87171">"openai-compatible"</span>,
+      <span style="color:#fbbf24">"BaseUrl"</span>:     <span style="color:#f87171">"https://api.deepseek.com"</span>,
+      <span style="color:#fbbf24">"ApiKey"</span>:      <span style="color:#f87171">"sk-xxxx"</span>,
+      <span style="color:#fbbf24">"TargetModel"</span>: <span style="color:#f87171">"deepseek-chat"</span>,
+      <span style="color:#fbbf24">"Alias"</span>:       <span style="color:#f87171">"openai-compatible/deepseek-chat"</span>  <span style="color:#64748b">// 自动生成</span>
+    }
+  },
+  <span style="color:#86efac">"Actions"</span>: [                          <span style="color:#64748b">// auracfg action --set/update/delete 管理</span>
+    {
+      <span style="color:#fbbf24">"Id"</span>: <span style="color:#f87171">"translate"</span>, <span style="color:#fbbf24">"Name"</span>: <span style="color:#f87171">"翻译"</span>, <span style="color:#fbbf24">"Icon"</span>: <span style="color:#f87171">"languages"</span>,
+      <span style="color:#fbbf24">"ModelId"</span>: <span style="color:#f87171">"$google-translate"</span>,         <span style="color:#64748b">// $ 前缀 = 引用 System 服务</span>
+      <span style="color:#fbbf24">"IsInteractive"</span>: <span style="color:#67e8f9">false</span>, <span style="color:#fbbf24">"Hotkey"</span>: <span style="color:#f87171">"Alt+T"</span>,
+      <span style="color:#fbbf24">"Prompt"</span>: <span style="color:#f87171">"{SelectedText}"</span>
+    },
+    {
+      <span style="color:#fbbf24">"Id"</span>: <span style="color:#f87171">"reply"</span>, <span style="color:#fbbf24">"Name"</span>: <span style="color:#f87171">"智能回复"</span>, <span style="color:#fbbf24">"Icon"</span>: <span style="color:#f87171">"mail-reply"</span>,
+      <span style="color:#fbbf24">"ModelId"</span>: <span style="color:#f87171">"deepseek"</span>,
+      <span style="color:#fbbf24">"IsInteractive"</span>: <span style="color:#67e8f9">true</span>, <span style="color:#fbbf24">"Hotkey"</span>: <span style="color:#f87171">"Alt+R"</span>,
+      <span style="color:#fbbf24">"Prompt"</span>: <span style="color:#f87171">"原文：{SelectedText}\n回复意图：{UserInput}\n请生成专业回信。"</span>
+    }
+  ],
+  <span style="color:#86efac">"Settings"</span>: {                         <span style="color:#64748b">// 界面设置，auracfg settings 管理</span>
+    <span style="color:#fbbf24">"FontSize"</span>: <span style="color:#67e8f9">14</span>,
+    <span style="color:#fbbf24">"ResultWindowOpacity"</span>: <span style="color:#67e8f9">0.95</span>,
+    <span style="color:#fbbf24">"MenuTriggerDelayMs"</span>: <span style="color:#67e8f9">100</span>
+  }
+}</pre>
+  </div>
+</div>
+
+<!-- Three windows mockups -->
+<h3>三个核心窗口</h3>
+
+<div class="split" style="gap: 16px; flex-wrap: wrap;">
+
+  <!-- Window 1: Action Menu -->
+  <div class="mockup" style="flex: 0 0 auto; min-width: 260px;">
+    <div class="mockup-header">① 动作菜单（光标旁弹出）</div>
+    <div class="mockup-body" style="display:flex; justify-content:center; padding: 30px 20px; background: #2d2d2d;">
+      <!-- Capsule menu -->
+      <div style="display:inline-flex;align-items:center;background:white;border-radius:999px;box-shadow:0 4px 20px rgba(0,0,0,0.35);padding:5px 8px;gap:2px;font-size:14px;position:relative;">
+        <!-- Copy (fixed left) -->
+        <div style="width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#555;" title="复制">📋</div>
+        <div style="width:1px;height:18px;background:#e0e0e0;margin:0 2px;"></div>
+        <!-- Dynamic actions -->
+        <div style="width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;background:#6366f1;color:white;" title="翻译 Alt+T">🌐</div>
+        <div style="width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#555;" title="润色 Alt+P">✨</div>
+        <div style="width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#555;" title="智能回复 Alt+R">✉️</div>
+        <div style="width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#555;" title="词典">📖</div>
+        <div style="width:1px;height:18px;background:#e0e0e0;margin:0 2px;"></div>
+        <!-- Settings (fixed right) -->
+        <div style="width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#555;" title="设置">⚙️</div>
+        <!-- Tooltip shown below hovered icon -->
+        <div style="position:absolute;bottom:-28px;left:50%;transform:translateX(-50%);background:#333;color:white;border-radius:5px;padding:3px 8px;font-size:11px;white-space:nowrap;font-family:sans-serif;">翻译 (Alt+T)</div>
+      </div>
+    </div>
+    <div style="padding: 8px 12px; color: #94a3b8; font-size: 11px;">
+      最左：复制（固定）· 中间：动作（config 驱动）· 最右：设置（固定）
+    </div>
+  </div>
+
+  <!-- Window 2: Result Window -->
+  <div class="mockup" style="flex: 1 1 300px;">
+    <div class="mockup-header">② 结果大框（非交互式 / 结果展示）</div>
+    <div class="mockup-body" style="background:#1e1e1e; padding: 0; border-radius: 6px; overflow: hidden;">
+      <!-- Title bar -->
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:#2a2a2a;border-bottom:1px solid #333;">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span style="width:12px;height:12px;border-radius:50%;background:#ff5f57;display:inline-block;cursor:pointer;"></span>
+          <span style="color:#888;font-size:11px;font-family:sans-serif;">翻译 · deepseek</span>
+        </div>
+        <div style="display:flex;gap:4px;">
+          <span style="background:#333;color:#ccc;border-radius:4px;padding:2px 7px;font-size:11px;cursor:pointer;font-family:sans-serif;">P: Edit Prompt</span>
+          <span style="background:#333;color:#ccc;border-radius:4px;padding:2px 7px;font-size:11px;cursor:pointer;font-family:sans-serif;">R: Regenerate</span>
+          <span style="background:#6366f1;color:white;border-radius:4px;padding:2px 7px;font-size:11px;cursor:pointer;font-family:sans-serif;">C: Copy</span>
+        </div>
+      </div>
+      <!-- Result content area -->
+      <div style="padding:14px 16px;color:#e2e8f0;font-size:13px;font-family:'Segoe UI',sans-serif;line-height:1.7;min-height:100px;">
+        <span style="color:#6366f1;">▍</span> The quick brown fox jumps over the lazy dog. 这是一段 AI 返回的翻译结果，支持 Markdown 渲染，流式输出时光标在末尾闪烁。
+      </div>
+    </div>
+    <div style="padding: 8px 12px; color: #94a3b8; font-size: 11px;">
+      始终置顶 · X 关闭 · 流式输出 · 快捷键 P/R/C 操作
+    </div>
+  </div>
+
+</div>
+
+<!-- Window 3: Interactive Window -->
+<div class="mockup" style="margin-top: 16px;">
+  <div class="mockup-header">③ 交互式窗口（IsInteractive=true 的动作，如智能回复）</div>
+  <div class="mockup-body" style="background:#1e1e1e; padding: 0; overflow: hidden;">
+    <!-- Title bar -->
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:#2a2a2a;border-bottom:1px solid #333;">
+      <div style="display:flex;align-items:center;gap:6px;">
+        <span style="width:12px;height:12px;border-radius:50%;background:#ff5f57;display:inline-block;"></span>
+        <span style="color:#888;font-size:11px;font-family:sans-serif;">智能回复 · deepseek</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="color:#888;font-size:11px;font-family:sans-serif;">gpt-4o</span>
+        <span style="color:#555;font-size:11px;">▾</span>
+        <span style="background:#333;color:#ccc;border-radius:4px;padding:2px 7px;font-size:11px;cursor:pointer;font-family:sans-serif;">P: Prompt</span>
+        <span style="background:#333;color:#ccc;border-radius:4px;padding:2px 7px;font-size:11px;cursor:pointer;font-family:sans-serif;">R: Regen</span>
+        <span style="background:#6366f1;color:white;border-radius:4px;padding:2px 7px;font-size:11px;cursor:pointer;font-family:sans-serif;">C: Copy</span>
+      </div>
+    </div>
+    <!-- Top: user input -->
+    <div style="padding:10px 14px;border-bottom:1px solid #333;background:#1a1a1a;">
+      <div style="color:#94a3b8;font-size:10px;font-family:sans-serif;margin-bottom:6px;">你的回复草稿 / 意图</div>
+      <div style="color:#e2e8f0;font-size:13px;font-family:'Segoe UI',sans-serif;min-height:50px;border:1px solid #334155;border-radius:5px;padding:8px 10px;background:#0f172a;">
+        委婉拒绝，周五晚上已有约<span style="border-right:2px solid #6366f1;margin-left:1px;"> </span>
+      </div>
+      <div style="margin-top:6px;text-align:right;">
+        <span style="background:#22c55e;color:white;border-radius:4px;padding:3px 12px;font-size:11px;cursor:pointer;font-family:sans-serif;">↵ 生成</span>
+      </div>
+    </div>
+    <!-- Bottom: AI result -->
+    <div style="padding:10px 14px;background:#1e1e1e;">
+      <div style="color:#94a3b8;font-size:10px;font-family:sans-serif;margin-bottom:6px;">AI 生成结果</div>
+      <div style="color:#e2e8f0;font-size:13px;font-family:'Segoe UI',sans-serif;line-height:1.7;">
+        感谢您的邀请！很遗憾周五晚上我已有约在先，无法出席。希望改日有机会再聚，祝活动顺利！
+      </div>
+    </div>
+  </div>
+  <div style="padding: 8px 12px; color: #94a3b8; font-size: 11px;">
+    上栏：用户输入意图（Enter 提交）· 下栏：AI 结果（流式）· 右上角可切换模型
+  </div>
+</div>

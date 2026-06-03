@@ -20,11 +20,11 @@ public class YoudaoClient
         _http.DefaultRequestHeaders.Add("Cookie", "OUTFOX_SEARCH_USER_ID=1@100.1.1.1;");
     }
 
-    public async Task<string> TranslateAsync(string text, CancellationToken ct = default)
+    public async Task<string> TranslateAsync(string text, string to = "zh-CHS", CancellationToken ct = default)
     {
         var salt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString();
         var sign = Md5($"{AppKey}{text}{salt}{SignSuffix}");
-        var body = $"i={Uri.EscapeDataString(text)}&from=AUTO&to=zh-CHS" +
+        var body = $"i={Uri.EscapeDataString(text)}&from=AUTO&to={to}" +
                    $"&smartresult=dict&client={AppKey}&salt={salt}&sign={sign}" +
                    $"&doctype=json&version=2.1&keyfrom=fanyi.web";
 

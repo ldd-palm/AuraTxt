@@ -66,7 +66,10 @@ public class ShowCommand(ConfigService config)
         Console.WriteLine($" ({cfg.Actions.Count})");
         Console.WriteLine();
 
-        foreach (var a in cfg.Actions)
+        foreach (var a in cfg.Actions
+            .OrderBy(a => a.Enabled ? 0 : 1)
+            .ThenBy(a => a.Order)
+            .ThenBy(a => a.Name, StringComparer.OrdinalIgnoreCase))
         {
             var hk   = string.IsNullOrEmpty(a.Hotkey) ? "—" : a.Hotkey;
             var model = string.IsNullOrEmpty(a.ModelId) ? "—" : FormatModelRef(cfg, a.ModelId);
@@ -81,6 +84,7 @@ public class ShowCommand(ConfigService config)
             Console.Write("    Status:  ");
             PrintEnabled(a.Enabled);
             Console.WriteLine();
+            Console.WriteLine($"    Order:   {a.Order}");
 
             if (!a.IsSystem)
             {
@@ -104,6 +108,7 @@ public class ShowCommand(ConfigService config)
         Console.WriteLine($"    Font Size:         {s.FontSize}");
         Console.WriteLine($"    Window Opacity:    {s.ResultWindowOpacity}");
         Console.WriteLine($"    Trigger Delay:     {s.MenuTriggerDelayMs} ms");
+        Console.WriteLine($"    Target Language:   {s.TargetLanguage}");
         Console.WriteLine();
         Bold(); Console.Write("System Prompt"); Reset();
         Console.WriteLine(" (global wrapper — prepended before each action prompt)");
@@ -198,6 +203,7 @@ public class ShowCommand(ConfigService config)
             Console.Write("  Status:    ");
             PrintEnabled(a.Enabled);
             Console.WriteLine();
+            PrintLabel("Order", a.Order.ToString());
 
             if (!a.IsSystem)
             {
@@ -221,7 +227,10 @@ public class ShowCommand(ConfigService config)
         // List all
         Bold(); Console.WriteLine("Actions"); Reset();
         Console.WriteLine();
-        foreach (var a in cfg.Actions)
+        foreach (var a in cfg.Actions
+            .OrderBy(a => a.Enabled ? 0 : 1)
+            .ThenBy(a => a.Order)
+            .ThenBy(a => a.Name, StringComparer.OrdinalIgnoreCase))
         {
             var hk    = string.IsNullOrEmpty(a.Hotkey) ? "—" : a.Hotkey;
             var model = string.IsNullOrEmpty(a.ModelId) ? "—" : FormatModelRef(cfg, a.ModelId);
@@ -236,6 +245,7 @@ public class ShowCommand(ConfigService config)
             Console.Write("    Status:      ");
             PrintEnabled(a.Enabled);
             Console.WriteLine();
+            Console.WriteLine($"    Order:       {a.Order}");
 
             if (!a.IsSystem)
             {

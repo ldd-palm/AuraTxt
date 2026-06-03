@@ -38,6 +38,7 @@ public class DoctorCommand(ConfigService config)
         int badRefs = 0;
         foreach (var action in cfg.Actions)
         {
+            if (action.IsSystem) continue;   // system actions (copy/speech) have no ModelId
             if (!action.ModelId.Contains('/'))
             {
                 Error($"Action \"{action.Id}\": ModelId \"{action.ModelId}\" missing '/' — expected format providerId/TargetModel");
@@ -68,6 +69,22 @@ public class DoctorCommand(ConfigService config)
                 Warn($"Action \"{a.Id}\" and \"{conflictName}\" share hotkey {a.Hotkey}");
             seen.Add(a);
         }
+
+        // Prompt file references must point to existing files
+        int badPrompts = 0;
+        foreach (var a in cfg.Actions)
+            if (PromptService.IsFileRef(a.Prompt) && !File.Exists(a.Prompt))
+            {
+                Error($"Action \"{a.Id}\": prompt file not found — {a.Prompt}");
+                badPrompts++;
+            }
+        if (PromptService.IsFileRef(cfg.Settings.SystemPrompt) && !File.Exists(cfg.Settings.SystemPrompt))
+        {
+            Error($"System prompt file not found — {cfg.Settings.SystemPrompt}");
+            badPrompts++;
+        }
+        if (badPrompts == 0)
+            Ok("All prompt files exist");
 
         PrintSummary();
         return _errors > 0 ? 2 : _warnings > 0 ? 1 : 0;

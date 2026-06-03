@@ -1,0 +1,60 @@
+<h2>整体架构方案对比</h2>
+<p class="subtitle">三种 Solution 结构方案，核心差别在于 GUI 与 CLI 之间的耦合方式</p>
+
+<div class="options">
+
+  <div class="option" data-choice="layered" onclick="toggleSelect(this)">
+    <div class="letter" style="background:#22c55e;color:white;">★</div>
+    <div class="content">
+      <h3>方案 A — 分层共享库（推荐）</h3>
+      <p>一个 Solution，三个 Project：</p>
+      <ul>
+        <li><strong>AuraTxt.Core</strong>（Class Library）— 共享数据模型、config.json 序列化/反序列化、AI 客户端抽象、Google Translate / 有道移植</li>
+        <li><strong>AuraTxt</strong>（WPF App）— 系统托盘、全局钩子、弹窗 UI、调用 Core</li>
+        <li><strong>AuraTxt.Cli</strong>（Console App）— config-cli.exe，引用 Core，读写同一份 config.json</li>
+      </ul>
+      <p>config.json 存放在 <code>%AppData%\AuraTxt\config.json</code>（Windows 标准位置）</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>优势</h4><ul><li>JSON 解析逻辑只写一次，GUI 和 CLI 绝对同步</li><li>Claude Code 在同一 repo 操作 CLI，无需跨 repo</li><li>结构清晰，依赖方向单向（WPF/CLI → Core）</li></ul></div>
+        <div class="cons"><h4>劣势</h4><ul><li>Core 库发布时需跟 exe 一起打包（可 PublishSingleFile 合并）</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="ipc" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>方案 B — 运行时 IPC 通信</h3>
+      <p>GUI 和 CLI 通过本地 Named Pipe 或 REST 通信，CLI 发送修改指令，GUI 实时热重载配置，无需重启。</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>优势</h4><ul><li>配置修改后 GUI 立即生效，无需重启</li></ul></div>
+        <div class="cons"><h4>劣势</h4><ul><li>复杂度大幅上升，调试困难</li><li>需要 GUI 常驻监听端口，不适合轻量工具</li><li>需求文档没有要求热重载</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="single-exe" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>方案 C — 单 exe 内置 CLI 模式</h3>
+      <p>只有一个 exe，通过命令行参数切换模式：<code>AuraTxt.exe --cli model --set ...</code> 时进入 CLI 模式，无参数时启动 GUI。</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>优势</h4><ul><li>只需分发一个文件</li></ul></div>
+        <div class="cons"><h4>劣势</h4><ul><li>WPF exe 做 CLI 时会闪烁控制台窗口，体验差</li><li>两个截然不同的用途混在一起，代码结构混乱</li><li>违背需求文档的解耦设计初衷</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="section" style="margin-top:24px;">
+  <h3>文字选择检测方案（技术内定）</h3>
+  <p class="subtitle">这个不需要你选择，已确定最优方案：</p>
+  <ul>
+    <li>全局低级鼠标钩子（<strong>WH_MOUSE_LL</strong>）监听 LButtonUp</li>
+    <li>触发后 100ms 延迟（等待选区稳定），保存剪贴板旧内容</li>
+    <li>模拟 <strong>Ctrl+C</strong> 读取选中文字（通用，覆盖所有应用）</li>
+    <li>读取完毕后立即恢复旧剪贴板内容（用户无感知）</li>
+    <li>若选中内容非空，在光标位置弹出动作菜单</li>
+  </ul>
+</div>

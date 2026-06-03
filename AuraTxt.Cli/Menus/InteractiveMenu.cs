@@ -11,6 +11,7 @@ public class InteractiveMenu(ConfigService configService)
 
     public Task RunAsync()
     {
+        PromptService.EnsureScaffold();
         _cfg   = configService.Load();
         _dirty = false;
 
@@ -18,20 +19,24 @@ public class InteractiveMenu(ConfigService configService)
         {
             Console.Clear();
             H1("AuraTxt Config Tool");
-            Item("1", "Model Platform");
-            Item("2", "Action Features");
-            Item("3", "General Settings");
+            Item("1", "General Settings");
+            Item("2", "Model Platform");
+            Item("3", "Prompt Library");
+            Item("4", "Action Features");
             Item("D", "Doctor — Validate Config");
+            Item("S", "Save Config");
             Item("X", "Exit");
             Prompt();
 
             var key = char.ToUpper(ReadKey());
             switch (key)
             {
-                case '1': ModelPlatformMenu(); break;
-                case '2': ActionFeaturesMenu(); break;
-                case '3': GeneralSettingsMenu(); break;
+                case '1': GeneralSettingsMenu(); break;
+                case '2': ModelPlatformMenu(); break;
+                case '3': PromptLibraryMenu(); break;
+                case '4': ActionFeaturesMenu(); break;
                 case 'D': RunDoctor(); break;
+                case 'S': SaveNow(); break;
                 case 'X': ExitFlow(); break;
             }
         }
@@ -53,8 +58,31 @@ public class InteractiveMenu(ConfigService configService)
             for (int i = 0; i < providers.Count; i++)
             {
                 var (id, p) = providers[i];
-                var aliases = string.Join(", ", p.Models.Select(m => m.Alias));
-                Item((i + 1).ToString(), $"{p.DisplayName,-16}", $"({aliases})");
+                var enabled  = p.Models.Where(m => m.Enabled).Select(m => m.Alias).ToList();
+                var disabled = p.Models.Where(m => !m.Enabled).Select(m => m.Alias).ToList();
+
+                Console.ForegroundColor = ConsoleColor.DarkGray;
+                Console.Write($"  [{(i + 1)}] ");
+                Console.ForegroundColor = ConsoleColor.White;
+                Console.Write($"{p.DisplayName,-16} ");
+
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.Write("(");
+
+                if (enabled.Count > 0)
+                {
+                    Console.Write(string.Join(", ", enabled));
+                    if (disabled.Count > 0) Console.Write(", ");
+                }
+
+                if (disabled.Count > 0)
+                {
+                    Console.ForegroundColor = ConsoleColor.DarkGray;
+                    Console.Write(string.Join(", ", disabled));
+                }
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine(")");
+                Console.ResetColor();
             }
 
             Sep();
@@ -103,7 +131,7 @@ public class InteractiveMenu(ConfigService configService)
             DisplayName = id,
             BaseUrl     = url,
             ApiKey      = key,
-            Models      = new() { new ModelEntry { TargetModel = targetModel, Alias = alias } }
+            Models      = new() { new ModelEntry { TargetModel = targetModel, Alias = alias, Enabled = true } }
         };
 
         while (true)
@@ -115,7 +143,7 @@ public class InteractiveMenu(ConfigService configService)
             var tm2 = Ask("  Model full name");
             var al2 = Ask("  Alias", tm2);
             if (string.IsNullOrWhiteSpace(al2)) al2 = tm2;
-            provider.Models.Add(new ModelEntry { TargetModel = tm2, Alias = al2 });
+            provider.Models.Add(new ModelEntry { TargetModel = tm2, Alias = al2, Enabled = true });
         }
 
         _cfg.Models[id] = provider;
@@ -169,7 +197,20 @@ public class InteractiveMenu(ConfigService configService)
             {
                 var m  = p.Models[i];
                 var th = m.DisableThinking ? "off" : "on";
-                Item((i + 3).ToString(), $"Model    ", $": {m.TargetModel,-20} (alias: {m.Alias,-10} | thinking: {th})");
+                var status = m.Enabled ? "enabled" : "disabled";
+
+                Console.ForegroundColor = ConsoleColor.DarkGray;
+                Console.Write($"  [{(i + 3)}] ");
+                Console.ForegroundColor = ConsoleColor.White;
+                Console.Write($"Model    ");
+                Console.ForegroundColor = m.Enabled ? ConsoleColor.White : ConsoleColor.DarkGray;
+                Console.Write($": {m.TargetModel,-20} (alias: {m.Alias,-10} | thinking: {th} | ");
+                Console.ForegroundColor = m.Enabled ? ConsoleColor.Green : ConsoleColor.DarkGray;
+                Console.Write($"{status}");
+                Console.ForegroundColor = m.Enabled ? ConsoleColor.White : ConsoleColor.DarkGray;
+                Console.Write(")");
+                Console.ResetColor();
+                Console.WriteLine();
             }
 
             Sep();
@@ -198,7 +239,7 @@ public class InteractiveMenu(ConfigService configService)
                 var tm = Ask("Model full name");
                 var al = Ask("Alias", tm);
                 if (string.IsNullOrWhiteSpace(al)) al = tm;
-                p.Models.Add(new ModelEntry { TargetModel = tm, Alias = al });
+                p.Models.Add(new ModelEntry { TargetModel = tm, Alias = al, Enabled = true });
                 _dirty = true;
                 WriteSuccess("Model added.");
                 Pause();
@@ -237,11 +278,11 @@ public class InteractiveMenu(ConfigService configService)
             }
 
             if (int.TryParse(input, out var num) && num >= 3 && num < 3 + p.Models.Count)
-                ModelDetailMenu(p.Models[num - 3]);
+                ModelDetailMenu(p.Models[num - 3], providerId);
         }
     }
 
-    private void ModelDetailMenu(ModelEntry model)
+    private void ModelDetailMenu(ModelEntry model, string providerId)
     {
         while (true)
         {
@@ -250,11 +291,12 @@ public class InteractiveMenu(ConfigService configService)
             Item("1", "Full Name       ", $": {model.TargetModel}");
             Item("2", "Alias           ", $": {model.Alias}");
             Item("3", "Disable Thinking", $": {(model.DisableThinking ? "on" : "off")}");
+            Item("4", "Status          ", $": {(model.Enabled ? "enabled" : "disabled")}");
             Sep();
             Item("B", "Back");
             Prompt();
 
-            var input = Console.ReadLine()?.Trim() ?? "";
+            var input = Console.ReadLine()?.Trim().ToUpper() ?? "";
             if (input == "B") return;
             if (input == "1")
             {
@@ -273,6 +315,28 @@ public class InteractiveMenu(ConfigService configService)
                 WriteSuccess($"Disable Thinking → {(model.DisableThinking ? "on" : "off")}");
                 Pause();
             }
+            else if (input == "4")
+            {
+                // If disabling, check no action is using this model
+                if (model.Enabled)
+                {
+                    var modelRef = $"{providerId}/{model.TargetModel}";
+                    var bound = _cfg.Actions.Where(a => a.ModelId == modelRef).ToList();
+                    if (bound.Any())
+                    {
+                        WriteWarning($"Model '{model.TargetModel}' is used by {bound.Count} action(s):");
+                        foreach (var a in bound)
+                            Console.WriteLine($"      — {a.Name} ({a.Id})");
+                        WriteError("Update or delete those actions first before disabling this model.");
+                        Pause();
+                        break;
+                    }
+                }
+                model.Enabled = !model.Enabled;
+                _dirty = true;
+                WriteSuccess($"Status → {(model.Enabled ? "enabled" : "disabled")}");
+                Pause();
+            }
         }
     }
 
@@ -281,6 +345,8 @@ public class InteractiveMenu(ConfigService configService)
         var testable = _cfg.Models
             .Where(kv => kv.Key != "default")
             .SelectMany(kv => kv.Value.Models.Select(m => (Ref: $"{kv.Key}/{m.TargetModel}", Provider: kv.Value, Model: m)))
+            .OrderByDescending(x => x.Model.Enabled)
+            .ThenBy(x => x.Ref)
             .ToList();
 
         if (!testable.Any()) { WriteError("No user models to test. Add a provider first."); Pause(); return; }
@@ -288,11 +354,19 @@ public class InteractiveMenu(ConfigService configService)
         Console.Clear();
         H2("Test Model");
         for (int i = 0; i < testable.Count; i++)
-            Item((i + 1).ToString(), testable[i].Ref);
-        Item("0", "Cancel");
+        {
+            Console.ForegroundColor = ConsoleColor.DarkGray;
+            Console.Write($"  [{(i + 1)}] ");
+            Console.ForegroundColor = testable[i].Model.Enabled ? ConsoleColor.Green : ConsoleColor.DarkGray;
+            Console.WriteLine(testable[i].Ref);
+            Console.ResetColor();
+        }
+        Item("B", "Back");
         Prompt();
 
-        if (!int.TryParse(Console.ReadLine()?.Trim(), out var idx) || idx < 1 || idx > testable.Count) return;
+        var rawInput = Console.ReadLine()?.Trim() ?? "";
+        if (rawInput.Equals("B", StringComparison.OrdinalIgnoreCase)) return;
+        if (!int.TryParse(rawInput, out var idx) || idx < 1 || idx > testable.Count) return;
         var (modelRef, prov, mod) = testable[idx - 1];
 
         Console.Write($"  Testing {modelRef}...");
@@ -301,7 +375,7 @@ public class InteractiveMenu(ConfigService configService)
             var sw     = System.Diagnostics.Stopwatch.StartNew();
             var client = new AiClient();
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(120));
-            var result = client.CompleteAsync(prov, mod, "Hello, respond with OK only.", cts.Token).GetAwaiter().GetResult();
+            var result = client.CompleteAsync(prov, mod, "Hello, respond with OK only.", ct: cts.Token).GetAwaiter().GetResult();
             sw.Stop();
             Console.ForegroundColor = ConsoleColor.Green;
             Console.WriteLine($" ✓ Response: {result.Trim()} ({sw.Elapsed.TotalSeconds:F1}s)");
@@ -316,6 +390,162 @@ public class InteractiveMenu(ConfigService configService)
         Pause();
     }
 
+    // ──────────────────────────── PROMPT LIBRARY ────────────────────────────
+
+    private void PromptLibraryMenu()
+    {
+        PromptService.EnsureScaffold();
+        while (true)
+        {
+            Console.Clear();
+            H1("Prompt Library");
+            WriteGray($"  Folder: {PromptService.PromptsDir}");
+            Console.WriteLine();
+
+            var prompts = PromptService.ListPrompts();
+            for (int i = 0; i < prompts.Count; i++)
+            {
+                var name   = Path.GetFileName(prompts[i]);
+                var usedBy = PromptUsers(prompts[i]);
+                var tag = usedBy.Count > 0 ? $"(used by: {string.Join(", ", usedBy)})" : "(unused)";
+                Item((i + 1).ToString(), $"{name,-24}", tag);
+            }
+
+            Sep();
+            Item("B", "Back");
+            Item("A", "Add Prompt");
+            Item("D", "Delete Prompt");
+            Item("X", "Exit");
+            Console.WriteLine();
+            WriteGray("  Tip: enter a number to edit that prompt in Notepad.");
+            Prompt();
+
+            var input = Console.ReadLine()?.Trim().ToUpper() ?? "";
+            if (input == "B") return;
+            if (input == "X") ExitFlow();
+            if (input == "A") { AddPromptFlow(); continue; }
+            if (input == "D") { DeletePromptFlow(prompts); continue; }
+            if (int.TryParse(input, out var idx) && idx >= 1 && idx <= prompts.Count)
+                OpenInNotepad(prompts[idx - 1]);
+        }
+    }
+
+    private void AddPromptFlow()
+    {
+        Console.Clear();
+        H2("Add Prompt");
+        var name = Ask("Prompt name (no spaces, e.g. summarize)");
+        if (string.IsNullOrWhiteSpace(name)) return;
+        if (name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || name.Contains(' '))
+        { WriteError("Name contains invalid characters or spaces."); Pause(); return; }
+        if (PromptService.Exists(name)) { WriteError($"Prompt '{name}' already exists."); Pause(); return; }
+
+        var dest = Path.Combine(PromptService.PromptsDir, $"{name}.md");
+        Console.WriteLine($"  Will create: {dest}");
+        Console.Write("  Confirm? (Y/n): ");
+        var ans = char.ToLower(ReadKey()); Console.WriteLine();
+        if (ans == 'n') { WriteGray("  Cancelled."); Pause(); return; }
+
+        try
+        {
+            var path = PromptService.CreateFromTemplate(name);
+            WriteSuccess($"Created {name}.md from template — opening Notepad...");
+            OpenInNotepad(path);
+        }
+        catch (Exception ex) { WriteError(ex.Message); }
+        Pause();
+    }
+
+    private void DeletePromptFlow(List<string> prompts)
+    {
+        if (prompts.Count == 0) { WriteError("No prompts to delete."); Pause(); return; }
+        Console.Write("  Enter number to delete (0 to cancel): ");
+        if (!int.TryParse(Console.ReadLine()?.Trim(), out var idx) || idx < 1 || idx > prompts.Count) return;
+
+        var path = prompts[idx - 1];
+        var name = Path.GetFileName(path);
+        var usedBy = PromptUsers(path);
+        if (usedBy.Count > 0)
+        {
+            WriteError($"'{name}' is in use by: {string.Join(", ", usedBy)}");
+            WriteError("Unmount it first.");
+            Pause(); return;
+        }
+
+        Console.Write($"  Delete '{name}'? (y/N): ");
+        var ans = char.ToLower(ReadKey()); Console.WriteLine();
+        if (ans != 'y') return;
+        try { File.Delete(path); WriteSuccess($"Deleted {name}."); }
+        catch (Exception ex) { WriteError(ex.Message); }
+        Pause();
+    }
+
+    /// Lets the user pick a prompt file (from the library or any absolute path).
+    /// Returns the chosen file's absolute path, or null if cancelled / not found.
+    private string? SelectPromptFile()
+    {
+        var prompts = PromptService.ListPrompts();
+        Console.WriteLine();
+        H3("Select a prompt file");
+        for (int i = 0; i < prompts.Count; i++)
+            Item((i + 1).ToString(), Path.GetFileName(prompts[i]));
+        WriteGray("  Or type an absolute path to any file.");
+        Console.Write("  Number or path (blank to cancel): ");
+        var input = Console.ReadLine()?.Trim() ?? "";
+        if (input.Length == 0) return null;
+
+        string path = int.TryParse(input, out var idx) && idx >= 1 && idx <= prompts.Count
+            ? prompts[idx - 1]
+            : input.Trim('"');
+
+        if (!File.Exists(path)) { WriteError($"File not found: {path}"); Pause(); return null; }
+
+        Console.WriteLine();
+        WriteGray($"  {Path.GetFileName(path)} content:");
+        PreviewPrompt(path);
+        return Path.GetFullPath(path);
+    }
+
+    private static void PreviewPrompt(string path)
+    {
+        try
+        {
+            Console.ForegroundColor = ConsoleColor.DarkGray;
+            foreach (var line in File.ReadAllText(path).Split('\n'))
+                Console.WriteLine($"    │ {line.TrimEnd('\r')}");
+            Console.ResetColor();
+        }
+        catch { }
+    }
+
+    private static void OpenInNotepad(string path)
+    {
+        try
+        {
+            var p = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "notepad.exe", Arguments = $"\"{path}\"", UseShellExecute = true
+            });
+            p?.WaitForExit();
+        }
+        catch (Exception ex) { WriteError($"Cannot open editor: {ex.Message}"); }
+    }
+
+    private static bool SamePath(string? a, string b)
+    {
+        if (string.IsNullOrEmpty(a)) return false;
+        try { return string.Equals(Path.GetFullPath(a), Path.GetFullPath(b), StringComparison.OrdinalIgnoreCase); }
+        catch { return false; }
+    }
+
+    /// Who references this prompt file — actions by id, plus the global system prompt.
+    private List<string> PromptUsers(string path)
+    {
+        var users = _cfg.Actions.Where(a => SamePath(a.Prompt, path)).Select(a => a.Id).ToList();
+        if (SamePath(_cfg.Settings.SystemPrompt, path)) users.Add("(system prompt)");
+        return users;
+    }
+
     // ──────────────────────────── ACTION FEATURES ────────────────────────────
 
     private void ActionFeaturesMenu()
@@ -324,9 +554,14 @@ public class InteractiveMenu(ConfigService configService)
         {
             Console.Clear();
             H1("Action Features");
-            for (int i = 0; i < _cfg.Actions.Count; i++)
+            var sorted = _cfg.Actions
+                .OrderBy(a => a.Enabled ? 0 : 1)
+                .ThenBy(a => a.Order)
+                .ThenBy(a => a.Name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            for (int i = 0; i < sorted.Count; i++)
             {
-                var a  = _cfg.Actions[i];
+                var a  = sorted[i];
                 var hk = string.IsNullOrEmpty(a.Hotkey) ? "—" : a.Hotkey;
                 var model = string.IsNullOrEmpty(a.ModelId) ? "—" : ModelLabel(a.ModelId);
 
@@ -347,7 +582,7 @@ public class InteractiveMenu(ConfigService configService)
                     Console.Write("disabled");
                 }
                 Console.ResetColor();
-                Console.WriteLine(")");
+                Console.WriteLine($" | {a.Order})");
             }
 
             Sep();
@@ -365,8 +600,8 @@ public class InteractiveMenu(ConfigService configService)
             if (input == "D") { DeleteActionFlow(); continue; }
             if (input == "S") { SaveNow(); continue; }
 
-            if (int.TryParse(input, out var idx) && idx >= 1 && idx <= _cfg.Actions.Count)
-                ActionDetailMenu(_cfg.Actions[idx - 1]);
+            if (int.TryParse(input, out var idx) && idx >= 1 && idx <= sorted.Count)
+                ActionDetailMenu(sorted[idx - 1]);
         }
     }
 
@@ -382,6 +617,12 @@ public class InteractiveMenu(ConfigService configService)
 
         Console.WriteLine("  💡 Find icons at https://lucide.dev/icons/");
         var icon = Ask("Icon name (e.g. languages)");
+        if (!string.IsNullOrWhiteSpace(icon))
+        {
+            Console.Write($"  Downloading icon '{icon}'... ");
+            var ok = IconDownloadService.EnsureDownloadedAsync(icon).GetAwaiter().GetResult();
+            Console.WriteLine(ok ? "✓" : "✗ (not found on lucide.dev — will use text fallback)");
+        }
 
         var modelId = SelectModel();
         if (modelId is null) return;
@@ -399,7 +640,7 @@ public class InteractiveMenu(ConfigService configService)
             Console.Write("  Interactive action? (y/N): ");
             isInteractive = char.ToLower(ReadKey()) == 'y';
             Console.WriteLine();
-            prompt = AskPrompt(isInteractive);
+            prompt = SelectPromptFile() ?? "";   // stores the prompt file PATH
         }
 
         var hotkey = HotkeyCapture.Capture(_cfg.Actions);
@@ -408,6 +649,10 @@ public class InteractiveMenu(ConfigService configService)
         var enableAns = char.ToLower(ReadKey());
         Console.WriteLine();
         var enabled = enableAns != 'n';
+
+        Console.Write("  Display order (0-99, default 0): ");
+        var orderStr = Console.ReadLine()?.Trim();
+        int.TryParse(orderStr, out var order);
 
         _cfg.Actions.Add(new ActionItem
         {
@@ -418,7 +663,8 @@ public class InteractiveMenu(ConfigService configService)
             IsInteractive = isInteractive,
             Prompt        = prompt,
             Hotkey        = hotkey,
-            Enabled       = enabled
+            Enabled       = enabled,
+            Order         = order
         });
         _dirty = true;
         WriteSuccess($"Action '{id}' added.");
@@ -454,31 +700,35 @@ public class InteractiveMenu(ConfigService configService)
 
             if (isSystem)
             {
-                // System action: only icon, hotkey, status
-                Item("1", "Icon  ", $": {action.Icon}");
-                Item("2", "Hotkey", $": {hk}");
-                Console.Write("  [3] Status  : ");
+                // System action: name, icon, hotkey, status, order
+                Item("1", "Name  ", $": {action.Name}");
+                Item("2", "Icon  ", $": {action.Icon}");
+                Item("3", "Hotkey", $": {hk}");
+                Console.Write("  [4] Status  : ");
                 PrintStatus(action.Enabled);
                 Console.WriteLine();
+                Item("5", "Order ", $": {action.Order}");
             }
             else
             {
                 var isBuiltin = action.ModelId.StartsWith("default/");
-                Item("1", "Icon       ", $": {action.Icon}");
-                Item("2", "Model      ", $": {ModelLabel(action.ModelId)}");
-                Item("3", "Interactive", $": {(isBuiltin ? "(n/a — built-in)" : action.IsInteractive.ToString())}");
-                Item("4", "Prompt     ", $": {(isBuiltin ? "(n/a — built-in)" : Truncate(action.Prompt, 50))}");
-                Item("5", "Hotkey     ", $": {hk}");
-                Console.Write("  [6] Status     : ");
+                Item("1", "Name       ", $": {action.Name}");
+                Item("2", "Icon       ", $": {action.Icon}");
+                Item("3", "Model      ", $": {ModelLabel(action.ModelId)}");
+                Item("4", "Interactive", $": {(isBuiltin ? "(n/a — built-in)" : action.IsInteractive.ToString())}");
+                Item("5", "Prompt     ", $": {(isBuiltin ? "(n/a — built-in)" : PromptLabel(action.Prompt))}");
+                Item("6", "Hotkey     ", $": {hk}");
+                Console.Write("  [7] Status     : ");
                 PrintStatus(action.Enabled);
                 Console.WriteLine();
+                Item("8", "Order      ", $": {action.Order}");
             }
 
             Sep();
             Item("B", "Back");
             Prompt();
 
-            var input = Console.ReadLine()?.Trim() ?? "";
+            var input = Console.ReadLine()?.Trim().ToUpper() ?? "";
             if (input == "B") return;
 
             if (isSystem)
@@ -486,21 +736,42 @@ public class InteractiveMenu(ConfigService configService)
                 switch (input)
                 {
                     case "1":
-                        Console.WriteLine("  💡 Find icons at https://lucide.dev/icons/");
-                        var ic = Ask("New icon", action.Icon);
-                        if (!string.IsNullOrWhiteSpace(ic)) { action.Icon = ic; _dirty = true; }
+                        var newName = Ask("New name", action.Name);
+                        if (!string.IsNullOrWhiteSpace(newName)) { action.Name = newName; _dirty = true; WriteSuccess($"Name → {newName}"); }
+                        else WriteGray("  (unchanged)");
+                        Pause();
                         break;
                     case "2":
+                        Console.WriteLine("  💡 Find icons at https://lucide.dev/icons/");
+                        var ic = Ask("New icon", action.Icon);
+                        if (!string.IsNullOrWhiteSpace(ic))
+                        {
+                            action.Icon = ic; _dirty = true;
+                            Console.Write($"  Downloading icon '{ic}'... ");
+                            var ok = IconDownloadService.EnsureDownloadedAsync(ic).GetAwaiter().GetResult();
+                            Console.WriteLine(ok ? "✓" : "✗ (not found on lucide.dev — will use text fallback)");
+                        }
+                        break;
+                    case "3":
+                        if (action.Id == "copy")
+                        { WriteGray("  Copy action hotkey is fixed (empty)."); Pause(); break; }
                         var newHk = HotkeyCapture.Capture(_cfg.Actions, excludeId: action.Id);
                         action.Hotkey = newHk;
                         _dirty = true;
                         if (!string.IsNullOrEmpty(newHk)) WriteSuccess($"Hotkey set to {newHk}.");
                         Pause();
                         break;
-                    case "3":
+                    case "4":
                         action.Enabled = !action.Enabled;
                         _dirty = true;
                         WriteSuccess($"Status → {(action.Enabled ? "enabled" : "disabled")}");
+                        Pause();
+                        break;
+                    case "5":
+                        Console.Write($"  New order (0-99, current {action.Order}): ");
+                        var orderStr = Console.ReadLine()?.Trim();
+                        if (int.TryParse(orderStr, out var ov)) { action.Order = ov; _dirty = true; WriteSuccess($"Order → {ov}"); }
+                        else WriteGray("  (unchanged)");
                         Pause();
                         break;
                 }
@@ -510,11 +781,23 @@ public class InteractiveMenu(ConfigService configService)
                 switch (input)
                 {
                     case "1":
-                        Console.WriteLine("  💡 Find icons at https://lucide.dev/icons/");
-                        var ic = Ask("New icon", action.Icon);
-                        if (!string.IsNullOrWhiteSpace(ic)) { action.Icon = ic; _dirty = true; }
+                        var newName = Ask("New name", action.Name);
+                        if (!string.IsNullOrWhiteSpace(newName)) { action.Name = newName; _dirty = true; WriteSuccess($"Name → {newName}"); }
+                        else WriteGray("  (unchanged)");
+                        Pause();
                         break;
                     case "2":
+                        Console.WriteLine("  💡 Find icons at https://lucide.dev/icons/");
+                        var ic = Ask("New icon", action.Icon);
+                        if (!string.IsNullOrWhiteSpace(ic))
+                        {
+                            action.Icon = ic; _dirty = true;
+                            Console.Write($"  Downloading icon '{ic}'... ");
+                            var ok = IconDownloadService.EnsureDownloadedAsync(ic).GetAwaiter().GetResult();
+                            Console.WriteLine(ok ? "✓" : "✗ (not found on lucide.dev — will use text fallback)");
+                        }
+                        break;
+                    case "3":
                         var mid = SelectModel();
                         if (mid is not null)
                         {
@@ -523,7 +806,7 @@ public class InteractiveMenu(ConfigService configService)
                             _dirty = true;
                         }
                         break;
-                    case "3":
+                    case "4":
                         if (action.ModelId.StartsWith("default/"))
                         { WriteGray("  Built-in service: interaction not applicable."); Pause(); break; }
                         action.IsInteractive = !action.IsInteractive;
@@ -531,24 +814,30 @@ public class InteractiveMenu(ConfigService configService)
                         WriteSuccess($"Interactive → {action.IsInteractive}");
                         Pause();
                         break;
-                    case "4":
+                    case "5":
                         if (action.ModelId.StartsWith("default/"))
                         { WriteGray("  Built-in service: no prompt needed."); Pause(); break; }
-                        Console.WriteLine();
-                        var pr = AskPrompt(action.IsInteractive, action.Prompt);
-                        if (!string.IsNullOrWhiteSpace(pr)) { action.Prompt = pr; _dirty = true; }
+                        var pf = SelectPromptFile();
+                        if (pf is not null) { action.Prompt = pf; _dirty = true; }
                         break;
-                    case "5":
+                    case "6":
                         var newHk = HotkeyCapture.Capture(_cfg.Actions, excludeId: action.Id);
                         action.Hotkey = newHk;
                         _dirty = true;
                         if (!string.IsNullOrEmpty(newHk)) WriteSuccess($"Hotkey set to {newHk}.");
                         Pause();
                         break;
-                    case "6":
+                    case "7":
                         action.Enabled = !action.Enabled;
                         _dirty = true;
                         WriteSuccess($"Status → {(action.Enabled ? "enabled" : "disabled")}");
+                        Pause();
+                        break;
+                    case "8":
+                        Console.Write($"  New order (0-99, current {action.Order}): ");
+                        var orderStr = Console.ReadLine()?.Trim();
+                        if (int.TryParse(orderStr, out var ov)) { action.Order = ov; _dirty = true; WriteSuccess($"Order → {ov}"); }
+                        else WriteGray("  (unchanged)");
                         Pause();
                         break;
                 }
@@ -568,15 +857,17 @@ public class InteractiveMenu(ConfigService configService)
             Item("1", "Font Size      ", $": {s.FontSize}");
             Item("2", "Window Opacity ", $": {s.ResultWindowOpacity}");
             Item("3", "Trigger Delay  ", $": {s.MenuTriggerDelayMs} ms");
-            Item("4", "System Prompt  ", $": {Truncate(s.SystemPrompt, 60)}");
+            Item("4", "System Prompt  ", $": {PromptLabel(s.SystemPrompt)}");
+            Item("5", "Target Language", $": {LangLabel(s.TargetLanguage)}");
+            Item("6", "Theme          ", $": {s.Theme}");
             Sep();
             Item("B", "Back");
             Item("X", "Exit");
             Prompt();
 
-            var input = Console.ReadLine()?.Trim() ?? "";
+            var input = Console.ReadLine()?.Trim().ToUpper() ?? "";
             if (input == "B") return;
-            if (input.ToUpper() == "X") ExitFlow();
+            if (input == "X") ExitFlow();
 
             switch (input)
             {
@@ -604,20 +895,134 @@ public class InteractiveMenu(ConfigService configService)
                     { s.MenuTriggerDelayMs = dm; _dirty = true; WriteSuccess($"Delay → {dm} ms"); Pause(); }
                     break;
                 case "4":
-                    Console.WriteLine();
-                    Console.ForegroundColor = ConsoleColor.DarkGray;
-                    Console.WriteLine("  System Prompt acts as a global wrapper — it provides security guardrails");
-                    Console.WriteLine("  and output format constraints. It is prepended before each action prompt.");
-                    Console.ResetColor();
-                    Console.WriteLine();
-                    var sp = AskPrompt(false, s.SystemPrompt);
-                    if (!string.IsNullOrWhiteSpace(sp)) { s.SystemPrompt = sp; _dirty = true; }
+                    SystemPromptMenu(s);
+                    break;
+                case "5":
+                    SelectTargetLanguage(s);
+                    break;
+                case "6":
+                    SelectTheme(s);
                     break;
             }
         }
     }
 
     // ──────────────────────────── HELPERS ────────────────────────────
+
+    private void SystemPromptMenu(AppSettings s)
+    {
+        Console.WriteLine();
+        Console.WriteLine($"  Current system prompt file: {s.SystemPrompt}");
+        Console.ForegroundColor = ConsoleColor.DarkGray;
+        Console.WriteLine("  Sent as a system message before every action prompt.");
+        Console.ResetColor();
+
+        // Show current prompt content
+        var content = PromptService.Resolve(s.SystemPrompt);
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            WriteGray("  (empty)");
+        }
+        else
+        {
+            foreach (var line in content.Split('\n'))
+                Console.WriteLine($"  │ {line}");
+        }
+        Console.WriteLine();
+
+        Console.WriteLine("  [E] Edit current file in Notepad   [P] Point to a different file   [B] Back");
+        Console.Write("  Select: ");
+        var k = char.ToUpper(ReadKey());
+        Console.WriteLine();
+
+        if (k == 'E')
+        {
+            if (File.Exists(s.SystemPrompt)) OpenInNotepad(s.SystemPrompt);
+            else { WriteGray("  Current value is not a file — opening default system.md."); OpenInNotepad(PromptService.SystemFile); }
+        }
+        else if (k == 'P')
+        {
+            var np = SelectPromptFile();
+            if (np is not null) { s.SystemPrompt = np; _dirty = true; WriteSuccess("System prompt file updated."); Pause(); }
+        }
+    }
+
+    private static readonly IReadOnlyList<(string Code, string Name)> TranslateLanguages =
+    [
+        ("zh-CN", "简体中文"),
+        ("en",    "English"),
+        ("ja",    "日本語"),
+        ("ko",    "한국어"),
+        ("fr",    "Français"),
+        ("de",    "Deutsch"),
+        ("es",    "Español"),
+        ("pt",    "Português"),
+        ("ru",    "Русский"),
+        ("ar",    "العربية"),
+    ];
+
+    private void SelectTargetLanguage(AppSettings s)
+    {
+        Console.WriteLine();
+        Console.WriteLine($"  Select target language (current: {LangLabel(s.TargetLanguage)}):");
+        for (int i = 0; i < TranslateLanguages.Count; i++)
+            Console.WriteLine($"    {i + 1}. {TranslateLanguages[i].Name} ({TranslateLanguages[i].Code})");
+        Console.WriteLine("  Or type a language code directly (e.g. th, vi, it).");
+        Console.Write("  Selection (blank to cancel): ");
+        var input = Console.ReadLine()?.Trim() ?? "";
+        if (input.Length == 0) return;
+
+        string code;
+        if (int.TryParse(input, out var idx) && idx >= 1 && idx <= TranslateLanguages.Count)
+            code = TranslateLanguages[idx - 1].Code;
+        else
+            code = input;
+
+        var name = TranslateLanguages.FirstOrDefault(x => x.Code == code).Name;
+        s.TargetLanguage = code;
+        _dirty = true;
+        WriteSuccess(name is not null
+            ? $"Translate to → {name} ({code})"
+            : $"Translate to → {code}");
+        Pause();
+    }
+
+    /// Short label for a prompt reference — file name if it's a path, else truncated inline text.
+    private static string PromptLabel(string? p) =>
+        string.IsNullOrEmpty(p)                       ? "(none)"
+        : (p.Contains('\\') || p.Contains('/'))       ? Path.GetFileName(p)
+        :                                               Truncate(p, 50);
+
+    private void SelectTheme(AppSettings s)
+    {
+        ThemeService.EnsureScaffold();
+        var themes = ThemeService.ListThemes();
+
+        Console.WriteLine();
+        Console.WriteLine($"  Select theme (current: {s.Theme}):");
+        for (int i = 0; i < themes.Count; i++)
+            Console.WriteLine($"    {i + 1}. {themes[i].Name} — {themes[i].Description}");
+        Console.WriteLine("  Or type a theme ID directly.");
+        Console.Write("  Selection (blank to cancel): ");
+        var input = Console.ReadLine()?.Trim() ?? "";
+        if (input.Length == 0) return;
+
+        string id;
+        if (int.TryParse(input, out var idx) && idx >= 1 && idx <= themes.Count)
+            id = themes[idx - 1].Id;
+        else
+            id = input;
+
+        s.Theme = id;
+        _dirty = true;
+        WriteSuccess($"Theme → {id}");
+        Pause();
+    }
+
+    private static string LangLabel(string code) =>
+        TranslateLanguages.FirstOrDefault(x => x.Code == code) is var (_, name) && name is not null
+            ? $"{name} ({code})"
+            : code;
 
     private void RunDoctor()
     {
@@ -667,7 +1072,7 @@ public class InteractiveMenu(ConfigService configService)
 
     private string? SelectModel()
     {
-        var all = new List<(string Ref, string Label)>(_cfg.AllModelRefs());
+        var all = new List<(string Ref, string Label)>(_cfg.AllEnabledModelRefs());
         if (!all.Any()) { WriteError("No models available. Add a provider first."); Pause(); return null; }
 
         Console.WriteLine("  Available models:");
@@ -683,78 +1088,6 @@ public class InteractiveMenu(ConfigService configService)
     {
         var r = _cfg.ResolveModel(modelRef);
         return r is null ? modelRef : $"{r.Value.provider.DisplayName} / {r.Value.model.Alias}";
-    }
-
-    /// Reads multi-line prompt text. Ctrl+D (EOF) to finish.
-    private static string AskPrompt(bool interactive, string? existing = null)
-    {
-        // Show existing prompt if editing
-        if (!string.IsNullOrEmpty(existing))
-        {
-            Console.ForegroundColor = ConsoleColor.DarkGray;
-            Console.WriteLine("  Current prompt:");
-            Console.ResetColor();
-            foreach (var line in existing.Split('\n'))
-                Console.WriteLine($"    │ {line}");
-            Console.WriteLine();
-            Console.ForegroundColor = ConsoleColor.Yellow;
-            Console.WriteLine("  ⚡ Press Enter to keep the existing prompt unchanged.");
-            Console.ResetColor();
-            Console.WriteLine();
-        }
-
-        Console.ForegroundColor = ConsoleColor.DarkGray;
-        Console.WriteLine("  Prompt text (type or paste, then '---' on a line to finish):");
-        Console.WriteLine("  Placeholders: {SelectedText} = highlighted text" +
-                          (interactive ? "   {UserInput} = text you type in the popup" : ""));
-        Console.WriteLine(interactive
-            ? "  Example: Based on \"{SelectedText}\", write a reply that: {UserInput}"
-            : "  Example: Translate {SelectedText} into Chinese.");
-        Console.ResetColor();
-
-        var sb = new System.Text.StringBuilder();
-
-        while (true)
-        {
-            Console.ForegroundColor = ConsoleColor.Yellow;
-            Console.Write("  > ");
-            Console.ResetColor();
-            var line = Console.ReadLine();
-
-            // Ctrl+Z / EOF — fallback finish
-            if (line is null)
-            {
-                if (sb.Length == 0) return "";
-                break;
-            }
-            // "---" sentinel line → finish (or cancel if first line)
-            if (line == "---")
-            {
-                if (sb.Length == 0) return "";
-                break;
-            }
-            // Empty first line → cancel, keep existing prompt
-            if (sb.Length == 0 && string.IsNullOrEmpty(line))
-            {
-                Console.ForegroundColor = ConsoleColor.DarkGray;
-                Console.WriteLine("  (existing prompt kept)");
-                Console.ResetColor();
-                return "";
-            }
-
-            if (sb.Length > 0) sb.Append('\n');
-            sb.Append(line);
-        }
-
-        var raw  = sb.ToString().TrimEnd('\n', '\r');
-        var lines = raw.Split('\n').Where(l => !string.IsNullOrEmpty(l)).ToArray();
-        var result = string.Join('\n', lines);
-        var removed = raw.Split('\n').Length - lines.Length;
-        Console.ForegroundColor = ConsoleColor.DarkGray;
-        Console.WriteLine($"  ({lines.Length} line(s) saved)" +
-                          (removed > 0 ? $" — {removed} empty line(s) removed" : ""));
-        Console.ResetColor();
-        return result;
     }
 
     // ──── Console UI primitives ────

@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(dotnet build C:\\\\Users\\\\ldd\\\\Documents\\\\Works\\\\AuraTxt\\\\AuraTxt.sln)",
+      "Bash(Test-Path \"AuraTxt.Core\\\\Class1.cs\" -PathType Leaf)",
+      "Bash(Test-Path \"AuraTxt.Core.Tests\\\\UnitTest1.cs\" -PathType Leaf)",
+      "Bash(Test-Path \"AuraTxt.sln\" -PathType Leaf)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\ldd\\\\Documents\\\\Works\\\\AuraTxt\" -Directory)",
+      "Bash(Select-Object Name)"
+    ]
+  }
+}

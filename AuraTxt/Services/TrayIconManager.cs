@@ -8,32 +8,40 @@ namespace AuraTxt.Services;
 public class TrayIconManager : IDisposable
 {
     private readonly TaskbarIcon _icon;
+    private readonly MenuItem _toggleMonitorItem = null!;
+    private readonly MenuItem _toggleMenuItem = null!;
 
-    public TrayIconManager(ConfigService config, Action onExit)
+    public TrayIconManager(ConfigService config, Action onReload, Action onExit)
     {
         _icon = new TaskbarIcon
         {
             ToolTipText = "AuraTxt"
         };
 
-        // Load icon from embedded resource
-        try
-        {
-            _icon.IconSource = new System.Windows.Media.Imaging.BitmapImage(
-                new Uri("pack://application:,,,/Resources/tray.ico"));
-        }
-        catch { /* icon optional for now */ }
+        SetTrayIcon();
 
         var menu = new ContextMenu();
 
-        var toggle = new MenuItem { Header = "暂停监听" };
-        toggle.Click += (_, _) =>
+        _toggleMonitorItem = new MenuItem { Header = "Service: Pause" };
+        _toggleMonitorItem.Click += (_, _) =>
         {
             AppState.IsMonitoringPaused = !AppState.IsMonitoringPaused;
-            toggle.Header = AppState.IsMonitoringPaused ? "恢复监听" : "暂停监听";
+            _toggleMonitorItem.Header = AppState.IsMonitoringPaused
+                ? "Service: Resume" : "Service: Pause";
+            SetTrayIcon();
         };
 
-        var settingsItem = new MenuItem { Header = "配置 (auracfg)" };
+        _toggleMenuItem = new MenuItem { Header = "Hide Menu" };
+        _toggleMenuItem.Click += (_, _) =>
+        {
+            AppState.IsMenuHidden = !AppState.IsMenuHidden;
+            _toggleMenuItem.Header = AppState.IsMenuHidden ? "Show Menu" : "Hide Menu";
+        };
+
+        var reloadItem = new MenuItem { Header = "Reload Settings" };
+        reloadItem.Click += (_, _) => onReload();
+
+        var settingsItem = new MenuItem { Header = "Config (auracfg)" };
         settingsItem.Click += (_, _) =>
         {
             var auracfg = System.IO.Path.Combine(AppContext.BaseDirectory, "auracfg.exe");
@@ -43,17 +51,31 @@ public class TrayIconManager : IDisposable
                 System.Windows.MessageBox.Show("auracfg.exe not found in app directory.", "AuraTxt");
         };
 
-        var exitItem = new MenuItem { Header = "退出" };
+        var exitItem = new MenuItem { Header = "Exit" };
         exitItem.Click += (_, _) => onExit();
 
-        menu.Items.Add(toggle);
+        menu.Items.Add(_toggleMonitorItem);
+        menu.Items.Add(_toggleMenuItem);
+        menu.Items.Add(reloadItem);
         menu.Items.Add(settingsItem);
-        menu.Items.Add(new Separator());
         menu.Items.Add(exitItem);
 
         _icon.ContextMenu = menu;
         _icon.ForceCreate();
     }
+
+    private void SetTrayIcon()
+    {
+        var iconName = AppState.IsMonitoringPaused ? "aruatxt_paused.ico" : "aruatxt_active.ico";
+        try
+        {
+            _icon.IconSource = new System.Windows.Media.Imaging.BitmapImage(
+                new Uri($"pack://application:,,,/Resources/{iconName}"));
+        }
+        catch { /* icon optional */ }
+    }
+
+    public void RefreshIcon() => SetTrayIcon();
 
     public void Dispose() => _icon.Dispose();
 }

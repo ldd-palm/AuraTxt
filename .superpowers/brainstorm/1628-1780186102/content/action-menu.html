@@ -1,0 +1,94 @@
+<h2>动作菜单弹窗样式</h2>
+<p class="subtitle">用户选中文字后，光标旁弹出的小菜单。请选择你偏好的风格</p>
+
+<div class="cards">
+
+  <div class="card" data-choice="pill" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding: 24px; background: #1a1a2e; display:flex; align-items:center; justify-content:center;">
+      <!-- Pill style menu -->
+      <div style="
+        display: inline-flex;
+        align-items: center;
+        background: #ffffff;
+        border-radius: 999px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+        padding: 6px 10px;
+        gap: 4px;
+        font-family: 'Segoe UI', sans-serif;
+      ">
+        <div style="width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#555;font-size:14px;" title="复制">📋</div>
+        <div style="width:1px;height:20px;background:#e0e0e0;"></div>
+        <div style="width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#555;font-size:14px;" title="翻译">🌐</div>
+        <div style="width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#555;font-size:14px;" title="润色">✨</div>
+        <div style="width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#555;font-size:14px;" title="回复">✉️</div>
+        <div style="width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#555;font-size:14px;" title="解释">💡</div>
+        <div style="width:1px;height:20px;background:#e0e0e0;"></div>
+        <div style="width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#555;font-size:14px;" title="设置">⚙️</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — 胶囊横排（Pill）</h3>
+      <p>紧凑横向排列，最接近需求文档参考图（CherryStudio 风格）。最小化视觉打扰。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="card-menu" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding: 24px; background: #1a1a2e; display:flex; align-items:center; justify-content:center;">
+      <!-- Card dropdown style -->
+      <div style="
+        background: #ffffff;
+        border-radius: 12px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+        padding: 6px;
+        width: 160px;
+        font-family: 'Segoe UI', sans-serif;
+        font-size: 13px;
+      ">
+        <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;background:#f0f4ff;cursor:pointer;"><span>📋</span><span>复制</span><span style="margin-left:auto;color:#999;font-size:11px;">—</span></div>
+        <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;cursor:pointer;"><span>🌐</span><span>翻译</span><span style="margin-left:auto;color:#999;font-size:11px;">Alt+T</span></div>
+        <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;cursor:pointer;"><span>✨</span><span>润色</span><span style="margin-left:auto;color:#999;font-size:11px;">Alt+P</span></div>
+        <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;cursor:pointer;"><span>✉️</span><span>智能回复</span><span style="margin-left:auto;color:#999;font-size:11px;">Alt+R</span></div>
+        <div style="height:1px;background:#eee;margin:4px 0;"></div>
+        <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;cursor:pointer;"><span>⚙️</span><span>设置</span></div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — 竖向下拉菜单</h3>
+      <p>显示完整动作名称 + 快捷键提示，信息量更大，适合动作较多的场景。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="icon-tooltip" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding: 24px; background: #1a1a2e; display:flex; align-items:flex-start; justify-content:center; gap: 12px;">
+      <!-- Icon only + tooltip on hover -->
+      <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+        <div style="
+          display: inline-flex;
+          align-items: center;
+          background: rgba(255,255,255,0.95);
+          border-radius: 999px;
+          box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+          padding: 5px 8px;
+          gap: 2px;
+          font-family: 'Segoe UI', sans-serif;
+        ">
+          <div style="width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px;">📋</div>
+          <div style="width:1px;height:18px;background:#e0e0e0;"></div>
+          <div style="width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px;background:#6366f1;color:white;">🌐</div>
+          <div style="width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px;">✨</div>
+          <div style="width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px;">✉️</div>
+          <div style="width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px;">💡</div>
+          <div style="width:1px;height:18px;background:#e0e0e0;"></div>
+          <div style="width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px;">⚙️</div>
+        </div>
+        <!-- Tooltip shown below hovered icon -->
+        <div style="background:#333;color:white;border-radius:6px;padding:4px 10px;font-size:11px;font-family:sans-serif;">翻译 (Alt+T)</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — 胶囊图标 + Hover Tooltip</h3>
+      <p>与 A 类似但更紧凑（28px 图标），悬停时显示动作名+快捷键。最轻量，不打断视线。</p>
+    </div>
+  </div>
+
+</div>

@@ -1,0 +1,96 @@
+<h2>设计方案 · 第二节 v2：结果窗口 + 交互式窗口（修订）</h2>
+<p class="subtitle">按钮改为图标，生成按钮移至右上角，结果一次性展示</p>
+
+<div class="split" style="gap: 16px; flex-wrap: wrap; align-items: flex-start;">
+
+  <!-- Window 2 v2: Result Window -->
+  <div class="mockup" style="flex: 1 1 300px;">
+    <div class="mockup-header">② 结果大框（修订版）</div>
+    <div class="mockup-body" style="background:#1e1e1e; padding: 0; border-radius: 6px; overflow: hidden;">
+      <!-- Title bar -->
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:#2a2a2a;border-bottom:1px solid #333;">
+        <!-- Left: close + action name -->
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="width:12px;height:12px;border-radius:50%;background:#ff5f57;display:inline-block;cursor:pointer;" title="关闭"></span>
+          <span style="color:#888;font-size:11px;font-family:sans-serif;">翻译 · Google 翻译</span>
+        </div>
+        <!-- Right: icon buttons -->
+        <div style="display:flex;align-items:center;gap:6px;">
+          <!-- Edit Prompt -->
+          <div style="width:26px;height:26px;border-radius:5px;background:#2d2d2d;border:1px solid #3d3d3d;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#94a3b8;font-size:14px;" title="编辑 Prompt (P)">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </div>
+          <!-- Regenerate -->
+          <div style="width:26px;height:26px;border-radius:5px;background:#2d2d2d;border:1px solid #3d3d3d;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#94a3b8;font-size:14px;" title="重新生成 (R)">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          </div>
+          <!-- Copy -->
+          <div style="width:26px;height:26px;border-radius:5px;background:#6366f1;border:1px solid #6366f1;display:flex;align-items:center;justify-content:center;cursor:pointer;color:white;font-size:14px;" title="复制全部 (C)">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          </div>
+        </div>
+      </div>
+      <!-- Result content (one-shot, no streaming) -->
+      <div style="padding:14px 16px;color:#e2e8f0;font-size:13px;font-family:'Segoe UI',sans-serif;line-height:1.8;min-height:100px;">
+        敏捷的棕色狐狸跳过了懒惰的狗。这是 AI 一次性返回的完整结果，支持 Markdown 渲染。
+      </div>
+    </div>
+    <div style="padding: 8px 12px; color: #94a3b8; font-size: 11px;">
+      ✏️ 编辑Prompt &nbsp;·&nbsp; 🔄 重新生成 &nbsp;·&nbsp; 📋 复制全部（均支持快捷键 P / R / C）
+    </div>
+  </div>
+
+  <!-- Window 3 v2: Interactive Window -->
+  <div class="mockup" style="flex: 1 1 300px;">
+    <div class="mockup-header">③ 交互式窗口（修订版）</div>
+    <div class="mockup-body" style="background:#1e1e1e; padding: 0; overflow: hidden;">
+      <!-- Title bar with ALL icon buttons -->
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:#2a2a2a;border-bottom:1px solid #333;">
+        <!-- Left: close + action name + model switcher -->
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="width:12px;height:12px;border-radius:50%;background:#ff5f57;display:inline-block;cursor:pointer;"></span>
+          <span style="color:#888;font-size:11px;font-family:sans-serif;">智能回复</span>
+          <span style="background:#1a2744;color:#93c5fd;border-radius:4px;padding:2px 6px;font-size:10px;font-family:sans-serif;cursor:pointer;border:1px solid #1e3a8a;">deepseek ▾</span>
+        </div>
+        <!-- Right: icon buttons (Generate + Edit + Regen + Copy) -->
+        <div style="display:flex;align-items:center;gap:6px;">
+          <!-- Generate / Send -->
+          <div style="width:26px;height:26px;border-radius:5px;background:#22c55e;border:1px solid #16a34a;display:flex;align-items:center;justify-content:center;cursor:pointer;color:white;" title="生成 (Enter)">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          </div>
+          <div style="width:1px;height:16px;background:#3d3d3d;"></div>
+          <!-- Edit Prompt -->
+          <div style="width:26px;height:26px;border-radius:5px;background:#2d2d2d;border:1px solid #3d3d3d;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#94a3b8;" title="编辑 Prompt (P)">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </div>
+          <!-- Regenerate -->
+          <div style="width:26px;height:26px;border-radius:5px;background:#2d2d2d;border:1px solid #3d3d3d;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#94a3b8;" title="重新生成 (R)">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          </div>
+          <!-- Copy -->
+          <div style="width:26px;height:26px;border-radius:5px;background:#6366f1;border:1px solid #6366f1;display:flex;align-items:center;justify-content:center;cursor:pointer;color:white;" title="复制全部 (C)">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          </div>
+        </div>
+      </div>
+      <!-- Top: user input (no separate generate button) -->
+      <div style="padding:10px 14px;border-bottom:1px solid #2d2d2d;background:#181818;">
+        <div style="color:#64748b;font-size:10px;font-family:sans-serif;margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px;">回复意图</div>
+        <div style="color:#cbd5e1;font-size:13px;font-family:'Segoe UI',sans-serif;border:1px solid #334155;border-radius:5px;padding:8px 10px;background:#0f172a;min-height:44px;">
+          委婉拒绝，周五晚上已有约
+        </div>
+      </div>
+      <!-- Bottom: AI result (one-shot) -->
+      <div style="padding:10px 14px;background:#1e1e1e;">
+        <div style="color:#64748b;font-size:10px;font-family:sans-serif;margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px;">生成结果</div>
+        <div style="color:#e2e8f0;font-size:13px;font-family:'Segoe UI',sans-serif;line-height:1.8;">
+          感谢您的邀请！很遗憾周五晚上我已有约在先，无法出席。希望改日有机会再聚，祝活动顺利！
+        </div>
+      </div>
+    </div>
+    <div style="padding: 8px 12px; color: #94a3b8; font-size: 11px;">
+      右上角从左到右：▶ 发送生成 &nbsp;|&nbsp; ✏️ 编辑Prompt &nbsp;·&nbsp; 🔄 重新生成 &nbsp;·&nbsp; 📋 复制
+    </div>
+  </div>
+
+</div>

@@ -6,10 +6,94 @@
              Width="{TemplateBinding Width}" Height="{TemplateBinding Height}"/>
   </ControlTemplate>
 
+  <!-- Tray context menu: Win11 Fluent – no icon gutter, full-bleed text -->
+  <Style TargetType="ContextMenu">
+    <Setter Property="Padding" Value="4,4"/>
+    <Setter Property="Background" Value="{DynamicResource PickerBgFill}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource SurfaceStroke}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="SnapsToDevicePixels" Value="True"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ContextMenu">
+          <Border Background="{TemplateBinding Background}"
+                  BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}"
+                  CornerRadius="8"
+                  Padding="{TemplateBinding Padding}">
+            <Border.Effect>
+              <DropShadowEffect BlurRadius="16" ShadowDepth="2" Opacity="0.12" Color="Black"/>
+            </Border.Effect>
+            <StackPanel Orientation="Vertical" IsItemsHost="True"/>
+          </Border>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <Style TargetType="MenuItem">
+    <Setter Property="Padding" Value="12,6"/>
+    <Setter Property="MinWidth" Value="160"/>
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="MenuItem">
+          <Border x:Name="Border"
+                  Background="{TemplateBinding Background}"
+                  CornerRadius="5"
+                  Margin="2,1"
+                  Padding="{TemplateBinding Padding}">
+            <ContentPresenter ContentSource="Header"
+                              HorizontalAlignment="Stretch"
+                              VerticalAlignment="Center"
+                              TextBlock.Foreground="{DynamicResource PickerFgFill}"
+                              TextBlock.FontSize="13"/>
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsHighlighted" Value="True">
+              <Setter TargetName="Border" Property="Background"
+                      Value="{DynamicResource CmbHighlight}"/>
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+              <Setter Property="TextBlock.Foreground" Value="{DynamicResource TextTertiary}"/>
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- ComboBox dropdown items — always light bg + black text -->
+  <Style TargetType="ComboBoxItem">
+    <Setter Property="Background"  Value="{DynamicResource PickerBgFill}"/>
+    <Setter Property="Foreground"  Value="{DynamicResource PickerFgFill}"/>
+    <Setter Property="Padding"     Value="6,3"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ComboBoxItem">
+          <Border x:Name="Border" Background="{TemplateBinding Background}"
+                  Padding="{TemplateBinding Padding}" CornerRadius="2">
+            <ContentPresenter/>
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsHighlighted" Value="True">
+              <Setter TargetName="Border" Property="Background" Value="{DynamicResource CmbHighlight}"/>
+              <Setter Property="Foreground" Value="{DynamicResource CmbHighlightText}"/>
+            </Trigger>
+            <Trigger Property="IsSelected" Value="True">
+              <Setter TargetName="Border" Property="Background" Value="{DynamicResource CmbHighlight}"/>
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- Icon buttons (result window toolbar: edit, regen, etc.) -->
   <Style x:Key="IconBtnStyle" TargetType="Button">
-    <Setter Property="Background"        Value="#2D2D2D"/>
-    <Setter Property="BorderBrush"       Value="#3D3D3D"/>
-    <Setter Property="Foreground"        Value="#94A3B8"/>
+    <Setter Property="Background"        Value="{DynamicResource IconBtnFill}"/>
+    <Setter Property="BorderBrush"       Value="{DynamicResource IconBtnStroke}"/>
+    <Setter Property="Foreground"        Value="{DynamicResource TextTertiary}"/>
     <Setter Property="BorderThickness"   Value="1"/>
     <Setter Property="Cursor"            Value="Hand"/>
     <Setter Property="Template">
@@ -26,9 +110,35 @@
     </Setter>
     <Style.Triggers>
       <Trigger Property="IsMouseOver" Value="True">
-        <Setter Property="Background" Value="#3D3D3D"/>
+        <Setter Property="Background" Value="{DynamicResource IconBtnFillHover}"/>
       </Trigger>
     </Style.Triggers>
+  </Style>
+
+  <!-- Action menu buttons (36×36 Fluent, transparent bg, hover reveal) -->
+  <Style x:Key="MenuActionBtnStyle" TargetType="Button">
+    <Setter Property="Width"       Value="36"/>
+    <Setter Property="Height"      Value="36"/>
+    <Setter Property="Background"  Value="{DynamicResource MenuBtnFill}"/>
+    <Setter Property="BorderBrush" Value="Transparent"/>
+    <Setter Property="Cursor"      Value="Hand"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Button">
+          <Border x:Name="bg" Background="{TemplateBinding Background}"
+                  CornerRadius="6">
+            <ContentPresenter HorizontalAlignment="Center"
+                              VerticalAlignment="Center"/>
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="bg" Property="Background"
+                      Value="{DynamicResource MenuBtnFillHover}"/>
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
   </Style>
 
 </ResourceDictionary>

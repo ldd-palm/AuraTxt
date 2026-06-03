@@ -6,10 +6,17 @@ public partial class PromptEditDialog : Window
 {
     public string Result { get; private set; } = "";
 
-    public PromptEditDialog(string currentPrompt)
+    public PromptEditDialog(string text, bool readOnly = false)
     {
         InitializeComponent();
-        PromptBox.Text = currentPrompt;
+        PromptBox.Text = text;
+        if (readOnly)
+        {
+            PromptBox.IsReadOnly = true;
+            Title = "Built-in Model";
+            CancelBtn.Visibility = Visibility.Collapsed;
+            OkBtn.Content = "Close";
+        }
     }
 
     private void OK_Click(object sender, RoutedEventArgs e)     { Result = PromptBox.Text; DialogResult = true; }

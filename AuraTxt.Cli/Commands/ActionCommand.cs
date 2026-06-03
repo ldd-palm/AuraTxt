@@ -1,5 +1,6 @@
 using AuraTxt.Core.Models;
 using AuraTxt.Core.Services;
+using System.IO;
 
 namespace AuraTxt.Cli.Commands;
 
@@ -22,10 +23,15 @@ public class ActionCommand(ConfigService config)
     {
         var cfg = config.Load();
         if (!cfg.Actions.Any()) { Console.WriteLine("（无配置动作）"); return 0; }
-        Console.WriteLine($"{"ID",-15} {"名称",-15} {"模型",-20} {"交互",-6} {"快捷键"}");
-        Console.WriteLine(new string('-', 70));
-        foreach (var a in cfg.Actions)
-            Console.WriteLine($"{a.Id,-15} {a.Name,-15} {a.ModelId,-20} {a.IsInteractive,-6} {a.Hotkey}");
+        var sorted = cfg.Actions
+            .OrderBy(a => a.Enabled ? 0 : 1)
+            .ThenBy(a => a.Order)
+            .ThenBy(a => a.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        Console.WriteLine($"{"ID",-15} {"名称",-15} {"模型",-20} {"交互",-6} {"快捷键",-12} {"Order"}");
+        Console.WriteLine(new string('-', 80));
+        foreach (var a in sorted)
+            Console.WriteLine($"{a.Id,-15} {a.Name,-15} {a.ModelId,-20} {a.IsInteractive,-6} {a.Hotkey,-12} {a.Order}");
         return 0;
     }
 
@@ -36,6 +42,7 @@ public class ActionCommand(ConfigService config)
 
         if (opts.TryGetValue("hotkey", out var hk) && !string.IsNullOrEmpty(hk))
         {
+            if (id == "copy") return Err("Copy action hotkey is fixed and cannot be changed.", 2);
             var (res, conflict) = _hv.Validate(hk, cfg.Actions.Where(a => a.Id != id));
             if (res == HotkeyValidationResult.InvalidFormat)
                 return Err($"Invalid hotkey format: {hk} (example: Alt+T)");
@@ -50,6 +57,7 @@ public class ActionCommand(ConfigService config)
             return Err($"ModelId \"{mid}\" must use format providerId/TargetModel (e.g. openai/gpt-4o)", 1);
 
         var idx  = cfg.Actions.FindIndex(a => a.Id == id);
+        int.TryParse(opts.GetValueOrDefault("order", "0"), out var order);
         var item = new ActionItem
         {
             Id            = id,
@@ -59,13 +67,15 @@ public class ActionCommand(ConfigService config)
             IsInteractive = opts.GetValueOrDefault("interactive", "false") == "true",
             Hotkey        = opts.GetValueOrDefault("hotkey", ""),
             Prompt        = opts.GetValueOrDefault("prompt", ""),
-            Enabled       = opts.GetValueOrDefault("enabled", "true") == "true"
+            Enabled       = opts.GetValueOrDefault("enabled", "true") == "true",
+            Order         = order
         };
 
         if (idx >= 0) cfg.Actions[idx] = item;
         else          cfg.Actions.Add(item);
         config.Save(cfg);
         Console.WriteLine($"✓ Action '{id}' saved");
+        DownloadIconIfNeeded(item.Icon);
         return 0;
     }
 
@@ -78,6 +88,7 @@ public class ActionCommand(ConfigService config)
 
         if (opts.TryGetValue("hotkey", out var hk) && !string.IsNullOrEmpty(hk))
         {
+            if (id == "copy") return Err("Copy action hotkey is fixed and cannot be changed.", 2);
             var (res, conflict) = _hv.Validate(hk, cfg.Actions, excludeId: id);
             if (res == HotkeyValidationResult.InvalidFormat)
                 return Err($"快捷键格式无效：{hk}");
@@ -94,9 +105,11 @@ public class ActionCommand(ConfigService config)
         if (opts.TryGetValue("prompt",      out var p))  item.Prompt        = p;
         if (opts.TryGetValue("interactive", out var iv)) item.IsInteractive = iv == "true";
         if (opts.TryGetValue("enabled",     out var en)) item.Enabled      = en == "true";
+        if (opts.TryGetValue("order",       out var or) && int.TryParse(or, out var ov)) item.Order = ov;
 
         config.Save(cfg);
         Console.WriteLine($"✓ 动作 '{id}' 已更新");
+        if (opts.ContainsKey("icon")) DownloadIconIfNeeded(item.Icon);
         return 0;
     }
 
@@ -115,6 +128,14 @@ public class ActionCommand(ConfigService config)
         return 0;
     }
 
+    private static void DownloadIconIfNeeded(string icon)
+    {
+        if (string.IsNullOrWhiteSpace(icon)) return;
+        Console.Write($"  Downloading icon '{icon}'... ");
+        var ok = IconDownloadService.EnsureDownloadedAsync(icon).GetAwaiter().GetResult();
+        Console.WriteLine(ok ? "✓" : "✗ (not found on lucide.dev — will use text fallback)");
+    }
+
     private static int Err(string msg, int code = 1)
     {
         Console.Error.WriteLine(msg);
@@ -124,8 +145,8 @@ public class ActionCommand(ConfigService config)
     private static int PrintHelp()
     {
         Console.WriteLine("auracfg action --list");
-        Console.WriteLine("auracfg action --set    --id <id> --name <name> --icon <lucide> --model-id <id> --interactive <true|false> --prompt \"<text>\" [--hotkey <key>] [--enabled <true|false>]");
-        Console.WriteLine("auracfg action --update --id <id> [any field including --enabled]");
+        Console.WriteLine("auracfg action --set    --id <id> --name <name> --icon <lucide> --model-id <id> --interactive <true|false> --prompt \"<text>\" [--hotkey <key>] [--enabled <true|false>] [--order <int>]");
+        Console.WriteLine("auracfg action --update --id <id> [any field including --enabled] [--order <int>]");
         Console.WriteLine("auracfg action --delete --id <id>");
         return 1;
     }

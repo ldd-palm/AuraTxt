@@ -5,8 +5,7 @@ namespace AuraTxt.Core.Services;
 
 public class ConfigService
 {
-    private static readonly string DefaultConfigDir =
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AuraTxt");
+    private static readonly string DefaultConfigDir = AppContext.BaseDirectory;
 
     public static string DefaultConfigPath =>
         Path.Combine(DefaultConfigDir, "config.json");
@@ -26,8 +25,28 @@ public class ConfigService
     {
         if (!File.Exists(_path))
             return CreateDefault();
-        var json = File.ReadAllText(_path);
-        return JsonSerializer.Deserialize<ConfigRoot>(json, JsonOpts) ?? CreateDefault();
+
+        // Retry on transient file locks (e.g. another process is mid-save).
+        for (int retry = 0; ; retry++)
+        {
+            try
+            {
+                var json = File.ReadAllText(_path);
+                var cfg = JsonSerializer.Deserialize<ConfigRoot>(json, JsonOpts) ?? CreateDefault();
+
+                // Backfill: old configs had no Enabled field → default(bool)=false → fix to true.
+                foreach (var (_, provider) in cfg.Models)
+                    foreach (var model in provider.Models)
+                        if (!model.Enabled && !string.IsNullOrEmpty(model.TargetModel))
+                            model.Enabled = true;
+
+                return cfg;
+            }
+            catch (IOException) when (retry < 3)
+            {
+                Thread.Sleep(100);
+            }
+        }
     }
 
     public void Save(ConfigRoot config)
@@ -66,8 +85,8 @@ public class ConfigService
             ApiKey      = "",
             Models      = new()
             {
-                new ModelEntry { TargetModel = "Google_Translate", Alias = "GTrans", DisableThinking = false },
-                new ModelEntry { TargetModel = "Youdao_Dict",      Alias = "Youdao",  DisableThinking = false }
+                new ModelEntry { TargetModel = "Google_Translate", Alias = "GTrans", DisableThinking = false, Enabled = true },
+                new ModelEntry { TargetModel = "Youdao_Dict",      Alias = "Youdao",  DisableThinking = false, Enabled = true }
             }
         };
 
@@ -77,7 +96,7 @@ public class ConfigService
             Id       = "copy",
             Name     = "Copy",
             Icon     = "clipboard-copy",
-            Hotkey   = "Ctrl+C",
+            Hotkey   = "",
             Enabled  = true,
             IsSystem = true
         });

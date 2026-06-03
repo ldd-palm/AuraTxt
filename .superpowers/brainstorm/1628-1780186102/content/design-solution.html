@@ -1,0 +1,93 @@
+<h2>设计方案 · 第一节：Solution 结构与数据流</h2>
+<p class="subtitle">三个 Project 的职责边界与依赖方向</p>
+
+<div class="mockup">
+  <div class="mockup-header">AuraTxt.sln — Project 依赖图</div>
+  <div class="mockup-body" style="font-family: 'Cascadia Code', 'Consolas', monospace; font-size: 13px; line-height: 1.8;">
+
+    <div style="display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap;">
+
+      <!-- AuraTxt.Core -->
+      <div style="border: 2px solid #6366f1; border-radius: 10px; padding: 14px 18px; min-width: 220px; background: #1e1e2e;">
+        <div style="color: #a5b4fc; font-weight: bold; margin-bottom: 8px;">📦 AuraTxt.Core</div>
+        <div style="color: #94a3b8; font-size: 12px;">(Class Library · .NET 8)</div>
+        <hr style="border-color: #334155; margin: 8px 0;">
+        <div style="color: #e2e8f0; font-size: 12px;">
+          Models/<br>
+          &nbsp;&nbsp;ConfigRoot.cs<br>
+          &nbsp;&nbsp;ModelPlatform.cs<br>
+          &nbsp;&nbsp;ActionItem.cs<br>
+          Services/<br>
+          &nbsp;&nbsp;ConfigService.cs<br>
+          &nbsp;&nbsp;AiClient.cs<br>
+          &nbsp;&nbsp;GoogleTranslateClient.cs<br>
+          &nbsp;&nbsp;YoudaoClient.cs
+        </div>
+      </div>
+
+      <!-- Arrow column -->
+      <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 60px; padding-top: 40px; color: #64748b; font-size: 20px;">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+          <span style="font-size:11px;color:#94a3b8;">引用</span>
+          <span>←</span>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+          <span style="font-size:11px;color:#94a3b8;">引用</span>
+          <span>←</span>
+        </div>
+      </div>
+
+      <!-- Right column: two projects -->
+      <div style="display: flex; flex-direction: column; gap: 16px;">
+
+        <!-- AuraTxt WPF -->
+        <div style="border: 2px solid #22c55e; border-radius: 10px; padding: 14px 18px; min-width: 220px; background: #1e2e1e;">
+          <div style="color: #86efac; font-weight: bold; margin-bottom: 8px;">🖥️ AuraTxt</div>
+          <div style="color: #94a3b8; font-size: 12px;">(WPF App · .NET 8)</div>
+          <hr style="border-color: #334155; margin: 8px 0;">
+          <div style="color: #e2e8f0; font-size: 12px;">
+            TrayIcon + 右键菜单<br>
+            全局钩子（鼠标 + 键盘）<br>
+            ActionMenuWindow.xaml<br>
+            ResultWindow.xaml<br>
+            InteractiveWindow.xaml<br>
+          </div>
+        </div>
+
+        <!-- auracfg CLI -->
+        <div style="border: 2px solid #f59e0b; border-radius: 10px; padding: 14px 18px; min-width: 220px; background: #1e1a00;">
+          <div style="color: #fcd34d; font-weight: bold; margin-bottom: 8px;">⌨️ auracfg</div>
+          <div style="color: #94a3b8; font-size: 12px;">(Console App · .NET 8 → auracfg.exe)</div>
+          <hr style="border-color: #334155; margin: 8px 0;">
+          <div style="color: #e2e8f0; font-size: 12px;">
+            交互式菜单模式<br>
+            参数模式（AI Agent 调用）<br>
+            model / action 子命令<br>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- config.json -->
+    <div style="margin-top: 20px; border: 1px dashed #475569; border-radius: 8px; padding: 12px 16px; background: #0f172a;">
+      <div style="color: #94a3b8; font-size: 12px; margin-bottom: 6px;">共享数据文件</div>
+      <div style="color: #fbbf24; font-size: 13px;">📄 %AppData%\AuraTxt\config.json</div>
+      <div style="color: #64748b; font-size: 11px; margin-top: 4px;">AuraTxt 启动时读取 · auracfg 读写 · 两者通过文件共享状态</div>
+    </div>
+
+    <!-- js files -->
+    <div style="margin-top: 12px; border: 1px dashed #475569; border-radius: 8px; padding: 12px 16px; background: #0f172a;">
+      <div style="color: #94a3b8; font-size: 12px; margin-bottom: 6px;">内置免费服务（移植自 JS，无需 API Key）</div>
+      <div style="color: #67e8f9; font-size: 12px;">
+        🌐 Google Translate — translate.google.com/translate_a/single (tk token 算法)<br>
+        📖 有道词典 — fanyi.youdao.com / dict.youdao.com (MD5 签名算法)
+      </div>
+      <div style="color: #64748b; font-size: 11px; margin-top: 4px;">固定写入 config.json 的 "system" 区块，auracfg 和 GUI 均不允许修改</div>
+    </div>
+
+  </div>
+</div>
+
+<p style="margin-top:16px; color: #94a3b8; font-size: 13px;">这个结构是否符合你的预期？有任何要调整的地方请告诉我，确认后进入下一节（config.json 数据模型设计）。</p>

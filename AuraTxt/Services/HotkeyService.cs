@@ -48,6 +48,22 @@ public class HotkeyService
         var text = await ClipboardService.GetSelectedTextAsync(50);
         if (string.IsNullOrWhiteSpace(text)) return;
 
+        // System actions (speech/copy) don't have a ModelId — handle inline.
+        if (string.IsNullOrEmpty(action.ModelId))
+        {
+            switch (action.Id)
+            {
+                case "speech":
+                    var synth = new System.Speech.Synthesis.SpeechSynthesizer();
+                    synth.SpeakAsync(text);
+                    break;
+                case "copy":
+                    System.Windows.Clipboard.SetText(text);
+                    break;
+            }
+            return;
+        }
+
         await Application.Current.Dispatcher.InvokeAsync(() =>
             ShowResultFor(action, text, cfg));
     }

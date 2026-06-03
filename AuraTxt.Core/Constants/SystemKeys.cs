@@ -10,6 +10,10 @@ public static class SystemKeys
             "Win+Tab","Win+Space","Win+Enter",
             "Win+Left","Win+Right","Win+Up","Win+Down",
             "Alt+F4","Alt+Tab","Alt+Esc",
-            "Ctrl+Alt+Delete","PrintScreen","Win+PrintScreen","Alt+PrintScreen"
+            "Ctrl+Alt+Delete","PrintScreen","Win+PrintScreen","Alt+PrintScreen",
+            // AuraTxt uses Ctrl+C internally to capture selected text;
+            // assigning it as an action hotkey intercepts the keystroke before
+            // it reaches the target app and breaks text detection entirely.
+            "Ctrl+C","Ctrl+X","Ctrl+V","Ctrl+Z","Ctrl+A"
         };
 }

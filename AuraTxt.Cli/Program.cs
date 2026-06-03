@@ -1,6 +1,9 @@
+using System.Text;
 using AuraTxt.Cli.Commands;
 using AuraTxt.Cli.Menus;
 using AuraTxt.Core.Services;
+
+Console.OutputEncoding = Encoding.UTF8;
 
 var configService = new ConfigService();
 
@@ -15,6 +18,7 @@ return args[0] switch
     "provider" => await new ProviderCommand(configService).ExecuteAsync(args[1..]),
     "model"    => await new ProviderCommand(configService).ExecuteAsync(args[1..]),
     "action"   => await new ActionCommand(configService).ExecuteAsync(args[1..]),
+    "prompt"   => await new PromptCommand(configService).ExecuteAsync(args[1..]),
     "show"     => await new ShowCommand(configService).ExecuteAsync(args[1..]),
     "settings" => await new SettingsCommand(configService).ExecuteAsync(args[1..]),
     "doctor"   => new DoctorCommand(configService).Execute(),
@@ -51,6 +55,7 @@ static int Help()
     Console.WriteLine("  auracfg show action [id]       Show action details");
     Console.WriteLine("  auracfg provider  [options]    Manage model providers");
     Console.WriteLine("  auracfg action    [options]    Manage actions");
+    Console.WriteLine("  auracfg prompt    [options]    Manage prompt files");
     Console.WriteLine("  auracfg settings  [options]    Manage UI settings");
     Console.WriteLine("  auracfg doctor                 Validate config.json");
     Console.WriteLine("  auracfg restore                Restore config from backup");
