@@ -23,4 +23,9 @@ public static class AppState
     /// True while the action menu is being updated in-place (double-click reposition).
     /// Prevents the Deactivated handler from closing the window during content rebuild.
     public static bool IsMenuUpdating { get; set; }
+
+    /// True after an action was triggered for LastProcessedText (silence shield).
+    /// On plain click: if false → clear LastProcessedText immediately (scenario B re-arm);
+    ///                 if true → check async whether selection is gone before clearing.
+    public static bool SelectionActioned { get; set; }
 }

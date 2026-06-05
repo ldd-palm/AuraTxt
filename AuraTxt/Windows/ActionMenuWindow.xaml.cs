@@ -98,7 +98,7 @@ public partial class ActionMenuWindow : Window
     {
         try { await Task.Delay(500, ct); }
         catch (OperationCanceledException) { return; }
-        SafeClose();
+        SafeClose(applySuppress: false);  // light-dismiss: don't block immediate re-trigger
     }
 
     /// <summary>Cancels any pending deferred close.</summary>
@@ -129,15 +129,18 @@ public partial class ActionMenuWindow : Window
         finally { AppState.IsMenuUpdating = false; }
     }
 
-    private void SafeClose()
+    private void SafeClose(bool applySuppress = true)
     {
         if (!_ready || _closing) return;
         if (AppState.IsMenuUpdating) return;
         _closing = true;
-        // Suppress menu re-trigger for 2s (the mouse-up that clicked us fires globally)
-        AppState.MenuSuppressUntil = DateTime.UtcNow.AddSeconds(2);
+        if (applySuppress)
+            AppState.MenuSuppressUntil = DateTime.UtcNow.AddSeconds(2);
         Close();
     }
+
+    /// Called from global keyboard hook (UI thread via Dispatcher.BeginInvoke).
+    public void CloseNow() => SafeClose();
 
     private void BuildMenu()
     {

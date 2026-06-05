@@ -17,6 +17,7 @@ public partial class ResultWindow : Window
     private (ProviderConfig provider, ModelEntry model)? _activeModel;
     private bool _closing;
     private bool _editing;
+    private bool _pinned;
 
     public ResultWindow(ActionItem action, string selectedText, ConfigRoot cfg)
     {
@@ -104,9 +105,8 @@ public partial class ResultWindow : Window
         }
         if (resolved?.model.TargetModel == "Youdao_Dict")
         {
-            var yt = YoudaoToCode(_cfg.Settings.TargetLanguage);
-            LogService.Info($"Youdao_Dict → {yt}  text_len={_selectedText.Length}");
-            return await new YoudaoClient().TranslateAsync(_selectedText, to: yt);
+            LogService.Info($"Youdao_Dict → dict  text_len={_selectedText.Length}");
+            return await new YoudaoClient().DictionaryAsync(_selectedText);
         }
 
         if (resolved is null)
@@ -128,7 +128,12 @@ public partial class ResultWindow : Window
     }
 
     private void CloseBtn_Click(object sender, RoutedEventArgs e) { _closing = true; Close(); }
-    private void SafeClose() { if (_closing || _editing) return; _closing = true; Close(); }
+    private void SafeClose() { if (_closing || _editing || _pinned) return; _closing = true; Close(); }
+    private void PinBtn_Click(object sender, RoutedEventArgs e)
+    {
+        _pinned      = !_pinned;
+        PinBtn.Opacity = _pinned ? 1.0 : 0.45;
+    }
     private async void RegenBtn_Click(object sender, RoutedEventArgs e) => await RunAsync();
     private void CopyBtn_Click(object sender, RoutedEventArgs e)
     {
@@ -170,16 +175,13 @@ public partial class ResultWindow : Window
         else if (e.Key == Key.P) { EditBtn_Click(sender, new RoutedEventArgs()); e.Handled = true; }
         else if (e.Key == Key.R) { RegenBtn_Click(sender, new RoutedEventArgs()); e.Handled = true; }
         else if (e.Key == Key.C) { CopyBtn_Click(sender, new RoutedEventArgs()); e.Handled = true; }
+        else if (e.Key == Key.T) { PinBtn_Click(sender, new RoutedEventArgs()); e.Handled = true; }
     }
 
     private void TitleBar_MouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         if (e.ChangedButton == MouseButton.Left) DragMove();
     }
-
-    /// Map Google-style language code to Youdao code (only zh-CN → zh-CHS differs).
-    private static string YoudaoToCode(string googleCode) =>
-        googleCode == "zh-CN" ? "zh-CHS" : googleCode;
 
     private static string FormatError(Exception ex)
     {

@@ -35,9 +35,13 @@ public class PromptCommand(ConfigService config)
         return 0;
     }
 
+    private static string StripMd(string name) =>
+        name.EndsWith(".md", StringComparison.OrdinalIgnoreCase) ? name[..^3] : name;
+
     private int Show(Dictionary<string, string> o)
     {
-        if (!o.TryGetValue("name", out var name)) return Err("Missing --name");
+        if (!o.TryGetValue("name", out var raw)) return Err("Missing --name");
+        var name = StripMd(raw);
         var path = Path.Combine(PromptService.PromptsDir, $"{name}.md");
         if (!File.Exists(path)) return Err($"Prompt '{name}' not found", 2);
         Console.WriteLine(File.ReadAllText(path));
@@ -46,7 +50,8 @@ public class PromptCommand(ConfigService config)
 
     private int Add(Dictionary<string, string> o)
     {
-        if (!o.TryGetValue("name", out var name)) return Err("Missing --name");
+        if (!o.TryGetValue("name", out var raw)) return Err("Missing --name");
+        var name = StripMd(raw);
         if (PromptService.Exists(name)) return Err($"Prompt '{name}' already exists", 2);
         try
         {
@@ -60,7 +65,8 @@ public class PromptCommand(ConfigService config)
 
     private int Update(Dictionary<string, string> o)
     {
-        if (!o.TryGetValue("name", out var name)) return Err("Missing --name");
+        if (!o.TryGetValue("name", out var raw)) return Err("Missing --name");
+        var name = StripMd(raw);
         var path = Path.Combine(PromptService.PromptsDir, $"{name}.md");
         if (!File.Exists(path)) return Err($"Prompt '{name}' not found", 2);
         if (!WriteContentIfProvided(o, path))
@@ -71,7 +77,8 @@ public class PromptCommand(ConfigService config)
 
     private int Delete(Dictionary<string, string> o)
     {
-        if (!o.TryGetValue("name", out var name)) return Err("Missing --name");
+        if (!o.TryGetValue("name", out var raw)) return Err("Missing --name");
+        var name = StripMd(raw);
         var path = Path.Combine(PromptService.PromptsDir, $"{name}.md");
         if (!File.Exists(path)) return Err($"Prompt '{name}' not found", 2);
 

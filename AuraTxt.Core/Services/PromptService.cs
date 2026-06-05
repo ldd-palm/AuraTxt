@@ -8,7 +8,9 @@ namespace AuraTxt.Core.Services;
 public static class PromptService
 {
     // ── Prompts directory ────────────────────────────────────────────────────
-    public static string PromptsDir { get; } = Path.Combine(AppContext.BaseDirectory, "Prompts");
+    public static string PromptsDir { get; } = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        "AuraTxt", "prompts");
 
     public static string SystemFile   => Path.Combine(PromptsDir, "system.md");
     public static string TemplateFile => Path.Combine(PromptsDir, "template.md");

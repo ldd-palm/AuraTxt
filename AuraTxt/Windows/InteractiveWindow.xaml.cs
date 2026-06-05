@@ -17,6 +17,7 @@ public partial class InteractiveWindow : Window
     private (ProviderConfig provider, ModelEntry model)? _activeModel;
     private bool _closing;
     private bool _editing;
+    private bool _pinned;
 
     public InteractiveWindow(ActionItem action, string selectedText, ConfigRoot cfg)
     {
@@ -131,7 +132,12 @@ public partial class InteractiveWindow : Window
     }
 
     private void CloseBtn_Click(object sender, RoutedEventArgs e) { _closing = true; Close(); }
-    private void SafeClose() { if (_closing || _editing) return; _closing = true; Close(); }
+    private void SafeClose() { if (_closing || _editing || _pinned) return; _closing = true; Close(); }
+    private void PinBtn_Click(object sender, RoutedEventArgs e)
+    {
+        _pinned        = !_pinned;
+        PinBtn.Opacity = _pinned ? 1.0 : 0.45;
+    }
 
     private void TitleBar_MouseDown(object sender, MouseButtonEventArgs e)
     {
@@ -144,6 +150,7 @@ public partial class InteractiveWindow : Window
         else if (e.Key == Key.P) { EditBtn_Click(sender, new RoutedEventArgs()); e.Handled = true; }
         else if (e.Key == Key.R) { RegenBtn_Click(sender, new RoutedEventArgs()); e.Handled = true; }
         else if (e.Key == Key.C) { CopyBtn_Click(sender, new RoutedEventArgs()); e.Handled = true; }
+        else if (e.Key == Key.T) { PinBtn_Click(sender, new RoutedEventArgs()); e.Handled = true; }
     }
 
     private static string FormatError(Exception ex)

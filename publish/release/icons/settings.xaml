@@ -1,0 +1,23 @@
+﻿<DrawingGroup xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:svg="http://sharpvectors.codeplex.com/runtime/">
+  <DrawingGroup svg:SvgLink.Key="_SvgDrawingLayer">
+    <DrawingGroup.ClipGeometry>
+      <RectangleGeometry Rect="0,0,24,24" />
+    </DrawingGroup.ClipGeometry>
+    <GeometryDrawing>
+      <GeometryDrawing.Pen>
+        <Pen Brush="#FF000000" Thickness="2" StartLineCap="Round" EndLineCap="Round" LineJoin="Round" />
+      </GeometryDrawing.Pen>
+      <GeometryDrawing.Geometry>
+        <PathGeometry FillRule="Nonzero" Figures="M9.671,4.136A2.34,2.34,0,0,1,14.33,4.136A2.34,2.34,0,0,0,17.649,6.051A2.34,2.34,0,0,1,19.979,10.084A2.34,2.34,0,0,0,19.979,13.915A2.34,2.34,0,0,1,17.649,17.948A2.34,2.34,0,0,0,14.33,19.863A2.34,2.34,0,0,1,9.671,19.863A2.34,2.34,0,0,0,6.351,17.948A2.34,2.34,0,0,1,4.021,13.915A2.34,2.34,0,0,0,4.021,10.084A2.34,2.34,0,0,1,6.35,6.051A2.34,2.34,0,0,0,9.669,4.136" />
+      </GeometryDrawing.Geometry>
+    </GeometryDrawing>
+    <GeometryDrawing>
+      <GeometryDrawing.Pen>
+        <Pen Brush="#FF000000" Thickness="2" StartLineCap="Round" EndLineCap="Round" LineJoin="Round" />
+      </GeometryDrawing.Pen>
+      <GeometryDrawing.Geometry>
+        <EllipseGeometry RadiusX="3" RadiusY="3" Center="12,12" />
+      </GeometryDrawing.Geometry>
+    </GeometryDrawing>
+  </DrawingGroup>
+</DrawingGroup>

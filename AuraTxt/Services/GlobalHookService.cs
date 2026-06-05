@@ -38,6 +38,8 @@ public class GlobalHookService
         _hook.MouseDownExt     += OnMouseDown;
         _hook.MouseUpExt       += OnMouseUp;
         _hook.MouseDoubleClick += OnMouseDoubleClick;
+        _hook.KeyPress         += OnKeyPress;
+        _hook.KeyDown          += OnKeyDown;
         _hotkeys.RegisterAll(_config.Load());
     }
 
@@ -47,6 +49,8 @@ public class GlobalHookService
         _hook.MouseDownExt     -= OnMouseDown;
         _hook.MouseUpExt       -= OnMouseUp;
         _hook.MouseDoubleClick -= OnMouseDoubleClick;
+        _hook.KeyPress         -= OnKeyPress;
+        _hook.KeyDown          -= OnKeyDown;
         _hook.Dispose();
         _hook = null;
     }
@@ -179,10 +183,32 @@ public class GlobalHookService
             // Physical click-vs-drag test (first line of defense): a plain click has
             // near-zero movement between down and up. Without a drag there is no text
             // selection, so bail out before touching the clipboard or the state locks.
-            // This alone kills the "click empty space → menu re-pops" race.
             var dx = Math.Abs(e.X - _mouseDownPoint.X);
             var dy = Math.Abs(e.Y - _mouseDownPoint.Y);
-            if (dx < DragThreshold && dy < DragThreshold) return;
+            if (dx < DragThreshold && dy < DragThreshold)
+            {
+                if (!AppState.SelectionActioned)
+                {
+                    // No action was taken — user dismissed the menu without acting.
+                    // Plain click likely cleared the selection → re-arm immediately (Scenario B).
+                    AppState.LastProcessedText = "";
+                }
+                else
+                {
+                    // Action was taken — selection might still be highlighted (silence shield).
+                    // Check async: if selection gone → Idle; if still there → keep shield.
+                    Application.Current?.Dispatcher.BeginInvoke(async () =>
+                    {
+                        var t = await ClipboardService.GetSelectedTextAsync(50);
+                        if (string.IsNullOrWhiteSpace(t))
+                        {
+                            AppState.LastProcessedText = "";
+                            AppState.SelectionActioned = false;
+                        }
+                    });
+                }
+                return;
+            }
 
             if (DateTime.UtcNow < AppState.MenuSuppressUntil) return;
             if (AppState.IsResultWindowOpen) return;
@@ -199,14 +225,19 @@ public class GlobalHookService
                     var text = await ClipboardService.GetSelectedTextAsync(
                         cfg.Settings.MenuTriggerDelayMs);
 
-                    // Empty selection = user deselected → re-arm so the same text
-                    // can trigger the menu again on a fresh selection.
-                    if (string.IsNullOrWhiteSpace(text)) { AppState.LastProcessedText = ""; return; }
+                    // Empty selection = user deselected → re-arm.
+                    if (string.IsNullOrWhiteSpace(text))
+                    {
+                        AppState.LastProcessedText = "";
+                        AppState.SelectionActioned = false;
+                        return;
+                    }
 
                     // Same text still highlighted → don't re-pop the menu.
                     if (text == AppState.LastProcessedText) return;
 
                     AppState.LastProcessedText = text;
+                    AppState.SelectionActioned = false;   // fresh selection resets the actioned flag
                     var menu = new ActionMenuWindow(cfg, text, pos);
                     menu.Show();
                 }
@@ -214,5 +245,24 @@ public class GlobalHookService
             });
         }
         catch { }
+    }
+
+    // ── Keyboard dismiss: close the menu when the user types or deletes ────────
+
+    /// Fires for every printable character — close the menu so the user can type freely.
+    private void OnKeyPress(object? sender, KeyPressEventArgs e)
+    {
+        if (AppState.ActiveMenu is ActionMenuWindow menu)
+            Application.Current.Dispatcher.BeginInvoke(() => menu.CloseNow());
+    }
+
+    /// Catch Backspace, Delete, and app-switch keys (Win, Alt+Tab) which KeyPress does not fire for.
+    private void OnKeyDown(object? sender, KeyEventArgs e)
+    {
+        var dismiss = e.KeyCode is Keys.Back or Keys.Delete or Keys.LWin or Keys.RWin
+                   || (e.Alt && e.KeyCode is Keys.Tab or Keys.F4);
+        if (!dismiss) return;
+        if (AppState.ActiveMenu is ActionMenuWindow menu)
+            Application.Current.Dispatcher.BeginInvoke(() => menu.CloseNow());
     }
 }

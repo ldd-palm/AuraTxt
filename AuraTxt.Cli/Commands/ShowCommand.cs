@@ -283,8 +283,8 @@ public class ShowCommand(ConfigService config)
 
     private static void PrintEnabled(bool enabled)
     {
-        if (enabled) { Green(); Console.Write("enabled"); }
-        else         { Dim();  Console.Write("disabled"); }
+        if (enabled) { Green(); Console.Write("active"); }
+        else         { Dim();  Console.Write("inactive"); }
         Reset();
     }
 

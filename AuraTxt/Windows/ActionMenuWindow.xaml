@@ -4,7 +4,7 @@
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         WindowStartupLocation="Manual"
         Topmost="True" ShowInTaskbar="False" SizeToContent="WidthAndHeight"
-        ResizeMode="NoResize">
+        ResizeMode="NoResize" ShowActivated="False">
 
   <!-- Double-layer shadow: outer ambient (large blur, no offset) + inner directional -->
   <Border CornerRadius="8">

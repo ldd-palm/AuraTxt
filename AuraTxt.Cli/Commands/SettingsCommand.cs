@@ -11,12 +11,14 @@ public class SettingsCommand(ConfigService config)
     private int Show()
     {
         var s = config.Load().Settings;
-        Console.WriteLine($"font-size:     {s.FontSize}");
-        Console.WriteLine($"opacity:       {s.ResultWindowOpacity}");
-        Console.WriteLine($"delay-ms:      {s.MenuTriggerDelayMs}");
-        Console.WriteLine($"target-lang:   {s.TargetLanguage}");
-        Console.WriteLine($"theme:         {s.Theme}");
-        Console.WriteLine($"voice:         {s.SpeechVoice}");
+        Console.WriteLine($"font-size:      {s.FontSize}");
+        Console.WriteLine($"opacity:        {s.ResultWindowOpacity}");
+        Console.WriteLine($"delay-ms:       {s.MenuTriggerDelayMs}");
+        Console.WriteLine($"target-lang:    {s.TargetLanguage}");
+        Console.WriteLine($"theme:          {s.Theme}");
+        Console.WriteLine($"voice:          {s.SpeechVoice}");
+        Console.WriteLine($"prompt-editor:  {(string.IsNullOrEmpty(s.PromptEditor) ? "(notepad.exe)" : s.PromptEditor)}");
+        Console.WriteLine($"config-editor:  {(string.IsNullOrEmpty(s.ConfigEditor) ? "(auracfg)" : s.ConfigEditor)}");
         return 0;
     }
 
@@ -36,6 +38,10 @@ public class SettingsCommand(ConfigService config)
             s.Theme = th.Trim();
         if (opts.TryGetValue("voice", out var vc) && !string.IsNullOrWhiteSpace(vc))
             s.SpeechVoice = vc.Trim();
+        if (opts.TryGetValue("prompt-editor", out var pe))
+            s.PromptEditor = pe.Trim();
+        if (opts.TryGetValue("config-editor", out var ce))
+            s.ConfigEditor = ce.Trim();
         config.Save(cfg);
         Console.WriteLine("✓ Settings saved");
         return 0;
@@ -44,7 +50,7 @@ public class SettingsCommand(ConfigService config)
     private static int PrintHelp()
     {
         Console.WriteLine("auracfg settings --show");
-        Console.WriteLine("auracfg settings --set [--font-size <n>] [--opacity <0-1>] [--delay-ms <n>] [--target-lang <code>] [--theme <id>] [--voice <name>]");
+        Console.WriteLine("auracfg settings --set [--font-size <n>] [--opacity <0-1>] [--delay-ms <n>] [--target-lang <code>] [--theme <id>] [--voice <name>] [--prompt-editor <exe>] [--config-editor <exe>]");
         return 1;
     }
 }

@@ -10,8 +10,9 @@ public class TrayIconManager : IDisposable
     private readonly TaskbarIcon _icon;
     private readonly MenuItem _toggleMonitorItem = null!;
     private readonly MenuItem _toggleMenuItem = null!;
+    private readonly MenuItem _settingsItem = null!;
 
-    public TrayIconManager(ConfigService config, Action onReload, Action onExit)
+    public TrayIconManager(ConfigService config, Action onReload, Action onExit, Action? onToggleMonitor = null)
     {
         _icon = new TaskbarIcon
         {
@@ -29,6 +30,7 @@ public class TrayIconManager : IDisposable
             _toggleMonitorItem.Header = AppState.IsMonitoringPaused
                 ? "Service: Resume" : "Service: Pause";
             SetTrayIcon();
+            onToggleMonitor?.Invoke();
         };
 
         _toggleMenuItem = new MenuItem { Header = "Hide Menu" };
@@ -41,14 +43,32 @@ public class TrayIconManager : IDisposable
         var reloadItem = new MenuItem { Header = "Reload Settings" };
         reloadItem.Click += (_, _) => onReload();
 
-        var settingsItem = new MenuItem { Header = "Config (auracfg)" };
-        settingsItem.Click += (_, _) =>
+        _settingsItem = new MenuItem { Header = "Settings (auracfg)" };
+        _settingsItem.Click += (_, _) =>
         {
-            var auracfg = System.IO.Path.Combine(AppContext.BaseDirectory, "auracfg.exe");
-            if (System.IO.File.Exists(auracfg))
-                System.Diagnostics.Process.Start(auracfg);
+            var configEditor = config.Load().Settings.ConfigEditor;
+            if (string.IsNullOrEmpty(configEditor))
+            {
+                var auracfg = System.IO.Path.Combine(AppContext.BaseDirectory, "auracfg.exe");
+                if (System.IO.File.Exists(auracfg))
+                    System.Diagnostics.Process.Start(auracfg);
+                else
+                    System.Windows.MessageBox.Show("auracfg.exe not found in app directory.", "AuraTxt");
+            }
             else
-                System.Windows.MessageBox.Show("auracfg.exe not found in app directory.", "AuraTxt");
+            {
+                var cfgPath = System.IO.Path.Combine(AppContext.BaseDirectory, "config.json");
+                System.Diagnostics.Process.Start(configEditor, cfgPath);
+            }
+        };
+
+        menu.Opened += (_, _) =>
+        {
+            var editor = config.Load().Settings.ConfigEditor;
+            var name = string.IsNullOrEmpty(editor)
+                ? "auracfg"
+                : System.IO.Path.GetFileNameWithoutExtension(editor);
+            _settingsItem.Header = $"Settings ({name})";
         };
 
         var exitItem = new MenuItem { Header = "Exit" };
@@ -57,7 +77,7 @@ public class TrayIconManager : IDisposable
         menu.Items.Add(_toggleMonitorItem);
         menu.Items.Add(_toggleMenuItem);
         menu.Items.Add(reloadItem);
-        menu.Items.Add(settingsItem);
+        menu.Items.Add(_settingsItem);
         menu.Items.Add(exitItem);
 
         _icon.ContextMenu = menu;

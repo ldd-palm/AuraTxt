@@ -9,12 +9,14 @@ public class ProviderCommand(ConfigService config)
         ? PrintHelp()
         : args[0] switch
         {
-            "--list"      => List(),
-            "--set"       => Set(ArgParser.Parse(args[1..])),
-            "--add-model" => AddModel(ArgParser.Parse(args[1..])),
-            "--update"    => Update(ArgParser.Parse(args[1..])),
-            "--delete"    => Delete(ArgParser.Parse(args[1..])),
-            _             => PrintHelp()
+            "--list"         => List(),
+            "--set"          => Set(ArgParser.Parse(args[1..])),
+            "--add-model"    => AddModel(ArgParser.Parse(args[1..])),
+            "--update"       => Update(ArgParser.Parse(args[1..])),
+            "--delete"       => Delete(ArgParser.Parse(args[1..])),
+            "--delete-model" => DeleteModel(ArgParser.Parse(args[1..])),
+            "--update-model" => UpdateModel(ArgParser.Parse(args[1..])),
+            _                => PrintHelp()
         });
 
     private int List()
@@ -109,6 +111,48 @@ public class ProviderCommand(ConfigService config)
         return 0;
     }
 
+    private int DeleteModel(Dictionary<string, string> opts)
+    {
+        if (!opts.TryGetValue("id",    out var id)) return Err("Missing --id");
+        if (!opts.TryGetValue("model", out var tm)) return Err("Missing --model");
+        if (id == "default") return Err("Cannot modify built-in 'default' provider", 2);
+        var cfg = config.Load();
+        if (!cfg.Models.TryGetValue(id, out var p)) return Err($"Provider '{id}' not found", 2);
+        if (p.Models.FirstOrDefault(m => m.TargetModel == tm) is null)
+            return Err($"Model '{tm}' not found in provider '{id}'", 2);
+        var modelRef = $"{id}/{tm}";
+        var bound = cfg.Actions.Where(a => a.ModelId == modelRef).ToList();
+        if (bound.Count > 0)
+        {
+            Console.Error.WriteLine($"Model '{tm}' is used by {bound.Count} action(s):");
+            bound.ForEach(a => Console.Error.WriteLine($"  - {a.Name} ({a.Id})"));
+            return 2;
+        }
+        p.Models.RemoveAll(m => m.TargetModel == tm);
+        config.Save(cfg);
+        Console.WriteLine($"✓ Model '{tm}' removed from '{id}'");
+        if (p.Models.Count == 0) Console.WriteLine($"  Warning: provider '{id}' now has no models");
+        return 0;
+    }
+
+    private int UpdateModel(Dictionary<string, string> opts)
+    {
+        if (!opts.TryGetValue("id",    out var id)) return Err("Missing --id");
+        if (!opts.TryGetValue("model", out var tm)) return Err("Missing --model");
+        if (id == "default") return Err("Cannot modify built-in 'default' provider", 2);
+        var cfg = config.Load();
+        if (!cfg.Models.TryGetValue(id, out var p)) return Err($"Provider '{id}' not found", 2);
+        var entry = p.Models.FirstOrDefault(m => m.TargetModel == tm);
+        if (entry is null) return Err($"Model '{tm}' not found in provider '{id}'", 2);
+        if (opts.TryGetValue("alias",   out var al)) entry.Alias           = al;
+        if (opts.ContainsKey("thinking"))             entry.DisableThinking = false;
+        if (opts.ContainsKey("no-thinking"))          entry.DisableThinking = true;
+        if (opts.TryGetValue("enabled", out var en)) entry.Enabled         = en == "true";
+        config.Save(cfg);
+        Console.WriteLine($"✓ Model '{tm}' in '{id}' updated");
+        return 0;
+    }
+
     private static int Err(string msg, int code = 1)
     {
         Console.Error.WriteLine(msg);
@@ -121,8 +165,10 @@ public class ProviderCommand(ConfigService config)
         Console.WriteLine("auracfg provider --set    --id <id> --display <name> --url <url> --key <key> [--model <name>] [--alias <alias>] [--thinking]");
         Console.WriteLine("auracfg provider --add-model --id <id> --model <name> [--alias <alias>] [--thinking]");
         Console.WriteLine("auracfg provider --update --id <id> [--display|--url|--key]");
-        Console.WriteLine("auracfg provider --delete --id <id> [--force]");
-        Console.WriteLine("Note: --thinking flag enables thinking (default is disabled)");
+        Console.WriteLine("auracfg provider --delete       --id <id> [--force]");
+        Console.WriteLine("auracfg provider --delete-model --id <id> --model <name>");
+        Console.WriteLine("auracfg provider --update-model --id <id> --model <name> [--alias <alias>] [--thinking|--no-thinking] [--enabled <true|false>]");
+        Console.WriteLine("Note: --thinking enables thinking; --no-thinking disables it (default)");
         return 1;
     }
 }

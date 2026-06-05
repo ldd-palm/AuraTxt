@@ -41,7 +41,13 @@ public partial class App : Application
             _config  = new ConfigService();
             ApplyTheme(_config.Load().Settings.Theme);
             _hotkeys = new HotkeyService(_config);
-            _tray    = new TrayIconManager(_config, ReloadConfig, () => Shutdown());
+            _tray    = new TrayIconManager(_config, ReloadConfig, () => Shutdown(), () =>
+            {
+                if (AppState.IsMonitoringPaused)
+                    _hotkeys!.UnregisterAll();
+                else
+                    _hotkeys!.RegisterAll(_config!.Load());
+            });
             _hook    = new GlobalHookService(_config, _hotkeys);
             _hook.Start();
         }

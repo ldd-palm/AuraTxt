@@ -51,6 +51,7 @@ public class HotkeyService
         // System actions (speech/copy) don't have a ModelId — handle inline.
         if (string.IsNullOrEmpty(action.ModelId))
         {
+            AppState.SelectionActioned = true;
             switch (action.Id)
             {
                 case "speech":
@@ -69,6 +70,7 @@ public class HotkeyService
 
     public static void ShowResultFor(ActionItem action, string selectedText, ConfigRoot cfg)
     {
+        AppState.SelectionActioned = true;
         if (action.IsInteractive)
             new InteractiveWindow(action, selectedText, cfg).Show();
         else

@@ -27,7 +27,12 @@ public class AppSettings
     /// Defaults to "light".
     public string Theme { get; set; } = "light";
 
-    /// TTS voice for the Speech action. Empty = system default.
-    /// Defaults to "Microsoft Ava" (Win11 Natural English voice).
-    public string SpeechVoice { get; set; } = "Microsoft Ava";
+    /// TTS voice for the Speech action. Empty = system default SAPI5 voice.
+    public string SpeechVoice { get; set; } = "";
+
+    /// External editor for .md prompt files. Empty = notepad.exe.
+    public string PromptEditor { get; set; } = "";
+
+    /// External editor for config.json. Empty = auracfg.exe in app directory.
+    public string ConfigEditor { get; set; } = "";
 }
