@@ -13,3 +13,7 @@ packages/
 ## OS
 Thumbs.db
 .DS_Store
+
+## AI session docs (local only)
+AI_*.md
+publish/x64/
