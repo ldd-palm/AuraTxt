@@ -1,31 +1,72 @@
-# AuraTxt Profiles
+# Profile Help
 
-Profiles describe how to control thinking mode, strip output tags, and declare capabilities for each model family.
+## What is a Profile?
 
-## Quick Reference — Thinking Control
+A Profile tells AuraTxt how to communicate with a specific AI model
+family — in particular, how to turn "thinking mode" on or off, and
+whether to strip reasoning tags (<think>...</think>) from the output.
 
-| Vendor | location | disable example |
-|--------|----------|-----------------|
-| NIM / OpenAI-compat (DeepSeek, GLM, Kimi) | `chat_template_kwargs` | `{"thinking": false}` |
-| Qwen3 (thinking variants) | `chat_template_kwargs` | `{"enable_thinking": false}` |
-| Gemini Flash 2.5+ | `generationConfig.thinkingConfig` | `{"thinkingBudget": 0}` |
-| Gemini Pro | `generationConfig.thinkingConfig` | `{"thinkingBudget": 128}` |
-| Gemma 4 (via Gemini API) | `generationConfig.thinkingConfig` | `{"thinkingLevel": "none"}` |
+Different providers use completely different JSON fields for this.
+Profiles handle the translation automatically, so you just set
+ThinkingMode = "disable" or "enable_high" on an action and the
+correct payload is sent to whichever model you are using.
 
-## Adding a New Profile (5 steps)
+## How auto-matching works
 
-1. Run `auracfg profile --new` (interactive wizard) **or** copy an existing JSON file.
-2. Edit `id`, `match.name_patterns`, `priority`, `adapter_compatibility`.
-3. Set `thinking.modes.disable` / `thinking.modes.enable_high` payloads.
-4. Run `auracfg profile --validate profiles/{id}.json` to check schema.
-5. Run `auracfg profile --probe --provider PROV --model MODEL` to verify at runtime.
+When a model's Profile is set to "(auto)", AuraTxt picks the best
+profile by matching the model's full name against each profile's
+name patterns (glob, case-insensitive, * = wildcard), in priority
+order (highest number wins). If nothing matches, it falls back to
+a safe default that sends no thinking-control payload at all.
 
-## Schema Reference
+Examples:
 
-See MODEL_MANAGEMENT_REDESIGN.md §4 for the full field reference.
+  deepseek-ai/deepseek-v4-flash   matches  deepseek-v4    (priority 90)
+  meta/llama-3.3-70b-instruct     matches  llama-nemotron (priority 80)
+  gemini-2.5-flash-preview        matches  gemini-flash   (priority 90)
+  qwen/qwen3-next-80b-a3b-instruct matches qwen3-next-instruct (priority 100)
+  unknown-new-model               falls back to default-openai
+
+You almost never need to change a model's profile manually. Auto is
+correct in the vast majority of cases. Only override it if the wrong
+profile is being picked — use "auracfg profile --probe" to check.
+
+## Example 1 — DeepSeek V4 on NIM (openai_compatible)
+
+Profile: deepseek-v4
+ThinkingMode "disable"   → adds to request body:
+  "chat_template_kwargs": { "thinking": false, "enable_thinking": false }
+ThinkingMode "enable_high" → adds:
+  "chat_template_kwargs": { "thinking": true, "reasoning_effort": "high" }
+
+## Example 2 — Gemini 2.5 Flash (gemini_native)
+
+Profile: gemini-flash
+ThinkingMode "disable"   → adds to request body:
+  "generationConfig": { "thinkingConfig": { "thinkingBudget": 0 } }
+ThinkingMode "enable_high" → adds:
+  "generationConfig": { "thinkingConfig": { "thinkingBudget": 8192 } }
+
+## When to set a profile manually
+
+  - A brand-new model isn't recognized and falls back to default
+  - You created a custom profile in this folder and want to pin it
+  - Auto picks the wrong profile (verify with --probe, then override)
 
 ## Troubleshooting
 
-- **Thinking not disabled**: Check the `location` path and the exact field names in `modes.disable`.
-- **Wrong profile matched**: Raise `priority` or make `name_patterns` more specific.
-- **400 error from Gemini**: You're sending `thinkingConfig` to a model that doesn't support it. Use `gemini-legacy` profile or set `thinking: null`.
+  Thinking not disabled  →  wrong profile or wrong payload
+                             run: auracfg profile --probe --provider P --model M
+
+  400 error from Gemini  →  model doesn't support thinkingConfig
+                             try profile: gemini-legacy  (thinking: null)
+
+  Wrong profile matched  →  raise its priority, or tighten name_patterns
+
+## Managing Profiles
+
+  List all:        auracfg profile --list
+  Inspect one:     auracfg profile --show --id deepseek-v4
+  Probe live:      auracfg profile --probe --provider nim --model deepseek-ai/deepseek-v4-flash
+  Add custom:      auracfg profile --new  (interactive wizard)
+  Validate file:   auracfg profile --validate profiles/my-model.json

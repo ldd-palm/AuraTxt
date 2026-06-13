@@ -39,7 +39,7 @@ public class ProfilesPage : PageBase
             }
             AnsiConsole.Write(table);
             AnsiConsole.WriteLine();
-            AnsiConsole.MarkupLine("[grey][[O]] Open in editor  [[R]] Reload  [[N]] New  [[Esc]] Back[/]");
+            AnsiConsole.MarkupLine("[grey][[O]] Open in editor  [[R]] Reload  [[N]] New  [[H]] Help  [[Esc]] Back[/]");
 
             var key = Console.ReadKey(true);
             switch (char.ToUpperInvariant(key.KeyChar))
@@ -60,6 +60,10 @@ public class ProfilesPage : PageBase
                     ProfileService.Reload();
                     break;
 
+                case 'H':
+                    ShowHelp();
+                    break;
+
                 case '\x1b':
                     return PageResult.Back();
             }
@@ -74,6 +78,42 @@ public class ProfilesPage : PageBase
                 .Title(prompt)
                 .AddChoices(profiles.Select(p => p.Id).Prepend("(cancel)")));
         return choice == "(cancel)" ? null : profiles.FirstOrDefault(p => p.Id == choice);
+    }
+
+    private static void ShowHelp()
+    {
+        AnsiConsole.Clear();
+
+        // Read from disk (seeded by EnsureScaffold); fall back to embedded resource
+        var diskPath = Path.Combine(AppContext.BaseDirectory, "profiles", "README.md");
+        string text;
+        if (File.Exists(diskPath))
+        {
+            text = File.ReadAllText(diskPath);
+        }
+        else
+        {
+            using var stream = typeof(ProfileService).Assembly
+                .GetManifestResourceStream("AuraTxt.Core.Profiles.README.md.template");
+            text = stream is null ? "(Help not found)" : new StreamReader(stream).ReadToEnd();
+        }
+
+        // Render markdown lines with simple Spectre markup
+        foreach (var raw in text.ReplaceLineEndings("\n").Split('\n'))
+        {
+            if (raw.StartsWith("# "))
+                AnsiConsole.MarkupLine($"[bold yellow]{Markup.Escape(raw[2..])}[/]");
+            else if (raw.StartsWith("## "))
+                AnsiConsole.MarkupLine($"\n[bold cyan]{Markup.Escape(raw[3..])}[/]");
+            else if (raw.StartsWith("  ") || raw.StartsWith("    "))
+                AnsiConsole.MarkupLine($"[grey]{Markup.Escape(raw)}[/]");
+            else
+                AnsiConsole.WriteLine(raw);
+        }
+
+        Console.WriteLine();
+        AnsiConsole.MarkupLine("[grey]Press any key to return...[/]");
+        Console.ReadKey(true);
     }
 
     private static void OpenInEditor(TuiApp app, ProfileFile profile)

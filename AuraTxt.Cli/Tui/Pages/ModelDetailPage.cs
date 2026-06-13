@@ -1,3 +1,5 @@
+using AuraTxt.Core.Services;
+
 namespace AuraTxt.Cli.Tui.Pages;
 
 public class ModelDetailPage(string providerId, int modelIndex) : PageBase
@@ -64,8 +66,11 @@ public class ModelDetailPage(string providerId, int modelIndex) : PageBase
                 if (!string.IsNullOrWhiteSpace(na)) { m.Alias = na; app.MarkDirty(); app.Renderer.SetNotice($"Alias → {na}"); }
                 break;
             case "3":
-                var pid = app.Renderer.Ask("Profile ID (empty for auto)", m.ProfileId);
-                m.ProfileId = pid?.Trim() ?? "";
+                var profiles = ProfileService.All().Select(p => p.Id).ToList();
+                var choices  = profiles.Prepend("(auto)").ToList();
+                var current  = string.IsNullOrEmpty(m.ProfileId) ? "(auto)" : m.ProfileId;
+                var chosen   = app.Renderer.SelectFromList("Select profile", choices, current);
+                m.ProfileId  = chosen == "(auto)" ? "" : chosen;
                 app.MarkDirty();
                 app.Renderer.SetNotice($"Profile → {(string.IsNullOrEmpty(m.ProfileId) ? "(auto)" : m.ProfileId)}");
                 break;
