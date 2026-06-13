@@ -12,6 +12,8 @@ public class ActionItem
     public bool   Enabled       { get; set; } = true;
     public int    Order         { get; set; } = 0;
     public bool   IsSystem      { get; set; }
+    // "disable" | "enable_high". Anything else is normalised to "disable" on load.
+    public string ThinkingMode  { get; set; } = "disable";
 
     public bool IsSystemModel => ModelId.StartsWith("default/", StringComparison.OrdinalIgnoreCase);
 }
