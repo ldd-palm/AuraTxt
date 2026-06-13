@@ -12,8 +12,8 @@
   "thinking": {
     "location": "generationConfig.thinkingConfig",
     "modes": {
-      "disable": { "thinkingLevel": "none" },
-      "enable_high": { "thinkingLevel": "high" }
+      "disable": { "thinkingLevel": "NONE" },
+      "enable_high": { "thinkingLevel": "HIGH" }
     }
   },
   "strip_patterns": [],
