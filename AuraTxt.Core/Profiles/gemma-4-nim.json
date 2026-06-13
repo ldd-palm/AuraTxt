@@ -1,0 +1,31 @@
+{
+  "id": "gemma-4-nim",
+  "description": "Gemma 4 on NVIDIA NIM (OpenAI-compatible endpoint) — thinking via chat_template_kwargs.enable_thinking",
+  "match": {
+    "name_patterns": [
+      "google/gemma-4*",
+      "*gemma-4*-it",
+      "*gemma-4*"
+    ]
+  },
+  "priority": 90,
+  "adapter_compatibility": ["openai_compatible"],
+  "thinking": {
+    "location": "chat_template_kwargs",
+    "modes": {
+      "disable":     { "enable_thinking": false },
+      "enable_high": { "enable_thinking": true }
+    }
+  },
+  "strip_patterns": [],
+  "capabilities": {
+    "streaming": true,
+    "system_prompt": true,
+    "multi_turn": true
+  },
+  "recommended_params": {
+    "temperature": 1.0,
+    "top_p": 0.95,
+    "max_tokens": 16384
+  }
+}
