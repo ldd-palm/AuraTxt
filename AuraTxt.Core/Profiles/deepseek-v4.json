@@ -1,0 +1,30 @@
+{
+  "id": "deepseek-v4",
+  "description": "DeepSeek V4 family (Flash, Pro) - thinking via chat_template_kwargs",
+  "match": {
+    "name_patterns": [
+      "*deepseek-v4*",
+      "deepseek-ai/deepseek-v4-*"
+    ]
+  },
+  "priority": 90,
+  "adapter_compatibility": ["openai_compatible"],
+  "thinking": {
+    "location": "chat_template_kwargs",
+    "modes": {
+      "disable": { "thinking": false },
+      "enable_high": { "thinking": true, "reasoning_effort": "high" }
+    }
+  },
+  "strip_patterns": [],
+  "capabilities": {
+    "streaming": true,
+    "system_prompt": true,
+    "multi_turn": true
+  },
+  "recommended_params": {
+    "temperature": 0.3,
+    "top_p": 0.95,
+    "max_tokens": 4096
+  }
+}

@@ -4,6 +4,7 @@ using AuraTxt.Cli.Tui;
 using AuraTxt.Core.Services;
 
 Console.OutputEncoding = Encoding.UTF8;
+ProfileService.EnsureScaffold();
 
 var configService = new ConfigService();
 
@@ -21,6 +22,7 @@ return args[0] switch
     "prompt"           => await new PromptCommand(configService).ExecuteAsync(args[1..]),
     "show"             => await new ShowCommand(configService).ExecuteAsync(args[1..]),
     "settings"         => await new SettingsCommand(configService).ExecuteAsync(args[1..]),
+    "profile"          => await ProfileCommand.RunAsync(args[1..]),
     "doctor"           => new DoctorCommand(configService).Execute(),
     "restore"          => Restore(configService),
     "--help" or "-h"   => Help(),
@@ -85,6 +87,15 @@ static int Help()
     Console.WriteLine("  settings");
     Console.WriteLine("    auracfg settings --show");
     Console.WriteLine("    auracfg settings --set [--font-size <n>] [--opacity <0-1>] [--delay-ms <n>] [--target-lang <code>] [--theme <id>] [--voice <name>] [--prompt-editor <exe>] [--config-editor <exe>]");
+    Console.WriteLine();
+    Console.WriteLine("  profile");
+    Console.WriteLine("    auracfg profile --list");
+    Console.WriteLine("    auracfg profile --show   --id ID");
+    Console.WriteLine("    auracfg profile --reload");
+    Console.WriteLine("    auracfg profile --validate FILE");
+    Console.WriteLine("    auracfg profile --import  FILE");
+    Console.WriteLine("    auracfg profile --new     --id ID --base BASE [--pattern P ...] [--priority N] [--adapter TYPE]");
+    Console.WriteLine("    auracfg profile --probe   --provider PROV --model MODEL");
     Console.WriteLine();
     Console.WriteLine("  doctor                             Validate config and report issues");
     Console.WriteLine("  restore                            Restore config.json from .bak");

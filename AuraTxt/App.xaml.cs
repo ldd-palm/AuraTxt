@@ -38,6 +38,7 @@ public partial class App : Application
         {
             ThemeService.EnsureScaffold();   // create themes/ dir + default light.json/dark.json
             PromptService.EnsureScaffold();   // ensure Prompts dir + default system.md/template.md
+            ProfileService.EnsureScaffold();  // seed profiles/ dir + embedded JSONs
             _config  = new ConfigService();
             ApplyTheme(_config.Load().Settings.Theme);
             _hotkeys = new HotkeyService(_config);
@@ -94,6 +95,7 @@ public partial class App : Application
     {
         try
         {
+            ProfileService.Reload();
             var cfg = _config!.Load();
             ApplyTheme(cfg.Settings.Theme);
             _hotkeys!.RegisterAll(cfg);

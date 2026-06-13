@@ -1,0 +1,31 @@
+# AuraTxt Profiles
+
+Profiles describe how to control thinking mode, strip output tags, and declare capabilities for each model family.
+
+## Quick Reference — Thinking Control
+
+| Vendor | location | disable example |
+|--------|----------|-----------------|
+| NIM / OpenAI-compat (DeepSeek, GLM, Kimi) | `chat_template_kwargs` | `{"thinking": false}` |
+| Qwen3 (thinking variants) | `chat_template_kwargs` | `{"enable_thinking": false}` |
+| Gemini Flash 2.5+ | `generationConfig.thinkingConfig` | `{"thinkingBudget": 0}` |
+| Gemini Pro | `generationConfig.thinkingConfig` | `{"thinkingBudget": 128}` |
+| Gemma 4 (via Gemini API) | `generationConfig.thinkingConfig` | `{"thinkingLevel": "none"}` |
+
+## Adding a New Profile (5 steps)
+
+1. Run `auracfg profile --new` (interactive wizard) **or** copy an existing JSON file.
+2. Edit `id`, `match.name_patterns`, `priority`, `adapter_compatibility`.
+3. Set `thinking.modes.disable` / `thinking.modes.enable_high` payloads.
+4. Run `auracfg profile --validate profiles/{id}.json` to check schema.
+5. Run `auracfg profile --probe --provider PROV --model MODEL` to verify at runtime.
+
+## Schema Reference
+
+See MODEL_MANAGEMENT_REDESIGN.md §4 for the full field reference.
+
+## Troubleshooting
+
+- **Thinking not disabled**: Check the `location` path and the exact field names in `modes.disable`.
+- **Wrong profile matched**: Raise `priority` or make `name_patterns` more specific.
+- **400 error from Gemini**: You're sending `thinkingConfig` to a model that doesn't support it. Use `gemini-legacy` profile or set `thinking: null`.

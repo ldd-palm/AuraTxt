@@ -1,0 +1,30 @@
+{
+  "id": "kimi-k2",
+  "description": "Moonshot Kimi K2 family (K2, K2.5, K2.6)",
+  "match": {
+    "name_patterns": [
+      "*kimi-k2*",
+      "moonshotai/kimi-k2*"
+    ]
+  },
+  "priority": 90,
+  "adapter_compatibility": ["openai_compatible"],
+  "thinking": {
+    "location": "chat_template_kwargs",
+    "modes": {
+      "disable": { "thinking": false },
+      "enable_high": { "thinking": true }
+    }
+  },
+  "strip_patterns": [],
+  "capabilities": {
+    "streaming": true,
+    "system_prompt": true,
+    "multi_turn": true
+  },
+  "recommended_params": {
+    "temperature": 0.3,
+    "top_p": 0.95,
+    "max_tokens": 4096
+  }
+}

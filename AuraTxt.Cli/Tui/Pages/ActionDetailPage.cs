@@ -62,6 +62,8 @@ public class ActionDetailPage(string actionId) : PageBase
             list.Add(new MenuItem("6", "Hotkey",       hk));
             list.Add(new MenuItem("7", "Status",       TuiRenderer.StatusBadge(a.Enabled), TuiRenderer.StatusStyle(a.Enabled)));
             list.Add(new MenuItem("8", "Order",        a.Order.ToString()));
+            if (!isBuiltin)
+                list.Add(new MenuItem("9", "Thinking", ThinkingLabel(a.ThinkingMode), ThinkingStyle(a.ThinkingMode)));
         }
         else
         {
@@ -141,14 +143,28 @@ public class ActionDetailPage(string actionId) : PageBase
             case "8":
                 if (!a.IsSystem) { EditOrder(a, app); }
                 break;
+            case "9":
+                if (!a.IsSystem && !isBuiltin)
+                {
+                    a.ThinkingMode = a.ThinkingMode == "disable" ? "enable_high" : "disable";
+                    app.MarkDirty();
+                    app.Renderer.SetNotice($"Thinking → {ThinkingLabel(a.ThinkingMode)}");
+                }
+                break;
         }
         return false;
     }
+
+    private static string ThinkingLabel(string v) => v == "enable_high" ? "enabled (high)" : "disabled";
+
+    private static ItemValueStyle ThinkingStyle(string v) =>
+        v == "enable_high" ? ItemValueStyle.Success : ItemValueStyle.Muted;
 
     private static void EditHotkey(ActionItem a, TuiApp app)
     {
         if (a.Id == "copy") { app.Renderer.SetNotice("Copy action hotkey is fixed (empty).", NoticeKind.Info); return; }
         var hk = HotkeyCapture.Capture(app.Cfg.Actions, excludeId: a.Id);
+        if (hk is null) return;
         a.Hotkey = hk; app.MarkDirty();
         if (!string.IsNullOrEmpty(hk)) app.Renderer.SetNotice($"Hotkey → {hk}");
     }

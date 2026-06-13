@@ -1,0 +1,32 @@
+{
+  "id": "gemini-pro",
+  "description": "Gemini Pro family - cannot fully disable thinking (minimum budget enforced)",
+  "match": {
+    "name_patterns": [
+      "gemini-2.5-pro*",
+      "gemini-3-pro*",
+      "gemini-3.5-pro*"
+    ]
+  },
+  "priority": 95,
+  "adapter_compatibility": ["gemini_native"],
+  "thinking": {
+    "location": "generationConfig.thinkingConfig",
+    "modes": {
+      "disable": { "thinkingBudget": 128 },
+      "enable_high": { "thinkingBudget": 8192 }
+    }
+  },
+  "strip_patterns": [],
+  "capabilities": {
+    "streaming": true,
+    "system_prompt": true,
+    "multi_turn": true,
+    "max_context": 2097152
+  },
+  "recommended_params": {
+    "temperature": 0.3,
+    "top_p": 0.95,
+    "max_tokens": 4096
+  }
+}

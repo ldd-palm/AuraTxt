@@ -1,60 +1,125 @@
-using System.Net.Http;
-using System.Net.Http.Json;
-using System.Text.Json;
+using System.Runtime.CompilerServices;
+using System.Text.Json.Nodes;
+using AuraTxt.Core.Adapters;
 using AuraTxt.Core.Models;
+using AuraTxt.Core.Util;
 
 namespace AuraTxt.Core.Services;
 
 public class AiClient
 {
-    private readonly HttpClient _http;
+    private readonly Func<string, IAdapter> _getAdapter;
 
-    public AiClient(HttpClient? http = null)
-        => _http = http ?? new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
+    public AiClient() : this(AdapterRegistry.Get) { }
+    public AiClient(Func<string, IAdapter> getAdapter) => _getAdapter = getAdapter;
 
     public async Task<string> CompleteAsync(
-        ProviderConfig provider, ModelEntry model, string userPrompt,
-        string? systemPrompt = null, CancellationToken ct = default)
+        string providerId, ProviderConfig provider, ModelEntry model,
+        ActionItem action, string selectedText, string userInput = "",
+        CancellationToken ct = default)
     {
-        using var req = new HttpRequestMessage(
-            HttpMethod.Post,
-            $"{provider.BaseUrl.TrimEnd('/')}/chat/completions");
+        if (providerId == "default")
+            return await BuiltinDispatch(model, selectedText, ct);
 
-        req.Headers.Add("Authorization", $"Bearer {provider.ApiKey}");
+        var (req, stripPatterns) = BuildRequest(provider, model, action, selectedText, userInput);
+        var result = await _getAdapter(provider.AdapterType).CompleteAsync(req, ct);
+        return ApplyStrip(result, stripPatterns);
+    }
 
-        var messages = new List<object>();
-        if (!string.IsNullOrWhiteSpace(systemPrompt))
-            messages.Add(new { role = "system", content = systemPrompt });
-        messages.Add(new { role = "user", content = userPrompt });
-
-        var body = new Dictionary<string, object>
+    public async IAsyncEnumerable<string> StreamAsync(
+        string providerId, ProviderConfig provider, ModelEntry model,
+        ActionItem action, string selectedText, string userInput = "",
+        [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        if (providerId == "default")
         {
-            ["model"]    = model.TargetModel,
-            ["messages"] = messages,
-            ["stream"]   = (object)false
+            yield return await BuiltinDispatch(model, selectedText, ct);
+            yield break;
+        }
+
+        var (req, stripPatterns) = BuildRequest(provider, model, action, selectedText, userInput);
+        var rawStream = _getAdapter(provider.AdapterType).StreamAsync(req, ct);
+
+        if (stripPatterns.Count == 0)
+        {
+            await foreach (var chunk in rawStream) yield return chunk;
+            yield break;
+        }
+
+        var filter = new TagStripFilter(stripPatterns);
+        await foreach (var chunk in rawStream)
+        {
+            var out_ = filter.Feed(chunk);
+            if (!string.IsNullOrEmpty(out_)) yield return out_;
+        }
+        var tail = filter.Flush();
+        if (!string.IsNullOrEmpty(tail)) yield return tail;
+    }
+
+    // ── Internal (testable) ────────────────────────────────────────────────
+
+    internal (AdapterRequest Req, List<string> StripPatterns) BuildRequest(
+        ProviderConfig provider, ModelEntry model, ActionItem action,
+        string selectedText, string userInput)
+    {
+        var adapterType = NormaliseAdapterType(provider.AdapterType);
+        var profile = ProfileService.Resolve(model, adapterType);
+
+        var systemPrompt = PromptService.Resolve(ConfigService.DefaultSettings?.SystemPrompt ?? "");
+        var userPrompt   = PromptService.Resolve(action.Prompt)
+            .Replace("{SelectedText}", selectedText)
+            .Replace("{UserInput}",   userInput);
+
+        var @params = new Dictionary<string, JsonNode?>();
+        foreach (var (k, v) in profile.RecommendedParams)
+            @params[k] = v?.DeepClone();
+
+        var extraBody = new JsonObject();
+        if (profile.Thinking is not null)
+        {
+            var payload = action.ThinkingMode == "enable_high"
+                ? profile.Thinking.Modes.EnableHigh
+                : profile.Thinking.Modes.Disable;
+            JsonPathSetter.SetPath(extraBody, profile.Thinking.Location, payload.DeepClone()!.AsObject());
+        }
+
+        var req = new AdapterRequest
+        {
+            BaseUrl      = provider.BaseUrl,
+            ApiKey       = provider.ApiKey,
+            TargetModel  = model.TargetModel,
+            SystemPrompt = systemPrompt,
+            UserPrompt   = userPrompt,
+            ExtraBody    = extraBody,
+            Params       = @params
         };
+        return (req, profile.StripPatterns);
+    }
 
-        if (model.DisableThinking)
-            body["thinking"] = new { type = "disabled" };
+    // ── Private helpers ────────────────────────────────────────────────────
 
-        var bodyJson = JsonSerializer.Serialize(body,
-            new JsonSerializerOptions { WriteIndented = true });
-        LogService.Raw($"──── REQUEST  {DateTime.Now:HH:mm:ss}  " +
-                       $"{provider.BaseUrl.TrimEnd('/')}/chat/completions\n{bodyJson}");
+    private static string NormaliseAdapterType(string t) => t.ToLowerInvariant() switch
+    {
+        "gemini_native" or "gemini" => "gemini_native",
+        _                           => "openai_compatible"
+    };
 
-        req.Content = new StringContent(bodyJson, System.Text.Encoding.UTF8, "application/json");
+    private static string ApplyStrip(string text, List<string> patterns)
+    {
+        if (patterns.Count == 0) return text;
+        var f = new TagStripFilter(patterns);
+        return f.Feed(text) + f.Flush();
+    }
 
-        var resp = await _http.SendAsync(req, ct);
-        var raw  = await resp.Content.ReadAsStringAsync(ct);
-        LogService.Raw($"──── RESPONSE HTTP {(int)resp.StatusCode}  {DateTime.Now:HH:mm:ss}\n{raw}");
-
-        resp.EnsureSuccessStatusCode();
-
-        using var doc = JsonDocument.Parse(raw);
-        return doc.RootElement
-            .GetProperty("choices")[0]
-            .GetProperty("message")
-            .GetProperty("content")
-            .GetString() ?? "";
+    private static async Task<string> BuiltinDispatch(
+        ModelEntry model, string selectedText, CancellationToken ct)
+    {
+        var lang = ConfigService.DefaultSettings?.TargetLanguage ?? "zh-CN";
+        return model.TargetModel switch
+        {
+            "Google_Translate" => await new GoogleTranslateClient().TranslateAsync(selectedText, "auto", lang, ct),
+            "Youdao_Dict"      => await new YoudaoClient().DictionaryAsync(selectedText, ct),
+            _                  => $"[Error] Unknown built-in model: {model.TargetModel}"
+        };
     }
 }

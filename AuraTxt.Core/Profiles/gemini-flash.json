@@ -1,0 +1,33 @@
+{
+  "id": "gemini-flash",
+  "description": "Gemini 2.5/3.x Flash family - thinkingBudget integer control",
+  "match": {
+    "name_patterns": [
+      "gemini-2.5-flash*",
+      "gemini-3-flash*",
+      "gemini-3.5-flash*",
+      "gemini-4-flash*"
+    ]
+  },
+  "priority": 90,
+  "adapter_compatibility": ["gemini_native"],
+  "thinking": {
+    "location": "generationConfig.thinkingConfig",
+    "modes": {
+      "disable": { "thinkingBudget": 0 },
+      "enable_high": { "thinkingBudget": 8192 }
+    }
+  },
+  "strip_patterns": [],
+  "capabilities": {
+    "streaming": true,
+    "system_prompt": true,
+    "multi_turn": true,
+    "max_context": 1048576
+  },
+  "recommended_params": {
+    "temperature": 0.3,
+    "top_p": 0.95,
+    "max_tokens": 4096
+  }
+}

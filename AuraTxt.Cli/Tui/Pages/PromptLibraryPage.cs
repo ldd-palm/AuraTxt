@@ -32,6 +32,12 @@ public class PromptLibraryPage : PageBase
                     var r2 = Activate(n.N.ToString(), prompts, app);
                     if (r2 != null) return Task.FromResult(r2);
                     break;
+                case MenuKey.Letter l when l.C == 'D':
+                    if (int.TryParse(items[cursor].Key, out var di) && di >= 1 && di <= prompts.Count)
+                        DeletePrompt(prompts[di - 1], app);
+                    else
+                        app.Renderer.SetNotice("No prompt selected.", NoticeKind.Warning);
+                    break;
                 case MenuKey.Letter l:
                     JumpTo(sel, items, l.C.ToString());
                     var r3 = Activate(l.C.ToString(), prompts, app);
@@ -65,15 +71,15 @@ public class PromptLibraryPage : PageBase
 
         switch (key)
         {
-            case "A": AddPrompt(app);               break;
-            case "D": DeletePrompt(prompts, app);   break;
+            case "A": AddPrompt(app); break;
         }
         return null;
     }
 
     private static void AddPrompt(TuiApp app)
     {
-        var name = app.Renderer.Ask("Prompt name (no spaces, e.g. summarize)");
+        var name = app.Renderer.AskOrCancel("Prompt name (no spaces, e.g. summarize)");
+        if (name is null) return;
         if (string.IsNullOrWhiteSpace(name)) return;
         if (name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || name.Contains(' '))
         { app.Renderer.SetNotice("Name contains invalid characters or spaces.", NoticeKind.Error); return; }
@@ -90,20 +96,14 @@ public class PromptLibraryPage : PageBase
         catch (Exception ex) { app.Renderer.SetNotice(ex.Message, NoticeKind.Error); }
     }
 
-    private static void DeletePrompt(List<string> prompts, TuiApp app)
+    private static void DeletePrompt(string promptPath, TuiApp app)
     {
-        if (prompts.Count == 0) { app.Renderer.SetNotice("No prompts to delete.", NoticeKind.Warning); return; }
-        var labels = prompts.Select(Path.GetFileName).Append("Cancel").ToList();
-        var choice = app.Renderer.SelectFromList("Delete which prompt?", labels!);
-        if (choice == "Cancel") return;
-
-        var path   = prompts.First(p => Path.GetFileName(p) == choice);
-        var usedBy = app.PromptUsers(path);
+        var choice = Path.GetFileName(promptPath);
+        if (!app.Renderer.Confirm($"Delete '{choice}'?", defaultYes: false)) return;
+        var usedBy = app.PromptUsers(promptPath);
         if (usedBy.Count > 0)
         { app.Renderer.SetNotice($"'{choice}' is in use by: {string.Join(", ", usedBy)}", NoticeKind.Error); return; }
-
-        if (!app.Renderer.Confirm($"Delete '{choice}'?", defaultYes: false)) return;
-        try { File.Delete(path); app.Renderer.SetNotice($"Deleted {choice}."); }
+        try { File.Delete(promptPath); app.Renderer.SetNotice($"Deleted {choice}."); }
         catch (Exception ex) { app.Renderer.SetNotice(ex.Message, NoticeKind.Error); }
     }
 }

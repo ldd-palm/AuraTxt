@@ -43,11 +43,11 @@ public class ModelDetailPage(string providerId, int modelIndex) : PageBase
 
     private static IReadOnlyList<MenuItem> BuildItems(AuraTxt.Core.Models.ModelEntry m) =>
     [
-        new MenuItem("1", "Full Name",        m.TargetModel),
-        new MenuItem("2", "Alias",            m.Alias),
-        new MenuItem("3", "Disable Thinking", m.DisableThinking ? "on" : "off",
-                     m.DisableThinking ? ItemValueStyle.Warning : ItemValueStyle.Success),
-        new MenuItem("4", "Status",           TuiRenderer.StatusBadge(m.Enabled),
+        new MenuItem("1", "Full Name", m.TargetModel),
+        new MenuItem("2", "Alias",     m.Alias),
+        new MenuItem("3", "Profile",   string.IsNullOrEmpty(m.ProfileId) ? "(auto)" : m.ProfileId,
+                     string.IsNullOrEmpty(m.ProfileId) ? ItemValueStyle.Muted : ItemValueStyle.Success),
+        new MenuItem("4", "Status",    TuiRenderer.StatusBadge(m.Enabled),
                      TuiRenderer.StatusStyle(m.Enabled)),
     ];
 
@@ -64,8 +64,10 @@ public class ModelDetailPage(string providerId, int modelIndex) : PageBase
                 if (!string.IsNullOrWhiteSpace(na)) { m.Alias = na; app.MarkDirty(); app.Renderer.SetNotice($"Alias → {na}"); }
                 break;
             case "3":
-                m.DisableThinking = !m.DisableThinking; app.MarkDirty();
-                app.Renderer.SetNotice($"Disable Thinking → {(m.DisableThinking ? "on" : "off")}");
+                var pid = app.Renderer.Ask("Profile ID (empty for auto)", m.ProfileId);
+                m.ProfileId = pid?.Trim() ?? "";
+                app.MarkDirty();
+                app.Renderer.SetNotice($"Profile → {(string.IsNullOrEmpty(m.ProfileId) ? "(auto)" : m.ProfileId)}");
                 break;
             case "4":
                 if (m.Enabled)

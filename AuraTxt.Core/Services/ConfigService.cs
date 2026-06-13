@@ -21,6 +21,15 @@ public class ConfigService
     public ConfigService() : this(DefaultConfigPath) { }
     public ConfigService(string path) => _path = path;
 
+    // mtime-keyed JSON text cache: Load() sits on the hot path (every text selection),
+    // so skip the disk read when the file hasn't changed. Deserialization still runs
+    // per call — every caller gets a fresh, independently mutable ConfigRoot.
+    private static readonly object CacheLock = new();
+    private static readonly Dictionary<string, (DateTime Mtime, string Json)> JsonCache = new();
+
+    /// Last loaded settings — used by AiClient for TargetLanguage and SystemPrompt.
+    public static AppSettings? DefaultSettings { get; private set; }
+
     public ConfigRoot Load()
     {
         if (!File.Exists(_path))
@@ -31,15 +40,22 @@ public class ConfigService
         {
             try
             {
-                var json = File.ReadAllText(_path);
+                var mtime = File.GetLastWriteTimeUtc(_path);
+                string json;
+                lock (CacheLock)
+                {
+                    if (JsonCache.TryGetValue(_path, out var cached) && cached.Mtime == mtime)
+                        json = cached.Json;
+                    else
+                    {
+                        json = File.ReadAllText(_path);
+                        JsonCache[_path] = (mtime, json);
+                    }
+                }
                 var cfg = JsonSerializer.Deserialize<ConfigRoot>(json, JsonOpts) ?? CreateDefault();
 
-                // Backfill: old configs had no Enabled field → default(bool)=false → fix to true.
-                foreach (var (_, provider) in cfg.Models)
-                    foreach (var model in provider.Models)
-                        if (!model.Enabled && !string.IsNullOrEmpty(model.TargetModel))
-                            model.Enabled = true;
-
+                NormaliseThinkingModes(cfg);
+                DefaultSettings = cfg.Settings;
                 return cfg;
             }
             catch (IOException) when (retry < 3)
@@ -75,6 +91,18 @@ public class ConfigService
         File.Copy(bak, _path, overwrite: true);
     }
 
+    private static void NormaliseThinkingModes(ConfigRoot cfg)
+    {
+        foreach (var action in cfg.Actions)
+        {
+            if (action.ThinkingMode is not ("disable" or "enable_high"))
+            {
+                LogService.Error($"Invalid ThinkingMode '{action.ThinkingMode}' on action '{action.Id}'; defaulting to 'disable'");
+                action.ThinkingMode = "disable";
+            }
+        }
+    }
+
     private ConfigRoot CreateDefault()
     {
         var cfg = new ConfigRoot();
@@ -83,33 +111,36 @@ public class ConfigService
             DisplayName = "Built-in",
             BaseUrl     = "",
             ApiKey      = "",
+            AdapterType = "openai_compatible",
             Models      = new()
             {
-                new ModelEntry { TargetModel = "Google_Translate", Alias = "GTrans", DisableThinking = false, Enabled = true },
-                new ModelEntry { TargetModel = "Youdao_Dict",      Alias = "Youdao",  DisableThinking = false, Enabled = true }
+                new ModelEntry { TargetModel = "Google_Translate", Alias = "GTrans", Enabled = true },
+                new ModelEntry { TargetModel = "Youdao_Dict",      Alias = "Youdao",  Enabled = true }
             }
         };
 
-        // System actions — undeletable, model-less, routed by WPF
         cfg.Actions.Add(new ActionItem
         {
-            Id       = "copy",
-            Name     = "Copy",
-            Icon     = "clipboard-copy",
-            Hotkey   = "",
-            Enabled  = true,
-            IsSystem = true
+            Id           = "copy",
+            Name         = "Copy",
+            Icon         = "clipboard-copy",
+            Hotkey       = "",
+            Enabled      = true,
+            IsSystem     = true,
+            ThinkingMode = "disable"
         });
         cfg.Actions.Add(new ActionItem
         {
-            Id       = "speech",
-            Name     = "Speech",
-            Icon     = "speech",
-            Hotkey   = "Ctrl+E",
-            Enabled  = true,
-            IsSystem = true
+            Id           = "speech",
+            Name         = "Speech",
+            Icon         = "speech",
+            Hotkey       = "Ctrl+E",
+            Enabled      = true,
+            IsSystem     = true,
+            ThinkingMode = "disable"
         });
 
+        DefaultSettings = cfg.Settings;
         Save(cfg);
         return cfg;
     }

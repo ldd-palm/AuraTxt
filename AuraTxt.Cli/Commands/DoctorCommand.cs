@@ -86,6 +86,66 @@ public class DoctorCommand(ConfigService config)
         if (badPrompts == 0)
             Ok("All prompt files exist");
 
+        // 1. ThinkingMode legality
+        int badThinking = 0;
+        foreach (var action in cfg.Actions)
+        {
+            if (action.ThinkingMode is not ("disable" or "enable_high"))
+            { Error($"Action \"{action.Id}\": invalid ThinkingMode \"{action.ThinkingMode}\""); badThinking++; }
+        }
+        if (badThinking == 0)
+            Ok("All Action ThinkingMode values are valid");
+
+        // 2. Profile resolution success
+        int badProfiles = 0;
+        foreach (var (pid, provider) in cfg.Models.Where(kv => kv.Key != "default"))
+        foreach (var model in provider.Models)
+        {
+            try { ProfileService.Resolve(model, provider.AdapterType); }
+            catch (ProfileNotFoundException ex) { Error(ex.Message); badProfiles++; }
+            catch (ProfileAdapterMismatchException ex) { Error(ex.Message); badProfiles++; }
+        }
+        if (badProfiles == 0 && cfg.Models.Any(kv => kv.Key != "default"))
+            Ok("All models resolve to a compatible profile");
+
+        // 3. enable_high with null-thinking profile
+        foreach (var action in cfg.Actions.Where(a => a.ThinkingMode == "enable_high" && !string.IsNullOrEmpty(a.ModelId)))
+        {
+            var resolved = cfg.ResolveModel(action.ModelId);
+            if (resolved is null) continue;
+            var (provider, model) = resolved.Value;
+            try
+            {
+                var profile = ProfileService.Resolve(model, provider.AdapterType);
+                if (profile.Thinking is null)
+                    Warn($"Action \"{action.Id}\" has ThinkingMode=enable_high but profile \"{profile.Id}\" has thinking=null (will have no effect)");
+            }
+            catch { }
+        }
+
+        // 4. StripPatterns format
+        foreach (var profile in ProfileService.All())
+        foreach (var pat in profile.StripPatterns)
+            if (!pat.Contains("..."))
+                Warn($"Profile \"{profile.Id}\" has strip_pattern without '...': \"{pat}\"");
+
+        // 5. Capabilities vs action type
+        foreach (var action in cfg.Actions.Where(a => !a.IsSystem && !string.IsNullOrEmpty(a.ModelId)))
+        {
+            var resolved = cfg.ResolveModel(action.ModelId);
+            if (resolved is null) continue;
+            var (provider, model) = resolved.Value;
+            try
+            {
+                var profile = ProfileService.Resolve(model, provider.AdapterType);
+                if (action.IsInteractive && !profile.Capabilities.MultiTurn)
+                    Warn($"Action \"{action.Id}\" is interactive but profile \"{profile.Id}\" declares multi_turn=false");
+                if (!action.IsInteractive && !profile.Capabilities.Streaming)
+                    Warn($"Action \"{action.Id}\" uses streaming but profile \"{profile.Id}\" declares streaming=false");
+            }
+            catch { }
+        }
+
         PrintSummary();
         return _errors > 0 ? 2 : _warnings > 0 ? 1 : 0;
     }

@@ -37,6 +37,12 @@ public class ActionFeaturesPage : PageBase
                     var r2 = Activate(n.N.ToString(), sorted, app);
                     if (r2 != null) return Task.FromResult(r2);
                     break;
+                case MenuKey.Letter l when l.C == 'D':
+                    if (int.TryParse(items[cursor].Key, out var di) && di >= 1 && di <= sorted.Count)
+                        DeleteAction(sorted[di - 1], app);
+                    else
+                        app.Renderer.SetNotice("Navigate to an action first.", NoticeKind.Warning);
+                    break;
                 case MenuKey.Letter l:
                     JumpTo(sel, items, l.C.ToString());
                     var r3 = Activate(l.C.ToString(), sorted, app);
@@ -71,21 +77,16 @@ public class ActionFeaturesPage : PageBase
 
         switch (key)
         {
-            case "A": AddActionFlow.Run(app);         break;
-            case "D": DeleteAction(sorted, app);      break;
-            case "S": app.SaveNow();                  break;
+            case "A": AddActionFlow.Run(app); break;
+            case "S": app.SaveNow();          break;
         }
         return null;
     }
 
-    private static void DeleteAction(List<ActionItem> sorted, TuiApp app)
+    private static void DeleteAction(ActionItem action, TuiApp app)
     {
-        var deletable = sorted.Where(a => !a.IsSystem).ToList();
-        if (deletable.Count == 0) { app.Renderer.SetNotice("No user actions to delete.", NoticeKind.Warning); return; }
-        var labels = deletable.Select(a => $"{a.Name} ({a.Id})").Append("Cancel").ToList();
-        var choice = app.Renderer.SelectFromList("Delete which action?", labels);
-        if (choice == "Cancel") return;
-        var action = deletable.First(a => $"{a.Name} ({a.Id})" == choice);
+        if (action.IsSystem) { app.Renderer.SetNotice("Cannot delete system actions.", NoticeKind.Warning); return; }
+        if (!app.Renderer.Confirm($"Delete action '{action.Name}'?", defaultYes: false)) return;
         app.Cfg.Actions.Remove(action);
         app.MarkDirty();
         app.Renderer.SetNotice($"Action '{action.Name}' deleted.");

@@ -6,10 +6,17 @@ namespace AuraTxt.Core.Tests.Models;
 public class ModelTests
 {
     [Fact]
-    public void ModelEntry_DisableThinking_DefaultsToTrue()
+    public void ModelEntry_ProfileId_DefaultsToEmpty()
     {
         var m = new ModelEntry { TargetModel = "gpt-4o", Alias = "gpt-4o" };
-        Assert.True(m.DisableThinking);
+        Assert.Equal("", m.ProfileId);
+    }
+
+    [Fact]
+    public void ActionItem_ThinkingMode_DefaultsToDisable()
+    {
+        var a = new ActionItem();
+        Assert.Equal("disable", a.ThinkingMode);
     }
 
     [Fact]

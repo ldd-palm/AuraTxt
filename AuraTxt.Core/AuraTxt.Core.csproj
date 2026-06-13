@@ -10,4 +10,13 @@
     <PackageReference Include="System.Speech" Version="9.0.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="AuraTxt.Core.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Profiles\*.json" />
+    <EmbeddedResource Include="Profiles\README.md.template" />
+  </ItemGroup>
+
 </Project>

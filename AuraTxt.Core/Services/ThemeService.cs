@@ -61,7 +61,9 @@ public static class ThemeService
         }
 
         // Merge with built-in fallback so missing keys don't break the UI.
-        var fallback = themeId.Equals("dark", StringComparison.OrdinalIgnoreCase)
+        // A theme can declare BaseTheme:"dark" to get dark fallbacks (third-party dark themes).
+        var baseId = string.IsNullOrEmpty(file.BaseTheme) ? themeId : file.BaseTheme;
+        var fallback = baseId.Equals("dark", StringComparison.OrdinalIgnoreCase)
             ? BuiltinDark() : BuiltinLight();
         foreach (var kv in fallback.Colors)
         {

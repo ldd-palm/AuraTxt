@@ -7,11 +7,28 @@ public class GoogleTranslateClient
 {
     private readonly HttpClient _http;
 
+    // Shared instance — the client is constructed per call site (ResultWindow), so a
+    // per-instance HttpClient would leak sockets under frequent use.
+    private static readonly HttpClient _sharedHttp = CreateShared();
+
+    private static HttpClient CreateShared()
+    {
+        var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+        http.DefaultRequestHeaders.UserAgent.ParseAdd(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
+        return http;
+    }
+
     public GoogleTranslateClient(HttpClient? http = null)
     {
-        _http = http ?? new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
-        _http.DefaultRequestHeaders.UserAgent.ParseAdd(
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
+        if (http is not null)
+        {
+            _http = http;
+            _http.DefaultRequestHeaders.UserAgent.ParseAdd(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
+        }
+        else
+            _http = _sharedHttp;
     }
 
     public async Task<string> TranslateAsync(

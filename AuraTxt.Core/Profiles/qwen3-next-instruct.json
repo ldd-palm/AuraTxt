@@ -1,0 +1,25 @@
+{
+  "id": "qwen3-next-instruct",
+  "description": "Qwen3-Next instruct variant - natively non-thinking, no chat_template_kwargs needed",
+  "match": {
+    "name_patterns": [
+      "*qwen3-next*instruct*",
+      "qwen/qwen3-next-*-instruct"
+    ]
+  },
+  "priority": 100,
+  "adapter_compatibility": ["openai_compatible"],
+  "thinking": null,
+  "strip_patterns": [],
+  "capabilities": {
+    "streaming": true,
+    "system_prompt": true,
+    "multi_turn": true,
+    "max_context": 262144
+  },
+  "recommended_params": {
+    "temperature": 0.3,
+    "top_p": 0.9,
+    "max_tokens": 4096
+  }
+}

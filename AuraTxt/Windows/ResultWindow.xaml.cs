@@ -18,6 +18,7 @@ public partial class ResultWindow : Window
     private bool _closing;
     private bool _editing;
     private bool _pinned;
+    private CancellationTokenSource? _streamCts;
 
     public ResultWindow(ActionItem action, string selectedText, ConfigRoot cfg)
     {
@@ -40,6 +41,8 @@ public partial class ResultWindow : Window
         MinHeight = 200;
 
         TitleLabel.Text     = action.Name;
+        var titleIcon = IconCacheService.GetIconSync(action.Icon);
+        if (titleIcon is not null) { TitleIcon.Source = titleIcon; TitleIcon.Visibility = Visibility.Visible; }
         ResultText.FontSize = cfg.Settings.FontSize;
         Opacity             = cfg.Settings.ResultWindowOpacity;
 
@@ -64,6 +67,7 @@ public partial class ResultWindow : Window
         {
             AppState.IsResultWindowOpen = false;
             AppState.MenuSuppressUntil  = DateTime.UtcNow.AddSeconds(2);
+            _streamCts?.Cancel();
         };
         Deactivated += (_, _) => SafeClose();
 
@@ -76,7 +80,15 @@ public partial class ResultWindow : Window
         {
             _activeModel = _cfg.ResolveModel(id);
             _action.ModelId = id;
-            try { new ConfigService().Save(_cfg); }
+            // Read-modify-write on a fresh load: writing back our stale snapshot (_cfg)
+            // would clobber any change auracfg saved while this window was open.
+            try
+            {
+                var svc   = new ConfigService();
+                var fresh = svc.Load();
+                var a     = fresh.Actions.FirstOrDefault(x => x.Id == _action.Id);
+                if (a is not null) { a.ModelId = id; svc.Save(fresh); }
+            }
             catch (Exception ex) { LogService.Error($"Failed to persist model selection", ex); }
         }
     }
@@ -84,47 +96,35 @@ public partial class ResultWindow : Window
     private async Task RunAsync()
     {
         LogService.Info($"ACTION [{_action.Id}] model={_action.ModelId} text_len={_selectedText.Length}");
+
+        _streamCts?.Cancel();
+        _streamCts = new CancellationTokenSource();
+        var ct = _streamCts.Token;
+
+        var resolved = _activeModel ?? _cfg.ResolveModel(_action.ModelId);
+        if (resolved is null)
+        { ResultText.Text = FormatError(new InvalidOperationException($"Model not found: {_action.ModelId}")); return; }
+
         ResultText.Text = "Processing…";
-        try { ResultText.Text = await CallModelAsync(); }
+        var firstChunk = true;
+        var slash = _action.ModelId.IndexOf('/');
+        var providerId = slash >= 0 ? _action.ModelId[..slash] : _action.ModelId;
+        try
+        {
+            await foreach (var delta in new AiClient().StreamAsync(
+                providerId, resolved.Value.provider, resolved.Value.model, _action, _selectedText, "", ct))
+            {
+                if (firstChunk) { ResultText.Text = ""; firstChunk = false; }
+                ResultText.AppendText(delta);
+            }
+        }
+        catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            LogService.Error($"CallModel failed for action [{_action.Id}]", ex);
-            ResultText.Text = FormatError(ex);
+            LogService.Error($"Stream failed for action [{_action.Id}]", ex);
+            if (!ct.IsCancellationRequested)
+                ResultText.Text = (string.IsNullOrEmpty(ResultText.Text) ? "" : ResultText.Text + "\n") + FormatError(ex);
         }
-    }
-
-    private async Task<string> CallModelAsync()
-    {
-        var resolved = _activeModel ?? _cfg.ResolveModel(_action.ModelId);
-
-        // Built-in models: no prompt, call service directly
-        if (resolved?.model.TargetModel == "Google_Translate")
-        {
-            LogService.Info($"Google_Translate → {_cfg.Settings.TargetLanguage}  text_len={_selectedText.Length}");
-            return await new GoogleTranslateClient().TranslateAsync(_selectedText, to: _cfg.Settings.TargetLanguage);
-        }
-        if (resolved?.model.TargetModel == "Youdao_Dict")
-        {
-            LogService.Info($"Youdao_Dict → dict  text_len={_selectedText.Length}");
-            return await new YoudaoClient().DictionaryAsync(_selectedText);
-        }
-
-        if (resolved is null)
-            throw new InvalidOperationException($"Model not found: {_action.ModelId}");
-
-        var userPrompt = _currentPrompt
-            .Replace("{SelectedText}", _selectedText)
-            .Replace("{UserInput}", "");
-
-        var sysText = PromptService.Resolve(_cfg.Settings.SystemPrompt);
-        var systemPrompt = string.IsNullOrWhiteSpace(sysText)
-            ? null
-            : sysText
-                .Replace("{SelectedText}", _selectedText)
-                .Replace("{UserInput}", "");
-
-        return await new AiClient().CompleteAsync(
-            resolved.Value.provider, resolved.Value.model, userPrompt, systemPrompt);
     }
 
     private void CloseBtn_Click(object sender, RoutedEventArgs e) { _closing = true; Close(); }
@@ -171,8 +171,13 @@ public partial class ResultWindow : Window
 
     private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Escape)         { SafeClose(); e.Handled = true; }
-        else if (e.Key == Key.P) { EditBtn_Click(sender, new RoutedEventArgs()); e.Handled = true; }
+        if (e.Key == Key.Escape)         { SafeClose(); e.Handled = true; return; }
+        // Bare-letter shortcuts only: let Ctrl+C etc. tunnel to the TextBox (copy selection),
+        // and never hijack typing in an editable TextBox.
+        if (Keyboard.Modifiers != ModifierKeys.None) return;
+        if (Keyboard.FocusedElement is System.Windows.Controls.TextBox { IsReadOnly: false }) return;
+
+        if (e.Key == Key.P)      { EditBtn_Click(sender, new RoutedEventArgs()); e.Handled = true; }
         else if (e.Key == Key.R) { RegenBtn_Click(sender, new RoutedEventArgs()); e.Handled = true; }
         else if (e.Key == Key.C) { CopyBtn_Click(sender, new RoutedEventArgs()); e.Handled = true; }
         else if (e.Key == Key.T) { PinBtn_Click(sender, new RoutedEventArgs()); e.Handled = true; }

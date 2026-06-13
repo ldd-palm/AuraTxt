@@ -1,0 +1,25 @@
+{
+  "id": "gemini-legacy",
+  "description": "Gemini 2.0 and earlier - no thinking control at all (sending thinkingConfig causes HTTP 400)",
+  "match": {
+    "name_patterns": [
+      "gemini-2.0-*",
+      "gemini-1.5-*",
+      "gemini-1.0-*"
+    ]
+  },
+  "priority": 85,
+  "adapter_compatibility": ["gemini_native"],
+  "thinking": null,
+  "strip_patterns": [],
+  "capabilities": {
+    "streaming": true,
+    "system_prompt": true,
+    "multi_turn": true
+  },
+  "recommended_params": {
+    "temperature": 0.3,
+    "top_p": 0.95,
+    "max_tokens": 4096
+  }
+}

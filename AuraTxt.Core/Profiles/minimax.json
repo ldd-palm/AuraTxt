@@ -1,0 +1,25 @@
+{
+  "id": "minimax",
+  "description": "MiniMax M2.7+ - thinking is intrinsic via <think> tags, cannot be disabled, must be stripped",
+  "match": {
+    "name_patterns": [
+      "*minimax-m2*",
+      "*minimax-m3*",
+      "minimaxai/minimax-*"
+    ]
+  },
+  "priority": 90,
+  "adapter_compatibility": ["openai_compatible"],
+  "thinking": null,
+  "strip_patterns": ["<think>...</think>"],
+  "capabilities": {
+    "streaming": true,
+    "system_prompt": true,
+    "multi_turn": true
+  },
+  "recommended_params": {
+    "temperature": 1.0,
+    "top_p": 0.95,
+    "max_tokens": 4096
+  }
+}

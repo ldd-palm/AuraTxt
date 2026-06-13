@@ -10,6 +10,7 @@ public class MainMenuPage : PageBase
         new MenuItem("2", "Model Platform"),
         new MenuItem("3", "Prompt Library"),
         new MenuItem("4", "Action Features"),
+        new MenuItem("5", "Profiles"),
         MenuItem.Sep(),
         new MenuItem("D", "Doctor — Validate Config"),
         new MenuItem("S", "Save Config"),
@@ -62,6 +63,7 @@ public class MainMenuPage : PageBase
             case "2": return PageResult.Push(new ModelPlatformPage());
             case "3": return PageResult.Push(new PromptLibraryPage());
             case "4": return PageResult.Push(new ActionFeaturesPage());
+            case "5": return PageResult.Push(new ProfilesPage());
             case "D": app.RunDoctor();  return null;
             case "S": app.SaveNow();    return null;
             case "Q": return PageResult.Exit();

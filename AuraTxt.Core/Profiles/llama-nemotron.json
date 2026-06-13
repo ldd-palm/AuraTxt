@@ -1,0 +1,26 @@
+{
+  "id": "llama-nemotron",
+  "description": "Llama, Nemotron, and similar non-thinking instruct models - must NOT send chat_template_kwargs (causes NIM slow path)",
+  "match": {
+    "name_patterns": [
+      "*llama-*",
+      "meta/*",
+      "*nemotron*",
+      "nvidia/*nemotron*"
+    ]
+  },
+  "priority": 80,
+  "adapter_compatibility": ["openai_compatible"],
+  "thinking": null,
+  "strip_patterns": [],
+  "capabilities": {
+    "streaming": true,
+    "system_prompt": true,
+    "multi_turn": true
+  },
+  "recommended_params": {
+    "temperature": 0.3,
+    "top_p": 0.9,
+    "max_tokens": 4096
+  }
+}

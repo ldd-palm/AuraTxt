@@ -50,8 +50,8 @@ public class ShowCommand(ConfigService config)
                 Console.WriteLine();
                 foreach (var m in p.Models)
                 {
-                    var thinking = m.DisableThinking ? "off" : "on";
-                    Console.WriteLine($"      • {m.TargetModel}  (alias: {m.Alias}, thinking: {thinking})");
+                    var profile = string.IsNullOrEmpty(m.ProfileId) ? "(auto)" : m.ProfileId;
+                    Console.WriteLine($"      • {m.TargetModel}  (alias: {m.Alias}, profile: {profile})");
                 }
             }
             if (!string.IsNullOrEmpty(p.BaseUrl))
@@ -149,10 +149,10 @@ public class ShowCommand(ConfigService config)
             Console.WriteLine();
             foreach (var m in p.Models)
             {
-                var thinking = m.DisableThinking ? "off" : "on";
+                var profile = string.IsNullOrEmpty(m.ProfileId) ? "(auto)" : m.ProfileId;
                 Console.WriteLine($"  • {m.TargetModel}");
                 PrintLabel("    Alias", m.Alias);
-                PrintLabel("    Thinking", thinking);
+                PrintLabel("    Profile", profile);
                 Console.WriteLine();
             }
             return 0;
@@ -277,9 +277,9 @@ public class ShowCommand(ConfigService config)
     }
 
     private static string MaskKey(string key) =>
-        string.IsNullOrEmpty(key) ? "(not set)" :
-        key.Length <= 8 ? new string('•', key.Length) :
-        key[..4] + new string('•', Math.Min(8, key.Length - 4));
+        string.IsNullOrEmpty(key) ? "(not set)"
+        : key.Length <= 8         ? key[..Math.Min(4, key.Length)] + "***"
+        :                           key[..4] + "***" + key[^4..];
 
     private static void PrintEnabled(bool enabled)
     {

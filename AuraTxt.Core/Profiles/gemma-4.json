@@ -1,0 +1,31 @@
+{
+  "id": "gemma-4",
+  "description": "Gemma 4 family via Gemini API - thinking_level string control (different from Gemini Flash!)",
+  "match": {
+    "name_patterns": [
+      "gemma-4-*-it",
+      "gemma-4-*"
+    ]
+  },
+  "priority": 90,
+  "adapter_compatibility": ["gemini_native"],
+  "thinking": {
+    "location": "generationConfig.thinkingConfig",
+    "modes": {
+      "disable": { "thinkingLevel": "none" },
+      "enable_high": { "thinkingLevel": "high" }
+    }
+  },
+  "strip_patterns": [],
+  "capabilities": {
+    "streaming": true,
+    "system_prompt": true,
+    "multi_turn": true,
+    "max_context": 262144
+  },
+  "recommended_params": {
+    "temperature": 0.3,
+    "top_p": 0.95,
+    "max_tokens": 4096
+  }
+}

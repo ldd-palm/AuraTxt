@@ -7,10 +7,9 @@ namespace AuraTxt.Core.Services;
 /// inline text when it is not a resolvable file path (backward compatibility).
 public static class PromptService
 {
-    // ── Prompts directory ────────────────────────────────────────────────────
+    // ── Prompts directory (portable: next to the exe) ───────────────────────
     public static string PromptsDir { get; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "AuraTxt", "prompts");
+        AppContext.BaseDirectory, "prompts");
 
     public static string SystemFile   => Path.Combine(PromptsDir, "system.md");
     public static string TemplateFile => Path.Combine(PromptsDir, "template.md");

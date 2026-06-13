@@ -48,9 +48,9 @@ public class ProviderCommand(ConfigService config)
         if (opts.TryGetValue("model", out var tm))
             cfg.Models[id].Models.Add(new ModelEntry
             {
-                TargetModel     = tm,
-                Alias           = opts.GetValueOrDefault("alias", tm),
-                DisableThinking = !opts.ContainsKey("thinking")
+                TargetModel = tm,
+                Alias       = opts.GetValueOrDefault("alias", tm),
+                ProfileId   = opts.GetValueOrDefault("profile", "")
             });
         config.Save(cfg);
         Console.WriteLine($"✓ Provider '{id}' saved");
@@ -66,9 +66,9 @@ public class ProviderCommand(ConfigService config)
         if (!cfg.Models.TryGetValue(id, out var p)) return Err($"Provider '{id}' not found", 2);
         p.Models.Add(new ModelEntry
         {
-            TargetModel     = tm,
-            Alias           = opts.GetValueOrDefault("alias", tm),
-            DisableThinking = !opts.ContainsKey("thinking")
+            TargetModel = tm,
+            Alias       = opts.GetValueOrDefault("alias", tm),
+            ProfileId   = opts.GetValueOrDefault("profile", "")
         });
         config.Save(cfg);
         Console.WriteLine($"✓ Model '{tm}' added to '{id}'");
@@ -144,10 +144,9 @@ public class ProviderCommand(ConfigService config)
         if (!cfg.Models.TryGetValue(id, out var p)) return Err($"Provider '{id}' not found", 2);
         var entry = p.Models.FirstOrDefault(m => m.TargetModel == tm);
         if (entry is null) return Err($"Model '{tm}' not found in provider '{id}'", 2);
-        if (opts.TryGetValue("alias",   out var al)) entry.Alias           = al;
-        if (opts.ContainsKey("thinking"))             entry.DisableThinking = false;
-        if (opts.ContainsKey("no-thinking"))          entry.DisableThinking = true;
-        if (opts.TryGetValue("enabled", out var en)) entry.Enabled         = en == "true";
+        if (opts.TryGetValue("alias",   out var al)) entry.Alias     = al;
+        if (opts.TryGetValue("profile", out var pf)) entry.ProfileId = pf;
+        if (opts.TryGetValue("enabled", out var en)) entry.Enabled   = en == "true";
         config.Save(cfg);
         Console.WriteLine($"✓ Model '{tm}' in '{id}' updated");
         return 0;

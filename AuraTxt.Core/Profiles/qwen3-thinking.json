@@ -1,0 +1,32 @@
+{
+  "id": "qwen3-thinking",
+  "description": "Qwen3 series with toggleable thinking (excludes -instruct variant)",
+  "match": {
+    "name_patterns": [
+      "qwen3:*",
+      "*qwen3-235b*",
+      "*qwen3-30b*",
+      "qwen/qwen3-*"
+    ]
+  },
+  "priority": 90,
+  "adapter_compatibility": ["openai_compatible"],
+  "thinking": {
+    "location": "chat_template_kwargs",
+    "modes": {
+      "disable": { "enable_thinking": false },
+      "enable_high": { "enable_thinking": true }
+    }
+  },
+  "strip_patterns": [],
+  "capabilities": {
+    "streaming": true,
+    "system_prompt": true,
+    "multi_turn": true
+  },
+  "recommended_params": {
+    "temperature": 0.3,
+    "top_p": 0.9,
+    "max_tokens": 4096
+  }
+}
