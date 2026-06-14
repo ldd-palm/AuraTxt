@@ -60,6 +60,15 @@ public class HotkeyService
                 case "copy":
                     System.Windows.Clipboard.SetText(text);
                     break;
+                case "google":
+                    try
+                    {
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+                            "https://www.google.com/search?q=" + Uri.EscapeDataString(text))
+                            { UseShellExecute = true });
+                    }
+                    catch { }
+                    break;
             }
             return;
         }
@@ -86,14 +95,18 @@ public class HotkeyService
 
         foreach (var mod in parts[..^1])
         {
-            mods |= mod.Trim().ToLower() switch
+            ModifierKeys? m = mod.Trim().ToLower() switch
             {
                 "ctrl"  => ModifierKeys.Control,
                 "alt"   => ModifierKeys.Alt,
                 "shift" => ModifierKeys.Shift,
                 "win"   => ModifierKeys.Windows,
-                _       => ModifierKeys.None
+                _       => null
             };
+            // Unknown modifier (e.g. hand-edited config) → reject; otherwise "Foo+T"
+            // would register a bare T as a system-wide hotkey.
+            if (m is null) return false;
+            mods |= m.Value;
         }
 
         return Enum.TryParse(parts[^1].Trim(), true, out key) && key != Key.None;

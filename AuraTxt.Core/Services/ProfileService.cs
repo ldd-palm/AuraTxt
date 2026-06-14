@@ -53,16 +53,18 @@ public static class ProfileService
                 File.WriteAllText(dest, json);
         }
 
-        // Seed README
-        var readmeDest = Path.Combine(ProfilesDir, "README.md");
-        if (!File.Exists(readmeDest))
+        // Seed .md.template files as .md (README.md, AI_PROMPT.md, etc.)
+        const string mdPrefix = "AuraTxt.Core.Profiles.";
+        foreach (var resName in Asm.GetManifestResourceNames())
         {
-            const string readmeName = "AuraTxt.Core.Profiles.README.md.template";
-            using var stream = Asm.GetManifestResourceStream(readmeName);
-            if (stream is not null)
+            if (!resName.StartsWith(mdPrefix) || !resName.EndsWith(".md.template")) continue;
+            var fileName = resName[mdPrefix.Length..^".template".Length];
+            var dest = Path.Combine(ProfilesDir, fileName);
+            if (!File.Exists(dest))
             {
+                using var stream = Asm.GetManifestResourceStream(resName)!;
                 using var reader = new StreamReader(stream);
-                File.WriteAllText(readmeDest, reader.ReadToEnd());
+                File.WriteAllText(dest, reader.ReadToEnd());
             }
         }
 
@@ -119,6 +121,13 @@ public static class ProfileService
 
     public static ProfileFile Resolve(ModelEntry entry, string adapterType)
     {
+        // Normalise aliases so callers don't need to pre-process
+        adapterType = adapterType.ToLowerInvariant() switch
+        {
+            "gemini" or "gemini_native" => "gemini_native",
+            _                           => "openai_compatible"
+        };
+
         List<ProfileFile> profiles;
         lock (_lock) { profiles = _cache; }
 

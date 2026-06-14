@@ -11,7 +11,9 @@ public static class IconCacheService
 {
     private static readonly string CacheDir = Path.Combine(AppContext.BaseDirectory, "icons");
 
-    private static readonly Dictionary<string, DrawingImage?> MemCache = new();
+    // ConcurrentDictionary: GetIconSync writes on the UI thread while the background
+    // download task removes entries — a plain Dictionary would corrupt under that race.
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, DrawingImage?> MemCache = new();
 
     /// Synchronous icon load — never blocks on network. Returns null if icon not yet available.
     public static DrawingImage? GetIconSync(string lucideName)
@@ -54,7 +56,7 @@ public static class IconCacheService
         _ = Task.Run(async () =>
         {
             var ok = await IconDownloadService.EnsureDownloadedAsync(lucideName);
-            if (ok) lock (MemCache) { MemCache.Remove(lucideName); }
+            if (ok) MemCache.TryRemove(lucideName, out _);
         });
     }
 

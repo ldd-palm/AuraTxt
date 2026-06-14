@@ -55,6 +55,9 @@ public class ConfigService
                 var cfg = JsonSerializer.Deserialize<ConfigRoot>(json, JsonOpts) ?? CreateDefault();
 
                 NormaliseThinkingModes(cfg);
+                EnsureSystemAction(cfg, "copy",   "Copy",   "clipboard-copy", "");
+                EnsureSystemAction(cfg, "speech", "Speech", "speech",         "Ctrl+E");
+                EnsureSystemAction(cfg, "google", "Google", "search",         "");
                 DefaultSettings = cfg.Settings;
                 return cfg;
             }
@@ -89,6 +92,16 @@ public class ConfigService
         if (!File.Exists(bak))
             throw new FileNotFoundException("No backup found at " + bak, bak);
         File.Copy(bak, _path, overwrite: true);
+    }
+
+    private static void EnsureSystemAction(ConfigRoot cfg, string id, string name, string icon, string hotkey)
+    {
+        if (cfg.Actions.Any(a => a.Id == id)) return;
+        cfg.Actions.Add(new ActionItem
+        {
+            Id = id, Name = name, Icon = icon, Hotkey = hotkey,
+            Enabled = true, IsSystem = true, ThinkingMode = "disable"
+        });
     }
 
     private static void NormaliseThinkingModes(ConfigRoot cfg)
@@ -135,6 +148,16 @@ public class ConfigService
             Name         = "Speech",
             Icon         = "speech",
             Hotkey       = "Ctrl+E",
+            Enabled      = true,
+            IsSystem     = true,
+            ThinkingMode = "disable"
+        });
+        cfg.Actions.Add(new ActionItem
+        {
+            Id           = "google",
+            Name         = "Google",
+            Icon         = "search",
+            Hotkey       = "",
             Enabled      = true,
             IsSystem     = true,
             ThinkingMode = "disable"

@@ -39,14 +39,18 @@ public partial class InteractiveWindow : Window
         });
         MinWidth = 320;
         MinHeight = 200;
+        if (AppState.SessionInteractiveWindowWidth.HasValue)
+            Width = AppState.SessionInteractiveWindowWidth.Value;
+        SizeChanged += (_, _) => AppState.SessionInteractiveWindowWidth = Width;
 
         TitleLabel.Text     = action.Name;
         var titleIcon = IconCacheService.GetIconSync(action.Icon);
         if (titleIcon is not null) { TitleIcon.Source = titleIcon; TitleIcon.Visibility = Visibility.Visible; }
         ResultText.FontSize = cfg.Settings.FontSize;
+        UserInput.FontSize  = cfg.Settings.FontSize;
         Opacity             = cfg.Settings.ResultWindowOpacity;
 
-        var items = cfg.AllEnabledModelAliases()
+        var items = cfg.AllEnabledModelRefs()
             .Where(r => !r.Ref.StartsWith("default/"))
             .Select(r => new ModelPickerItem(r.Ref, r.Label, false))
             .ToList();
@@ -90,7 +94,6 @@ public partial class InteractiveWindow : Window
         }
     }
 
-    private async void SendBtn_Click(object sender, RoutedEventArgs e)  => await GenerateAsync();
     private async void RegenBtn_Click(object sender, RoutedEventArgs e) => await GenerateAsync();
 
     private async Task GenerateAsync()

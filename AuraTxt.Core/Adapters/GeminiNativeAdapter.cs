@@ -21,7 +21,12 @@ public sealed class GeminiNativeAdapter : IAdapter
         var raw  = await resp.Content.ReadAsStringAsync(ct);
         LogService.Raw($"──── GEMINI RESPONSE HTTP {(int)resp.StatusCode}\n{raw}");
         if (!resp.IsSuccessStatusCode)
-            throw new HttpRequestException($"HTTP {(int)resp.StatusCode} — {OpenAICompatibleAdapter.ExtractApiError(raw)}");
+        {
+            var apiErr = OpenAICompatibleAdapter.ExtractApiError(raw);
+            if ((int)resp.StatusCode >= 500 && !raw.Contains(apiErr))
+                apiErr += $" | raw: {raw[..Math.Min(300, raw.Length)]}";
+            throw new HttpRequestException($"HTTP {(int)resp.StatusCode} — {apiErr}");
+        }
         using var doc = JsonDocument.Parse(raw);
         return ExtractGeminiText(doc.RootElement);
     }
@@ -36,8 +41,12 @@ public sealed class GeminiNativeAdapter : IAdapter
         using var resp = await _stream.SendAsync(msg, HttpCompletionOption.ResponseHeadersRead, ct);
         if (!resp.IsSuccessStatusCode)
         {
-            var err = await resp.Content.ReadAsStringAsync(ct);
-            throw new HttpRequestException($"HTTP {(int)resp.StatusCode} — {OpenAICompatibleAdapter.ExtractApiError(err)}");
+            var err    = await resp.Content.ReadAsStringAsync(ct);
+            var apiErr = OpenAICompatibleAdapter.ExtractApiError(err);
+            // For 500 the generic message is useless; append raw snippet so callers can diagnose
+            if ((int)resp.StatusCode >= 500 && !err.Contains(apiErr))
+                apiErr += $" | raw: {err[..Math.Min(300, err.Length)]}";
+            throw new HttpRequestException($"HTTP {(int)resp.StatusCode} — {apiErr}");
         }
         using var body   = await resp.Content.ReadAsStreamAsync(ct);
         using var reader = new StreamReader(body);

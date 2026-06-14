@@ -13,10 +13,26 @@ public partial class App : Application
     private GlobalHookService? _hook;
     private HotkeyService? _hotkeys;
     private ConfigService? _config;
+    private System.Threading.Mutex? _instanceMutex;
 
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        // Single-instance guard
+        _instanceMutex = new System.Threading.Mutex(
+            initiallyOwned: true,
+            name: "Global\\AuraTxt-SingleInstance-{A3F2C8D1-6E4B-4A9F-B7E2-1C5D8F3A2B6E}",
+            out bool createdNew);
+        if (!createdNew)
+        {
+            _instanceMutex.Dispose();
+            System.Windows.MessageBox.Show(
+                "AuraTxt is already running.\nCheck the system tray.",
+                "AuraTxt", MessageBoxButton.OK, MessageBoxImage.Information);
+            Shutdown();
+            return;
+        }
 
         // Parse --log / -log flag
         if (e.Args.Any(a => a == "--log" || a == "-log"))
@@ -112,6 +128,8 @@ public partial class App : Application
         _hook?.Stop();
         _hotkeys?.UnregisterAll();
         _tray?.Dispose();
+        try { _instanceMutex?.ReleaseMutex(); } catch { }
+        _instanceMutex?.Dispose();
         base.OnExit(e);
     }
 }

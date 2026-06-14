@@ -252,6 +252,7 @@ public class GlobalHookService
     /// Fires for every printable character — close the menu so the user can type freely.
     private void OnKeyPress(object? sender, KeyPressEventArgs e)
     {
+        if (char.IsControl(e.KeyChar)) return;
         if (AppState.ActiveMenu is ActionMenuWindow menu)
             Application.Current.Dispatcher.BeginInvoke(() => menu.CloseNow());
     }

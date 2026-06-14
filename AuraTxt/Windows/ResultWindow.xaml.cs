@@ -39,6 +39,9 @@ public partial class ResultWindow : Window
         });
         MinWidth = 320;
         MinHeight = 200;
+        if (AppState.SessionResultWindowWidth.HasValue)
+            Width = AppState.SessionResultWindowWidth.Value;
+        SizeChanged += (_, _) => AppState.SessionResultWindowWidth = Width;
 
         TitleLabel.Text     = action.Name;
         var titleIcon = IconCacheService.GetIconSync(action.Icon);
@@ -47,7 +50,7 @@ public partial class ResultWindow : Window
         Opacity             = cfg.Settings.ResultWindowOpacity;
 
         // Populate model picker with enabled user models + all built-in models
-        var items = cfg.AllEnabledModelAliases()
+        var items = cfg.AllEnabledModelRefs()
             .Select(r => new ModelPickerItem(r.Ref, r.Label, r.Ref.StartsWith("default/")))
             .ToList();
         ModelPicker.ItemsSource       = items;

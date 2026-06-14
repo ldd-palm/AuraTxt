@@ -1,0 +1,172 @@
+# AuraTxt Profile Generator — AI Prompt
+
+## How to use this file
+
+1. Copy everything below the line "── Paste to AI chat ──"
+2. Paste it into any AI chat (Claude, ChatGPT, Gemini, DeepSeek …)
+3. At the very end, add your model's API call template (Python / curl / JSON)
+4. Copy the JSON the AI returns → save as `profiles/<id>.json`
+5. Validate:  `auracfg profile --validate profiles/<id>.json`
+6. Reload:    `auracfg profile --reload`  (or restart auracfg)
+
+────────────────────────── Paste to AI chat ──────────────────────────
+
+## Task
+
+Generate an AuraTxt profile JSON from the API call template I will provide at the end.
+Output ONLY valid JSON — no markdown fences, no explanation.
+
+## Profile JSON schema
+
+```
+{
+  "id":          "kebab-case-unique-id",
+  "description": "human-readable one-liner (optional)",
+  "match": {
+    "name_patterns": ["glob patterns, case-insensitive, * = wildcard"]
+  },
+  "priority": 90,
+  "adapter_compatibility": ["openai_compatible"],
+  "thinking": {
+    "location": "dot.separated.path.in.request.body",
+    "modes": {
+      "disable":     { ...fields to set when thinking is OFF },
+      "enable_high": { ...fields to set when thinking is HIGH }
+    }
+  },
+  "strip_patterns": [],
+  "capabilities": {
+    "streaming":    true,
+    "system_prompt": true,
+    "multi_turn":   true,
+    "max_context":  131072
+  },
+  "recommended_params": {
+    "temperature": 0.6,
+    "top_p":       0.95,
+    "max_tokens":  8192
+  }
+}
+```
+
+## Field reference
+
+**id** — unique kebab-case string, e.g. `deepseek-v4`, `gemma-4-nim`
+
+**match.name_patterns** — glob list matched against the model's full name string.
+Use `*` as wildcard, case-insensitive. More specific patterns first.
+Example: `["deepseek-ai/deepseek-v4*", "*deepseek-v4*"]`
+
+**priority** — 0–100; highest wins when multiple profiles match the same model name.
+Use 90 for model-specific profiles, 80 for family-level, 70 for catch-all fallbacks.
+
+**adapter_compatibility** — which HTTP adapter this profile applies to:
+- `"openai_compatible"` — endpoint is POST /v1/chat/completions (OpenAI format)
+- `"gemini_native"`     — endpoint is Google's generativelanguage.googleapis.com REST API
+
+**thinking.location** — dot-separated path of the parent object that gets the thinking fields
+merged into it. Examples:
+- `"chat_template_kwargs"` → fields go into top-level `chat_template_kwargs: { … }`
+- `"generationConfig.thinkingConfig"` → fields go into `generationConfig: { thinkingConfig: { … } }`
+
+**thinking.modes** — exact field values to inject for each mode:
+- `disable`     → payload when ThinkingMode = "disable"
+- `enable_high` → payload when ThinkingMode = "enable_high"
+If the model has no thinking control, set `"thinking": null`.
+
+**strip_patterns** — regex patterns to strip from the model's output.
+Each pattern MUST contain the literal string `...` (used as a placeholder for matched content).
+Example: `["<think>...</think>"]` strips everything between think tags.
+Leave `[]` if the model does not emit reasoning tags in its output.
+
+**capabilities** — set from the model's documentation:
+- `streaming` — supports streaming responses
+- `system_prompt` — accepts a system message
+- `multi_turn` — supports multi-turn conversation history
+- `max_context` — context window in tokens (omit if unknown)
+
+**recommended_params** — suggested defaults; omit any you are unsure about.
+
+## Example 1: DeepSeek V4 on NVIDIA NIM (openai_compatible)
+
+The NIM API uses `chat_template_kwargs.thinking` + `enable_thinking` booleans.
+
+```json
+{
+  "id": "deepseek-v4",
+  "description": "DeepSeek V4 family on NIM / OpenAI-compatible endpoints",
+  "match": {
+    "name_patterns": ["deepseek-ai/deepseek-v4*", "*deepseek-v4*"]
+  },
+  "priority": 90,
+  "adapter_compatibility": ["openai_compatible"],
+  "thinking": {
+    "location": "chat_template_kwargs",
+    "modes": {
+      "disable":     { "thinking": false, "enable_thinking": false },
+      "enable_high": { "thinking": true,  "reasoning_effort": "high" }
+    }
+  },
+  "strip_patterns": ["<think>...</think>"],
+  "capabilities": {
+    "streaming": true,
+    "system_prompt": true,
+    "multi_turn": true,
+    "max_context": 131072
+  },
+  "recommended_params": {
+    "temperature": 0.6,
+    "top_p": 0.95,
+    "max_tokens": 8192
+  }
+}
+```
+
+## Example 2: Gemini 2.5 Flash (gemini_native)
+
+The Gemini REST API uses `generationConfig.thinkingConfig.thinkingBudget` (integer, 0 = off).
+
+```json
+{
+  "id": "gemini-flash",
+  "description": "Gemini 2.5 Flash family — thinkingBudget integer control",
+  "match": {
+    "name_patterns": ["gemini-2.5-flash*", "gemini-2.0-flash*"]
+  },
+  "priority": 90,
+  "adapter_compatibility": ["gemini_native"],
+  "thinking": {
+    "location": "generationConfig.thinkingConfig",
+    "modes": {
+      "disable":     { "thinkingBudget": 0 },
+      "enable_high": { "thinkingBudget": 8192 }
+    }
+  },
+  "strip_patterns": [],
+  "capabilities": {
+    "streaming": true,
+    "system_prompt": true,
+    "multi_turn": true,
+    "max_context": 1048576
+  },
+  "recommended_params": {
+    "temperature": 1.0,
+    "top_p": 0.95,
+    "max_tokens": 16384
+  }
+}
+```
+
+## Rules to follow
+
+1. Detect adapter type: `/v1/chat/completions` → `openai_compatible`; `generativelanguage.googleapis.com` → `gemini_native`
+2. Find thinking-control fields in the template (look for: `enable_thinking`, `thinkingConfig`, `thinkingBudget`, `reasoning_effort`, `thinking_budget`, `thinkingLevel`, `enable_thinking`, etc.)
+3. Map those fields to `thinking.location` + `modes.disable` / `modes.enable_high`
+4. Infer `name_patterns` from the model name in the template (keep `*` wildcards broad enough to cover the model family)
+5. Set `strip_patterns` to `["<think>...</think>"]` if the template or documentation mentions `<think>` tags; otherwise `[]`
+6. Use capabilities from the template / documentation; if unknown, default streaming=true, system_prompt=true, multi_turn=true
+7. If you cannot determine how thinking is controlled, set `"thinking": null` and explain in `"description"`
+
+## My model's API call template:
+
+[PASTE YOUR MODEL'S API CALL / CURL / PAYLOAD HERE]

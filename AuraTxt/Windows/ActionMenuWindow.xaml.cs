@@ -1,5 +1,6 @@
 using System.Threading;
 using System.Windows;
+using System.Windows.Input;
 using System.Windows.Media;
 using AuraTxt.Core.Models;
 using AuraTxt.Core.Services;
@@ -47,7 +48,20 @@ public partial class ActionMenuWindow : Window
     {
         PositionNearCursor();
         BuildMenu();
+        UpdateLayout();
+        ClampToWorkArea();   // re-clamp with the real size (PositionNearCursor used estimates)
         _ready = true;
+    }
+
+    /// PositionNearCursor clamps with estimated bounds (actual size unknown before layout);
+    /// with many actions the menu can exceed that estimate and stick out of the screen.
+    private void ClampToWorkArea()
+    {
+        var wa = SystemParameters.WorkArea;
+        if (ActualWidth > 0)
+            Left = Math.Max(wa.Left, Math.Min(Left, wa.Right - ActualWidth));
+        if (ActualHeight > 0)
+            Top = Math.Max(wa.Top, Math.Min(Top, wa.Bottom - ActualHeight));
     }
 
     private void PositionNearCursor()
@@ -125,6 +139,7 @@ public partial class ActionMenuWindow : Window
             IconPanel.Children.Clear();
             BuildMenu();
             UpdateLayout();
+            ClampToWorkArea();
         }
         finally { AppState.IsMenuUpdating = false; }
     }
@@ -190,10 +205,21 @@ public partial class ActionMenuWindow : Window
         switch (id)
         {
             case "copy":
-                Clipboard.SetText(_selectedText);
+                // Clipboard can be locked by another process (CLIPBRD_E_CANT_OPEN).
+                try { Clipboard.SetText(_selectedText); }
+                catch (Exception ex) { LogService.Error("Copy action failed", ex); }
                 break;
             case "speech":
                 SpeechService.Speak(_selectedText, _cfg.Settings.SpeechVoice);
+                break;
+            case "google":
+                try
+                {
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+                        "https://www.google.com/search?q=" + Uri.EscapeDataString(_selectedText))
+                        { UseShellExecute = true });
+                }
+                catch (Exception ex) { LogService.Error("Google search failed", ex); }
                 break;
         }
         SafeClose();
@@ -264,6 +290,18 @@ public partial class ActionMenuWindow : Window
         border.PreviewMouseLeftButtonDown += (_, _) => DragMove();
 
         return border;
+    }
+
+    protected override void OnPreviewKeyDown(System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key == Key.C && (Keyboard.Modifiers & ModifierKeys.Control) != 0)
+        {
+            try { Clipboard.SetText(_selectedText); }
+            catch (Exception ex) { LogService.Error("Ctrl+C copy failed", ex); }
+            e.Handled = true;
+            return;
+        }
+        base.OnPreviewKeyDown(e);
     }
 
     private Separator MakeSeparator() => new()

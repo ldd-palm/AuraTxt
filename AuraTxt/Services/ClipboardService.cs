@@ -31,6 +31,9 @@ public static class ClipboardService
     [DllImport("user32.dll")]
     private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr extra);
 
+    [DllImport("user32.dll")]
+    private static extern uint GetClipboardSequenceNumber();
+
     private const byte VK_CONTROL     = 0x11;
     private const byte VK_C           = 0x43;
     private const uint KEYEVENTF_KEYUP = 0x0002;
@@ -46,17 +49,27 @@ public static class ClipboardService
     private static async Task<string?> TryClipboardAsync()
     {
         string prev = "";
+        uint seqAfterRead = 0;
         try
         {
             if (System.Windows.Clipboard.ContainsText())
                 prev = System.Windows.Clipboard.GetText();
 
             System.Windows.Clipboard.Clear();
+            var seqBefore = GetClipboardSequenceNumber();
             PressCtrlC();
-            await Task.Delay(150);
+
+            // Poll the clipboard sequence number instead of a fixed wait: most apps
+            // land the copy in <50 ms (saves ~100 ms latency), slow apps get up to 300 ms.
+            for (int waited = 0; waited < 300; waited += 25)
+            {
+                await Task.Delay(25);
+                if (GetClipboardSequenceNumber() != seqBefore) break;
+            }
 
             var text = System.Windows.Clipboard.ContainsText()
                 ? System.Windows.Clipboard.GetText() : "";
+            seqAfterRead = GetClipboardSequenceNumber();
             return string.IsNullOrWhiteSpace(text) ? null : text;
         }
         catch { return null; }
@@ -64,10 +77,16 @@ public static class ClipboardService
         {
             try
             {
-                if (!string.IsNullOrEmpty(prev))
-                    System.Windows.Clipboard.SetText(prev);
-                else
-                    System.Windows.Clipboard.Clear();
+                // seqAfterRead == 0  → exception before read; restore prev (safe fallback)
+                // seq unchanged      → nobody wrote to clipboard after our read → restore prev
+                // seq changed        → user or another app wrote to clipboard → leave it alone
+                if (seqAfterRead == 0 || GetClipboardSequenceNumber() == seqAfterRead)
+                {
+                    if (!string.IsNullOrEmpty(prev))
+                        System.Windows.Clipboard.SetText(prev);
+                    else
+                        System.Windows.Clipboard.Clear();
+                }
             }
             catch { }
         }

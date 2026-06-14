@@ -137,8 +137,14 @@ public static class ProfileCommand
         Console.WriteLine($"Disable payload:   {profile.Thinking?.Modes.Disable.ToJsonString() ?? "(none)"}");
         Console.WriteLine();
 
+        // Enable request/response logging to a temp file so we can show the raw exchange on error
+        var logPath = Path.Combine(Path.GetTempPath(), $"auracfg-probe-{DateTime.Now:yyyyMMdd-HHmmss}.log");
+        AuraTxt.Core.Services.LogService.Enabled = true;
+        AuraTxt.Core.Services.LogService.LogPath  = logPath;
+
         var client     = new AuraTxt.Core.Services.AiClient();
-        var testAction = new AuraTxt.Core.Models.ActionItem { ThinkingMode = "disable", Prompt = "" };
+        // Use {SelectedText} so userPrompt is non-empty ("Say only: OK")
+        var testAction = new AuraTxt.Core.Models.ActionItem { ThinkingMode = "disable", Prompt = "{SelectedText}" };
         var sw         = System.Diagnostics.Stopwatch.StartNew();
         string? firstChunk = null;
         var sb = new System.Text.StringBuilder();
@@ -150,7 +156,20 @@ public static class ProfileCommand
                 sb.Append(chunk);
             }
         }
+        catch (HttpRequestException ex)
+        {
+            Console.Error.WriteLine($"[Error] {ex.Message}");
+            if (File.Exists(logPath))
+            {
+                Console.Error.WriteLine();
+                Console.Error.WriteLine("── Raw HTTP exchange ──────────────────────────────────────────");
+                Console.Error.WriteLine(File.ReadAllText(logPath));
+                Console.Error.WriteLine("───────────────────────────────────────────────────────────────");
+            }
+            return 2;
+        }
         catch (Exception ex) { Console.Error.WriteLine($"[Error] {ex.Message}"); return 2; }
+        finally { AuraTxt.Core.Services.LogService.Enabled = false; }
 
         var response = sb.ToString();
         Console.WriteLine($"Request included thinking control: {(profile.Thinking != null ? "YES" : "NO")}");

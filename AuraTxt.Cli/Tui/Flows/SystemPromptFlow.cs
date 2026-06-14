@@ -6,6 +6,25 @@ namespace AuraTxt.Cli.Tui.Flows;
 
 public static class SystemPromptFlow
 {
+    /// Renders the styled preview panel for any prompt ref (file path or inline text).
+    public static void ShowPanel(string? promptRef)
+    {
+        var label   = TuiRenderer.PromptLabel(promptRef);
+        var content = PromptService.Resolve(promptRef);
+        if (string.IsNullOrWhiteSpace(content)) { AnsiConsole.MarkupLine("  [grey](empty)[/]"); return; }
+        var allLines = content.Split('\n');
+        var preview  = allLines.Take(20).Select(l => Markup.Escape(l.TrimEnd('\r')));
+        var body     = string.Join("\n", preview);
+        if (allLines.Length > 20) body += "\n[grey]…(truncated)[/]";
+        AnsiConsole.Write(new Spectre.Console.Panel(new Markup(body))
+        {
+            Border      = Spectre.Console.BoxBorder.Rounded,
+            BorderStyle = new Style(foreground: Spectre.Console.Color.Cyan1),
+            Header      = new PanelHeader($"[bold cyan] {Markup.Escape(label)} [/]"),
+            Padding     = new Spectre.Console.Padding(1, 0, 1, 0),
+        });
+    }
+
     public static void Run(AppSettings s, TuiApp app)
     {
         AnsiConsole.Clear();
@@ -17,27 +36,7 @@ public static class SystemPromptFlow
         AnsiConsole.MarkupLine("  [grey]Sent as the system message before every action.[/]");
         Console.WriteLine();
 
-        var content = PromptService.Resolve(s.SystemPrompt);
-        if (string.IsNullOrWhiteSpace(content))
-        {
-            AnsiConsole.MarkupLine("  [grey](empty)[/]");
-        }
-        else
-        {
-            var allLines = content.Split('\n');
-            var preview  = allLines.Take(20).Select(l => Markup.Escape(l.TrimEnd('\r')));
-            var body     = string.Join("\n", preview);
-            if (allLines.Length > 20) body += "\n[grey]…(truncated)[/]";
-
-            var panel = new Spectre.Console.Panel(new Markup(body))
-            {
-                Border      = Spectre.Console.BoxBorder.Rounded,
-                BorderStyle = new Style(foreground: Spectre.Console.Color.Cyan1),
-                Header      = new PanelHeader($"[bold cyan] {Markup.Escape(label)} [/]"),
-                Padding     = new Spectre.Console.Padding(1, 0, 1, 0),
-            };
-            AnsiConsole.Write(panel);
-        }
+        ShowPanel(s.SystemPrompt);
 
         Console.WriteLine();
         AnsiConsole.MarkupLine(
@@ -46,7 +45,7 @@ public static class SystemPromptFlow
             "[bold white][[Esc]][/] Back");
         Console.Write("  Select: ");
 
-        var ki = Console.ReadKey(true);
+        var ki  = Console.ReadKey(true);
         Console.WriteLine();
 
         if (ki.Key == ConsoleKey.Escape || char.ToUpper(ki.KeyChar) == 'B') return;

@@ -1,3 +1,4 @@
+using System.Text;
 using AuraTxt.Core.Services;
 using Spectre.Console;
 
@@ -80,10 +81,24 @@ public class TuiRenderer
         };
         var valMarkup = valText.Length > 0 ? $"  [{valColor}]{Markup.Escape(valText)}[/]" : "";
 
+        string val2Markup = "";
+        if (!string.IsNullOrEmpty(item.Value2))
+        {
+            var v2Text = Truncate(item.Value2, Math.Max(10, Console.WindowWidth - valueCol - 10));
+            var v2Color = item.ValueStyle2 switch
+            {
+                ItemValueStyle.Success => "green",
+                ItemValueStyle.Danger  => "red",
+                ItemValueStyle.Warning => "yellow",
+                _                      => "grey35",
+            };
+            val2Markup = $" [grey35],[/] [{v2Color}]{Markup.Escape(v2Text)}[/]";
+        }
+
         if (isSelected)
-            AnsiConsole.MarkupLine($"[bold cyan]  › [[{Markup.Escape(item.Key)}]] {Markup.Escape(labelField)}[/]{valMarkup}");
+            AnsiConsole.MarkupLine($"[bold cyan]  › [[{Markup.Escape(item.Key)}]] {Markup.Escape(labelField)}[/]{valMarkup}{val2Markup}");
         else
-            AnsiConsole.MarkupLine($"[grey]    [[{Markup.Escape(item.Key)}]][/] {Markup.Escape(labelField)}{valMarkup}");
+            AnsiConsole.MarkupLine($"[grey]    [[{Markup.Escape(item.Key)}]][/] {Markup.Escape(labelField)}{valMarkup}{val2Markup}");
     }
 
     // ── Key reading ────────────────────────────────────────────────────────
@@ -125,6 +140,37 @@ public class TuiRenderer
                 .AllowEmpty());
     }
 
+    public string? AskOrCancel(string prompt, string? defaultValue = null)
+    {
+        Console.WriteLine();
+        var hint = defaultValue is not null ? $" [grey]({Markup.Escape(defaultValue)})[/]" : "";
+        AnsiConsole.Markup($"[yellow]  {Markup.Escape(prompt)}:[/]{hint} ");
+        var sb = new StringBuilder();
+        while (true)
+        {
+            var ki = Console.ReadKey(intercept: true);
+            if (ki.Key == ConsoleKey.Escape) { Console.WriteLine(); return null; }
+            if (ki.Key == ConsoleKey.Enter)  { Console.WriteLine(); return sb.Length > 0 ? sb.ToString() : defaultValue ?? ""; }
+            if (ki.Key == ConsoleKey.Backspace && sb.Length > 0) { sb.Remove(sb.Length - 1, 1); Console.Write("\b \b"); }
+            else if (!char.IsControl(ki.KeyChar) && ki.KeyChar != '\0') { sb.Append(ki.KeyChar); Console.Write(ki.KeyChar); }
+        }
+    }
+
+    public string? AskSecretOrCancel(string prompt)
+    {
+        Console.WriteLine();
+        AnsiConsole.Markup($"[yellow]  {Markup.Escape(prompt)}:[/] ");
+        var sb = new StringBuilder();
+        while (true)
+        {
+            var ki = Console.ReadKey(intercept: true);
+            if (ki.Key == ConsoleKey.Escape) { Console.WriteLine(); return null; }
+            if (ki.Key == ConsoleKey.Enter)  { Console.WriteLine(); return sb.ToString(); }
+            if (ki.Key == ConsoleKey.Backspace && sb.Length > 0) { sb.Remove(sb.Length - 1, 1); Console.Write("\b \b"); }
+            else if (!char.IsControl(ki.KeyChar) && ki.KeyChar != '\0') { sb.Append(ki.KeyChar); Console.Write('•'); }
+        }
+    }
+
     public bool Confirm(string prompt, bool defaultYes = true)
     {
         Console.WriteLine();
@@ -162,9 +208,9 @@ public class TuiRenderer
     }
 
     public static string MaskKey(string key) =>
-        string.IsNullOrEmpty(key)    ? "(not set)"
-        : key.Length <= 8            ? new string('•', key.Length)
-        :                              key[..4] + new string('•', Math.Min(8, key.Length - 4));
+        string.IsNullOrEmpty(key) ? "(not set)"
+        : key.Length <= 8         ? key[..Math.Min(4, key.Length)] + "*********************"
+        :                           key[..4] + "*********************" + key[^4..];
 
     public static string PromptLabel(string? p) =>
         string.IsNullOrEmpty(p)       ? "(none)"

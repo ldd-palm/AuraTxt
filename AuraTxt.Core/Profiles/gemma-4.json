@@ -12,8 +12,8 @@
   "thinking": {
     "location": "generationConfig.thinkingConfig",
     "modes": {
-      "disable": { "thinkingLevel": "NONE" },
-      "enable_high": { "thinkingLevel": "HIGH" }
+      "disable": {},
+      "enable_high": { "thinkingLevel": "high" }
     }
   },
   "strip_patterns": [],
@@ -24,7 +24,7 @@
     "max_context": 262144
   },
   "recommended_params": {
-    "temperature": 0.3,
+    "temperature": 1.0,
     "top_p": 0.95,
     "max_tokens": 4096
   }

@@ -80,7 +80,9 @@ public class AiClient
             var payload = action.ThinkingMode == "enable_high"
                 ? profile.Thinking.Modes.EnableHigh
                 : profile.Thinking.Modes.Disable;
-            JsonPathSetter.SetPath(extraBody, profile.Thinking.Location, payload.DeepClone()!.AsObject());
+            // Empty payload means "send nothing" — model doesn't accept the thinking field
+            if (payload.Count > 0)
+                JsonPathSetter.SetPath(extraBody, profile.Thinking.Location, payload.DeepClone()!.AsObject());
         }
 
         var req = new AdapterRequest

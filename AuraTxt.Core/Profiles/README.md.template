@@ -63,6 +63,26 @@ ThinkingMode "enable_high" → adds:
 
   Wrong profile matched  →  raise its priority, or tighten name_patterns
 
+## Generating a profile with AI
+
+If you have a model's API call template (Python snippet, curl command, or JSON
+payload from the provider's documentation), you can use any AI chat to generate
+the profile automatically — no manual JSON editing needed.
+
+Steps:
+
+  1. Open profiles/AI_PROMPT.md in any text editor
+  2. Copy the entire file content
+  3. Paste it into Claude, ChatGPT, Gemini, or any AI chat
+  4. Append your model's API call template at the bottom
+  5. The AI returns a ready-to-use profile JSON
+  6. Save it as profiles/<id>.json
+  7. Validate:  auracfg profile --validate profiles/<id>.json
+  8. Reload:    auracfg profile --reload
+
+AI_PROMPT.md includes the full schema, field explanations, and two examples, so
+the AI reliably produces correct output in one shot.
+
 ## Managing Profiles
 
   List all:        auracfg profile --list

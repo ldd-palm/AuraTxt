@@ -16,7 +16,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Profiles\*.json" />
-    <EmbeddedResource Include="Profiles\README.md.template" />
+    <EmbeddedResource Include="Profiles\*.md.template" />
   </ItemGroup>
 
 </Project>

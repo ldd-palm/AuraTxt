@@ -1,6 +1,6 @@
 # AuraTxt 需求说明书（Requirements Specification）
 
-> 版本：2026-06-12。本文档是 AuraTxt 的完整功能与实现规格，目标是让一个开发者（或 AI）在不参考原始代码的情况下复现整个项目。
+> 版本：2026-06-13。本文档是 AuraTxt 的完整功能与实现规格，目标是让一个开发者（或 AI）在不参考原始代码的情况下复现整个项目。
 > 行为规则中标注 **[关键]** 的条目是踩坑后确定的实现约束，偏离会复现历史 bug。
 
 ---
@@ -124,7 +124,7 @@ class ActionItem {
 
 `ConfigService.Load()` 在文件不存在时生成并保存默认配置：
 - `Models["default"]`：DisplayName="Built-in"，含 2 个模型：`Google_Translate`（Alias=GTrans）、`Youdao_Dict`（Alias=Youdao），均 `Enabled=true`。
-- 2 个系统 action：`copy`（Icon=clipboard-copy，Hotkey 恒为空且锁定）、`speech`（Icon=speech，Hotkey=Ctrl+E）。均 `IsSystem=true`、无 ModelId。
+- 3 个系统 action：`copy`（Icon=clipboard-copy，Hotkey 恒为空且锁定）、`speech`（Icon=speech，Hotkey=Ctrl+E）、`google`（Icon=search，Hotkey 默认空）。均 `IsSystem=true`、无 ModelId。
 
 ## 4. ConfigService（配置读写）
 
@@ -133,6 +133,7 @@ class ActionItem {
   1. 文件不存在 → 生成默认并保存。
   2. **mtime 缓存**：静态 `Dictionary<path,(mtime,jsonText)>` + lock；`File.GetLastWriteTimeUtc` 未变则直接用缓存文本，**反序列化仍每次执行**（每个调用方拿到独立可变对象）。
   3. IOException（另一进程写入中）→ 重试最多 3 次，间隔 100ms。
+  4. **系统 action 迁移守卫**：反序列化后调用 `EnsureSystemAction(cfg, id, name, icon, hotkey)` 补全缺失的内置 system action（copy/speech/google）。仅注入内存，不写盘——保证老版本 config.json 升级后也能看到新系统 action，同时不污染文件（用户可通过 auracfg Save 持久化）。
 - `Save(cfg)`：写 `config.json.tmp` 再 `File.Move(overwrite:true)`（原子替换）。
 - `SaveWithBackup(cfg)`：先复制现有文件到 `config.json.bak` 再 Save。
 - `Restore()`：从 .bak 复原；无备份抛 FileNotFoundException。
@@ -141,11 +142,12 @@ class ActionItem {
 
 ### 5.1 启动（App.OnStartup）
 
-1. 解析 `--log`/`-log` 参数 → `LogService.Enabled=true`，日志路径 `{exe}/auratxt.log`。
-2. 注册 `DispatcherUnhandledException`（MessageBox + Handled=true）与 `AppDomain.UnhandledException`。
-3. `ThemeService.EnsureScaffold()`、`PromptService.EnsureScaffold()`、**`ProfileService.EnsureScaffold()`**（按此顺序）。
-4. 加载配置、`ApplyTheme(Settings.Theme)`。
-5. 创建 `HotkeyService`、`TrayIconManager`、`GlobalHookService` 并启动钩子。
+1. **单实例守卫**：用命名 Mutex（`Global\AuraTxt-SingleInstance-{固定 GUID}`，`initiallyOwned=true`）检测重复启动；`createdNew=false` 时弹 MessageBox "AuraTxt is already running. Check the system tray." 后 `Shutdown()`。Mutex 作为实例字段持有，`OnExit` 时 `ReleaseMutex()`+`Dispose()`（OS 进程退出也会释放，但显式清理更规范）。
+2. 解析 `--log`/`-log` 参数 → `LogService.Enabled=true`，日志路径 `{exe}/auratxt.log`。
+3. 注册 `DispatcherUnhandledException`（MessageBox + Handled=true）与 `AppDomain.UnhandledException`。
+4. `ThemeService.EnsureScaffold()`、`PromptService.EnsureScaffold()`、**`ProfileService.EnsureScaffold()`**（按此顺序）。
+5. 加载配置、`ApplyTheme(Settings.Theme)`。
+6. 创建 `HotkeyService`、`TrayIconManager`、`GlobalHookService` 并启动钩子。
 - App.xaml：`ShutdownMode="OnExplicitShutdown"`（无主窗口）。
 
 ### 5.2 划词触发（GlobalHookService）
@@ -185,6 +187,8 @@ class ActionItem {
 | ActiveMenu (Window?) | 当前可见菜单引用，light-dismiss 用 |
 | IsMenuUpdating | UpdateMenu 期间阻止 SafeClose |
 | SelectionActioned | 选区状态机标志（见下） |
+| SessionResultWindowWidth (double?) | ResultWindow 当前会话宽度覆盖；null=使用 XAML 默认值；重启后归零 |
+| SessionInteractiveWindowWidth (double?) | InteractiveWindow 同上 |
 
 ### 5.4 选区状态机 [关键]
 
@@ -218,7 +222,7 @@ ActionProcessed LastProcessedText=T   SelectionActioned=true
 
 - `RegisterAll(cfg)`：遍历 Hotkey 非空的 action，解析为 `Key`+`ModifierKeys` 后 `HotkeyManager.Current.AddOrReplace(action.Id, ...)`；被其他程序占用时静默跳过。先 `UnregisterAll()` 再注册（幂等）。
 - 解析规则 [关键]：`"Ctrl+Alt+T"` 按 `+` 切分，至少 2 段；修饰符限 ctrl/alt/shift/win（大小写不敏感）；**未知修饰符必须整体拒绝**（否则 `"Foo+T"` 会注册裸 T 为系统级热键）；尾段用 `Enum.TryParse<Key>`。
-- 热键回调 `FireActionAsync`：取文本（delay 50ms）→ 空则返回 → 置 `SelectionActioned=true` → 系统 action 内联处理（speech/copy），AI action 经 Dispatcher 调 `ShowResultFor`。
+- 热键回调 `FireActionAsync`：取文本（delay 50ms）→ 空则返回 → 置 `SelectionActioned=true` → 系统 action 内联处理（speech/copy/google），AI action 经 Dispatcher 调 `ShowResultFor`。
 - `ShowResultFor(action, text, cfg)`（static）：`IsInteractive` ? InteractiveWindow : ResultWindow，`.Show()`。
 
 ### 5.7 托盘（TrayIconManager）
@@ -242,6 +246,8 @@ ActionItem.ThinkingMode ("disable"|"enable_high")
 AiClient.BuildRequest(provider, model, action, selectedText, userInput)
     │  1. ProfileService.Resolve(model, adapterType) → ProfileFile
     │  2. 按 profile.Thinking.Location + modes[ThinkingMode] 构造 ExtraBody (JsonObject)
+    │     **[关键] 空 payload 守卫**：若选中的 modes payload 为空对象 `{}`，跳过 SetPath
+    │     （部分模型拒绝接收 thinkingConfig 字段，empty payload 表示"不发送"）
     │  3. 按 profile.StripPatterns 构造 strip filter 列表
     │  4. 返回 (AdapterRequest, string[] stripPatterns)
     │
@@ -262,6 +268,7 @@ IAdapter.CompleteAsync / StreamAsync(AdapterRequest, ct)
 - **`EnsureScaffold()`**：将所有嵌入 profile JSON 提取到 `profiles/` 目录（不覆盖已存在文件），提取 `README.md.template` 为 `profiles/README.md`，然后 `Reload()`。
 - **`Reload()`**：加载嵌入资源 + 磁盘文件；磁盘文件同名覆盖嵌入版本；按 `priority desc, id asc` 排序缓存。
 - **`Resolve(ModelEntry model, string adapterType)`**：
+  0. **[关键] adapterType 归一化**：入参先转小写，`"gemini"` 和 `"gemini_native"` 均归为 `"gemini_native"`，其余归为 `"openai_compatible"`。ConfigService 存储的值可能是 `"gemini"`，而 profile JSON 中写的是 `"gemini_native"`，不归一化会导致 Resolve 始终 fallback。
   1. `model.ProfileId` 非空 → `GetById(id)` 后验证 `AdapterCompatibility` 包含 adapterType，不匹配抛 `ProfileAdapterMismatchException`。
   2. 否则按优先级顺序遍历 profile，找 `AdapterCompatibility` 包含 adapterType 且 `match.name_patterns` 中任一 glob 匹配 `model.TargetModel` 的第一个，返回。
   3. 均不匹配 → 返回对应 adapterType 的默认 profile（`default-openai` / `default-gemini`）。
@@ -350,7 +357,7 @@ LogService：静态类，`Enabled`+`LogPath` 控制；`Info/Error/Raw` 三个方
   3. BuildMenu + UpdateLayout 后用 `ActualWidth/ActualHeight` **二次 clamp**（动作多时估算不够宽）。
 - **延迟关闭（DeferredClose）[关键]**：点击菜单外/Deactivated 不立即关，而是启动 500ms 可取消延时（CancellationTokenSource）。期间若 MouseDoubleClick 到达 → 取消关闭并 `UpdateMenu()` 原地更新（重定位+重建按钮，期间置 `IsMenuUpdating=true` 防误关）。
 - `SafeClose(bool applySuppress = true)`：`_ready/_closing/IsMenuUpdating` 守卫；`applySuppress=true` 时设 2s `MenuSuppressUntil`。**[关键]** 延迟关闭路径用 `SafeClose(false)`——light-dismiss 不设冷却，否则点掉菜单后 2s 内无法重新双击同词。按钮点击与键盘关闭（CloseNow）用默认 true。
-- 点击 AI action：`SafeClose()` + `HotkeyService.ShowResultFor(...)`。系统 action：copy → 剪贴板写 `_selectedText`（**try/catch**，剪贴板可能被占用）；speech → `SpeechService.Speak`。
+- 点击 AI action：`SafeClose()` + `HotkeyService.ShowResultFor(...)`。系统 action：copy → 剪贴板写 `_selectedText`（**try/catch**，剪贴板可能被占用）；speech → `SpeechService.Speak`；google → `Process.Start` 打开 `https://www.google.com/search?q={EscapeDataString(_selectedText)}`（`UseShellExecute=true`，try/catch）。
 - `OnPreviewKeyDown`：Ctrl+C → 复制 `_selectedText`（try/catch）并 Handled（菜单被激活时——如拖动后——也能复制）。
 - Closed 时将 `AppState.ActiveMenu` 置空（仅当仍指向自己）。
 
@@ -358,8 +365,9 @@ LogService：静态类，`Enabled`+`LogPath` 控制；`Info/Error/Raw` 三个方
 
 构造参数 `(ActionItem, selectedText, ConfigRoot)`：
 - `WindowChrome`：`ResizeBorderThickness=6, CaptionHeight=0, GlassFrameThickness=0`（**[关键]** GlassFrame 必须为 0，否则与 AllowsTransparency 渲染冲突）。MinWidth=320, MinHeight=200。
+- **会话宽度记忆**：构造时若 `AppState.SessionResultWindowWidth` 非 null 则覆盖 `Width`；`SizeChanged` 事件同步写回该字段。重启后归零、恢复 XAML 默认宽度。
 - 标题栏：关闭圆钮、action 图标+名称（DockPanel 保证 TextTrimming）、**模型选择 ComboBox**、按钮组（Edit Prompt ✏️ / Regenerate 🔄 / Pin 📌 / Copy 📋）。标题栏可拖动（DragMove）。
-- 模型 ComboBox：`AllEnabledModelAliases()` 全量（含内置）；初选 `action.ModelId`。**SelectionChanged 持久化 [关键]**：重新 `Load()` 最新配置 → 找到同 Id 的 action → 只改其 `ModelId` → `Save()`（read-modify-write，不得把窗口持有的旧快照整体写回，否则覆盖 auracfg 并发修改）。
+- 模型 ComboBox：`AllEnabledModelRefs()` 全量（含内置）；label 格式为 `"DisplayName / Alias"`（内置为 `"Built-in / Alias"`）；初选 `action.ModelId`。**SelectionChanged 持久化 [关键]**：重新 `Load()` 最新配置 → 找到同 Id 的 action → 只改其 `ModelId` → `Save()`（read-modify-write，不得把窗口持有的旧快照整体写回，否则覆盖 auracfg 并发修改）。
 - 打开即执行 `RunAsync()`：
   - `PromptService.Resolve(action.Prompt)` 得到 prompt 文本；占位符替换：`{SelectedText}`→选中文本，`{UserInput}`→空串。system prompt 同样 Resolve+替换。
   - 显示 "Processing…"，调用 `AiClient.StreamAsync(providerId, provider, model, action, selectedText, "", ct)`。内置模型（Google_Translate/Youdao_Dict）在 AiClient 内部拦截路由，不需要 ResultWindow 特殊处理。
@@ -371,9 +379,12 @@ LogService：静态类，`Enabled`+`LogPath` 控制；`Info/Error/Raw` 三个方
 ### 7.3 InteractiveWindow（交互窗）
 
 与 ResultWindow 同构，差异：
-- 三行布局：标题栏 / **用户输入 TextBox（AcceptsReturn，多行）** / 结果区。
-- 模型 ComboBox **排除内置模型**（`default/` 前缀过滤）；action.ModelId 为内置时不预选。
-- 不自动执行；点 ▶ Send 或输入框内 **Enter**（Shift+Enter 换行）触发 `GenerateAsync`。
+- `WindowStartupLocation="CenterScreen"`（ResultWindow 同），弹出在屏幕中央，不贴近光标。
+- 三行布局：标题栏 / **用户输入区** / 结果区；输入区与结果区各占 `Height="*"`（等比平分），输入区带垂直滚动条（`VerticalScrollBarVisibility="Auto"`）。
+- **会话宽度记忆**：同 ResultWindow，但使用 `AppState.SessionInteractiveWindowWidth`。
+- 模型 ComboBox **排除内置模型**（`default/` 前缀过滤）；label 格式同 ResultWindow；action.ModelId 为内置时不预选。
+- 标题栏**无 ▶ Generate 按钮**（与 ResultWindow 一致）；输入框内按 **Enter** 触发 `GenerateAsync`（Shift+Enter 换行），或点击 🔄 Regenerate 按钮重跑。
+- 输入区标签文字为 "Input"。
 - 占位符 `{UserInput}` 替换为输入框文本。未选模型时提示 "[Error] Please select a model first."
 
 ### 7.4 PromptEditDialog
@@ -441,7 +452,7 @@ LogService：静态类，`Enabled`+`LogPath` 控制；`Info/Error/Raw` 三个方
 - **Model 详情**：1 Full Name / 2 Alias / 3 Profile（空=`(auto)` 按 glob 自动匹配；输入 profile id 强制绑定）/ 4 Status（启用↔禁用；禁用前检查 action 引用）。
 - **Profiles 页**：表格显示所有 profile（Priority / Id / Adapter / Thinking / Strip / Source）；[O] 在 ConfigEditor 打开（嵌入 profile 先提取到 `profiles/` 目录）；[R] Reload；[N] 新建向导（6 步：adapter→id→base→patterns→priority→保存）。
 - **Prompt Library**：列出 prompts 目录 .md 文件及使用方（action Name 或 "(General Settings)"；路径比较须先 IsFileRef 判断且相对路径以 BaseDirectory 解析 [关键]，否则全显示 unused）；新建（从模板）、用 PromptEditor 打开、删除（被引用拒绝）。
-- **Action Features**：action 列表（系统 action 标记）；增删改：Name/Icon（可联网验证 lucide 名）/Model（SelectModelFlow 只列 enabled）/Prompt（选 .md 文件或内联）/Interactive/Hotkey（**手动输入字符串**+HotkeyValidator 校验 [关键]，不用 ReadKey 捕获；copy action 锁定为空）/Enabled/Order/ThinkingMode（9 键在 `disable` ↔ `enable_high` 之间切换）。
+- **Action Features**：action 列表，每项格式 `[n] Name  (●/○) active/inactive  {Order}  {model}  {Hotkey}`；列表渲染规则：Model 列——`IsSystem=true` 的 action 显示 `"(system)"`（不需要模型），普通 action 无 ModelId 时显示 `"—"`；Hotkey 列——`Id=="copy"` 显示 `"Ctrl+C"`（仅显示用，不注册热键），其他无热键显示 `"—"`；Detail 页 Hotkey 字段遵循相同规则（copy 显示 `"Ctrl+C"`，按 Enter 弹出 "Copy action hotkey is fixed (empty)." 提示，不允许编辑）。增删改：Name/Icon（可联网验证 lucide 名）/Model（SelectModelFlow 只列 enabled）/Prompt（选 .md 文件或内联）/Interactive/Hotkey（**手动输入字符串**+HotkeyValidator 校验 [关键]，不用 ReadKey 捕获；copy action 锁定为空）/Enabled/Order/ThinkingMode（9 键在 `disable` ↔ `enable_high` 之间切换）。
 - **General Settings**：AppSettings 各字段编辑；Theme 从 ListThemes 选择；SpeechVoice 从 GetInstalledVoices 选择；SystemPrompt 选 .md 或查看内容预览。
 - **Doctor**：校验 config——action 的 ModelId 可解析、prompt 文件存在、hotkey 合法且不冲突、provider 字段完整等，输出问题清单或 clean。
 
@@ -501,7 +512,7 @@ CLI 项目须与 WPF 输出到相同目录（托盘 Settings 按 `{exe}/auracfg.
 3. 双击选词 → 菜单弹出；菜单已开时双击其他词 → 原地更新不闪烁。
 4. 纯点击不弹菜单、不污染剪贴板；点掉菜单后立刻重选同词可再弹。
 5. 点击 AI action → 结果窗流式输出；切模型立即生效并写回 config；R 重跑、P 改 prompt 重跑、C 复制全部、T 置顶、Esc 关闭；选中部分文本 Ctrl+C 只复制选区；交互窗输入框可正常输入含 p/r/c/t 的单词。
-6. GTrans/Youdao 无 key 可用；speech 朗读；copy 复制。
+6. GTrans/Youdao 无 key 可用；speech 朗读；copy 复制；google 打开默认浏览器搜索选中文本。
 7. 热键在任意应用触发对应 action；Pause 后划词与热键全部失效，Resume 恢复。
 8. auracfg：增删 provider/model/action、测试连接（NIM/Gemini/generic 各自正确报错与成功）、doctor、批量命令；禁用的模型不出现在 WPF 模型选择中，auracfg 列表中灰显。
 9. 改 themes/*.json 或切主题 + Reload Settings → 颜色热更新。

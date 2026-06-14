@@ -71,6 +71,11 @@ public class TrayIconManager : IDisposable
             _settingsItem.Header = $"Settings ({name})";
         };
 
+        var aboutItem = new MenuItem { Header = "About" };
+        aboutItem.Click += (_, _) =>
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+                "https://github.com/ldd-palm/AuraTxt") { UseShellExecute = true });
+
         var exitItem = new MenuItem { Header = "Exit" };
         exitItem.Click += (_, _) => onExit();
 
@@ -78,6 +83,7 @@ public class TrayIconManager : IDisposable
         menu.Items.Add(_toggleMenuItem);
         menu.Items.Add(reloadItem);
         menu.Items.Add(_settingsItem);
+        menu.Items.Add(aboutItem);
         menu.Items.Add(exitItem);
 
         _icon.ContextMenu = menu;
