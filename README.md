@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="images/aruatxt_active_bak.ico" width="80" alt="AuraTxt"/>
+<img src="images/aruatxt_active.png" width="80" alt="AuraTxt"/>
 
 # AuraTxt
 
@@ -23,10 +23,10 @@ AuraTxt lives in your **system tray** and watches for text you select anywhere o
 Inspired by Cherry Studio's selection assistant and Qtranslate, AuraTxt goes further: it adds **built-in free translation**, an **interactive two-pane window** for back-and-forth tasks, a **thinking-mode profile system** for reasoning models, and a **fully portable** deployment — no installer, no registry, no cloud account required to get started.
 
 <div align="center">
-
 <img src="images/actionmenu.png" width="400" alt="Action menu appearing near selected text"/>
 
 *The action bar appears near your cursor immediately after text selection*
+</div>
 
 ---
 
@@ -148,7 +148,6 @@ Switch themes in **auracfg → General Settings → Theme**, then right-click th
 </tr>
 </table>
 
-
 **Create your own theme:** copy any `.json` file in `themes\`, change the hex color values, and save. AuraTxt discovers it on the next reload — no restart required.
 
 ---
@@ -231,7 +230,7 @@ Run AI completely offline — no API key, no internet connection required after 
 
 ## Configuration with auracfg
 
-<img src="images/aruatxt_paused_bak.ico" width="20" alt="auracfg"/> `auracfg.exe` is AuraTxt's configuration companion. Launch it from the tray menu (**Settings**) or run it directly in a terminal.
+`auracfg.exe` is AuraTxt's configuration companion. Launch it from the tray menu (**Settings**) or run it directly in a terminal.
 
 ### Interactive TUI
 
@@ -305,8 +304,8 @@ Useful for debugging wrong output, API errors, or verifying that thinking mode p
 
 | State | Meaning |
 |-------|---------|
-| <img src="images/aruatxt_active_bak.ico" width="16"/> Active | Monitoring text selection; hotkeys registered |
-| <img src="images/aruatxt_paused_bak.ico" width="16"/> Paused | Monitoring suspended — click **Resume** to restore |
+| <img src="images/aruatxt_active.png" width="16"/> Active | Monitoring text selection; hotkeys registered |
+| <img src="images/aruatxt_paused.png" width="16"/> Paused | Monitoring suspended — click **Resume** to restore |
 
 **Tray menu:**
 - **Pause / Resume** — suspend or restore text monitoring and hotkeys
