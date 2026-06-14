@@ -47,7 +47,9 @@ public class ActionDetailPage(string actionId) : PageBase
 
     private static IReadOnlyList<MenuItem> BuildItems(ActionItem a, TuiApp app)
     {
-        var hk        = string.IsNullOrEmpty(a.Hotkey) ? "(none)" : a.Hotkey;
+        var hk        = a.Id == "copy" ? "Ctrl+C"
+                      : string.IsNullOrEmpty(a.Hotkey) ? "(none)"
+                      : a.Hotkey;
         var isBuiltin = a.ModelId.StartsWith("default/");
         var list = new List<MenuItem>
         {

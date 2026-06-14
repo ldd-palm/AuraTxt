@@ -62,9 +62,14 @@ public class ActionFeaturesPage : PageBase
         for (int i = 0; i < sorted.Count; i++)
         {
             var a     = sorted[i];
-            var hk    = string.IsNullOrEmpty(a.Hotkey) ? "—" : a.Hotkey;
-            var model = string.IsNullOrEmpty(a.ModelId) ? "—" : app.ModelLabel(a.ModelId);
-            var val   = $"{TuiRenderer.StatusBadge(a.Enabled)}  {model}  {hk}";
+            var hk    = a.Id == "copy" ? "Ctrl+C"
+                      : string.IsNullOrEmpty(a.Hotkey) ? "—"
+                      : a.Hotkey;
+            var model = a.IsSystem ? "(system)"
+                      : string.IsNullOrEmpty(a.ModelId) ? "—"
+                      : app.ModelLabel(a.ModelId);
+            var ord   = a.Order.ToString();
+            var val   = $"{TuiRenderer.StatusBadge(a.Enabled)}  {ord}  {model}  {hk}";
             list.Add(new MenuItem((i + 1).ToString(), a.Name, val, TuiRenderer.StatusStyle(a.Enabled)));
         }
         return list;
