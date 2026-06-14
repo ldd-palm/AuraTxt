@@ -1,123 +1,352 @@
+<div align="center">
+
+<img src="images/aruatxt_active_bak.ico" width="80" alt="AuraTxt"/>
+
 # AuraTxt
 
-> AI-powered floating text actions — select any text, instantly translate or process with AI.
+**A portable, highly customizable AI text assistant for Windows**
 
-A **tray-only WPF app** for Windows. Highlight text with a drag or double-click, and a floating action menu appears near your cursor. Pick an action to translate, summarize, rewrite, or run any custom prompt against an OpenAI-compatible LLM — results stream in live.
+*Highlight any text → instant AI actions, right where you work*
 
-![AuraTxt](images/menu.png)
+[![Platform](https://img.shields.io/badge/platform-Windows-blue)](https://github.com)
+[![Runtime](https://img.shields.io/badge/.NET-8.0-purple)](https://dotnet.microsoft.com)
+[![Portable](https://img.shields.io/badge/portable-no%20install-green)](https://github.com)
+
+</div>
+
+---
+
+## What is AuraTxt?
+
+AuraTxt lives in your **system tray** and watches for text you select anywhere on screen. The moment you highlight a word or sentence, a small floating action bar pops up near your cursor. One click — and your text is translated, proofread, summarized, turned into an email, or processed by any AI model you choose.
+
+Inspired by Cherry Studio's selection assistant and Qtranslate, AuraTxt goes further: it adds **built-in free translation**, an **interactive two-pane window** for back-and-forth tasks, a **thinking-mode profile system** for reasoning models, and a **fully portable** deployment — no installer, no registry, no cloud account required to get started.
+
+<div align="center">
+
+<img src="images/actionmenu.png" width="400" alt="Action menu appearing near selected text"/>
+
+*The action bar appears near your cursor immediately after text selection*
+
+---
 
 ## Features
 
-- **Floating action menu** — pops up at the cursor after drag-select or double-click, never steals focus from the app you're working in
-- **Streaming AI** — any OpenAI-compatible API (OpenAI, DeepSeek, local LLMs); responses stream token-by-token into a lightweight result window
-- **Profile system** — 13 built-in model profiles (DeepSeek V4, Qwen3, Gemini, Gemma, GLM-5, Kimi K2, MiniMax, Llama…) auto-matched by model name; each profile controls adapter type, thinking-mode payloads, and `<think>` tag stripping; user-extensible via `profiles/*.json`
-- **Thinking control** — per-action `ThinkingMode` (`disable` / `enable_high`) maps to the correct vendor payload automatically via the matched profile
-- **Built-in translation** — Google Translate & Youdao Dictionary, no API key required
-- **Interactive mode** — dual-pane window: type follow-up instructions, regenerate with refined input
-- **Global hotkeys** — trigger any action directly from any app, menu not needed
-- **Text-to-speech** — read the selection aloud (SAPI5, configurable voice)
-- **External prompts** — actions reference `.md` prompt files edited live without restart; `{SelectedText}` / `{UserInput}` placeholders; injection-resistant system prompt
-- **Themes** — Win11 Fluent light/dark + custom themes as plain JSON (34 semantic tokens), hot-swap via tray reload
-- **Portable** — everything lives next to the exe; no installer, no registry
-- **Config CLI** — `auracfg.exe`: interactive TUI for humans, batch commands for scripts/AI
+| Category | What you get |
+|----------|-------------|
+| **Instant trigger** | Drag-select or double-click any text in any app → action bar appears without stealing keyboard focus |
+| **Built-in free models** | Google Translate and Youdao Dictionary, no API key needed |
+| **AI actions** | Connect any OpenAI-compatible or Gemini API; stream results in a lightweight floating window |
+| **Interactive window** | Two-pane layout: type your instruction, get AI output — ideal for email replies, grading, and drafting |
+| **Global hotkeys** | Assign a keyboard shortcut to any action; trigger without touching the mouse |
+| **Google search** | Highlight a term → open a browser Google search in one click |
+| **Text-to-speech** | Read selected text aloud using Windows SAPI5 voices |
+| **Themes** | Six color themes included; fully JSON-customizable |
+| **Thinking mode** | Toggle reasoning/thinking on or off per action for supported models (DeepSeek, Gemini, Qwen3…) |
+| **Portable** | Everything lives next to `AuraTxt.exe` — copy the folder to any PC, it just works |
+| **Single instance** | Only one copy runs at a time; duplicate launches show a friendly tray reminder |
 
-## Project Structure
+---
+
+## Quick Start
+
+**Requirements:** Windows 10/11, [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0)
+
+1. Extract the release folder anywhere (e.g. `C:\Tools\AuraTxt\`)
+2. Run `AuraTxt.exe` — a small icon appears in the system tray
+3. Highlight any text in any application
+4. The action bar pops up → click an action or press its hotkey
+5. To configure: right-click the tray icon → **Settings** (opens `auracfg.exe`)
+
+> **No API key needed to start.** Google Translate and Youdao Dictionary work out of the box.
+
+---
+
+## Directory Structure
+
+Everything lives next to the executables — no hidden AppData folders, no registry entries.
 
 ```
-AuraTxt.sln
-├── AuraTxt/              WPF tray app (WinExe, no main window)
-│   ├── Services/         Global mouse/keyboard hook, clipboard capture, hotkeys, tray icon
-│   └── Windows/          ActionMenuWindow, ResultWindow, InteractiveWindow
-├── AuraTxt.Core/         Shared library (no WPF dependency)
-│   ├── Models/           ConfigRoot, ProviderConfig, ModelEntry, ActionItem, AppSettings, ProfileFile
-│   ├── Adapters/         IAdapter, OpenAICompatibleAdapter, GeminiNativeAdapter, AdapterRegistry
-│   ├── Profiles/         13 embedded profile JSONs (auto-seeded to profiles/ on first run)
-│   ├── Util/             GlobMatcher, JsonPathSetter, TagStripFilter
-│   └── Services/         AiClient, ConfigService, ProfileService, PromptService, ThemeService,
-│                         translation clients, TTS
-├── AuraTxt.Cli/          auracfg.exe — config tool (TUI + batch commands)
-└── AuraTxt.Core.Tests/   xunit tests
+AuraTxt\
+├── AuraTxt.exe          Main app (tray icon + floating windows)
+├── auracfg.exe          Configuration tool (TUI + batch commands)
+├── config.json          All settings, providers, models, actions
+│
+├── prompts\             Prompt files (.md) — edit freely, changes apply immediately
+│   ├── system.md        Global system prompt (anti-injection DATA BOUNDARY)
+│   ├── translate.md     Bidirectional translation
+│   ├── proofread.md     Presentation script polish
+│   ├── reply.md         Email reply drafting (interactive)
+│   ├── mail.md          Email composition from notes
+│   └── grade.md         Assignment grading with rubric (interactive)
+│
+├── profiles\            Model behavior profiles (.json)
+│   ├── README.md        Profile authoring guide
+│   ├── AI_PROMPT.md     Paste into any AI chat to generate a new profile
+│   ├── deepseek-v4.json
+│   ├── gemini-flash.json
+│   └── ...              (auto-seeded from built-in library on first run)
+│
+├── themes\              Color themes (.json)
+│   ├── light.json       Default light theme
+│   ├── dark.json        Default dark theme
+│   └── *.json           Additional themes (see Themes section)
+│
+├── icons\               SVG icon cache (auto-downloaded from lucide.dev)
+└── auratxt.log          Debug log (only created when launched with --log)
 ```
 
-Data files (created on first run, all next to the exe):
+> **Icons** are sourced from [Lucide](https://lucide.dev) — a clean, consistent open-source icon set. When an action references an icon name (e.g. `search`, `mail`, `book-open`), AuraTxt downloads and caches the SVG automatically.
 
-| Path | Content |
-|------|---------|
-| `config.json` | Providers, models, actions, settings |
-| `prompts/*.md` | System prompt + per-action prompt files |
-| `themes/*.json` | Color themes (user-editable) |
-| `profiles/*.json` | Model profiles (seeded from built-ins; add custom ones here) |
-| `icons/` | Lucide icon cache |
-| `auratxt.log` | Request/response log (only with `--log`) |
+---
 
-A full reproduction-grade specification lives in [SPEC.md](SPEC.md).
+## Built-in Prompts
 
-## Getting Started
+AuraTxt ships with ready-to-use prompts for common tasks. All prompts are plain `.md` files — open them in any text editor to customize.
 
-1. Download `AuraTxt.exe` + `auracfg.exe` from [Releases](https://github.com/ldd-palm/AuraTxt/releases) into one folder (self-contained — no runtime install needed)
-2. Run `AuraTxt.exe` — an icon appears in the system tray
-3. Right-click tray icon → **Settings (auracfg)** to add an AI provider and actions
-4. Select text in any app → floating menu appears → click an action
+### Result Window Prompts
+*One-shot: select text → instant output*
 
-### Configuring a provider
+| File | What it does |
+|------|-------------|
+| `translate.md` | Detects language and translates: Non-Chinese → Chinese, Chinese → English, Mixed → English |
+| `proofread.md` | Transforms text into a polished, professional English presentation script |
+| `mail.md` | Refines rough notes into a complete professional email, then suggests a subject line |
 
-In auracfg: **Model Platform → [A] Add** — enter a provider id, Base URL (e.g. `https://api.deepseek.com/v1`), API key, and model name. The adapter type defaults to `openai_compatible`; set `AdapterType = "gemini_native"` for Google Gemini endpoints. Use **[T] Test Connection** to verify.
+**Example — Draft Email:**
+Select your bullet-point notes → click Draft Email
+→ Gets a complete email with greeting, body, sign-off, and `Subject: ...`
 
-Or in one batch command:
+### Interactive Window Prompts
+*Two-pane: type an instruction in the Input box, AI responds below*
 
-```sh
-auracfg provider --set --id deepseek --display DeepSeek --url https://api.deepseek.com/v1 --key sk-... --model deepseek-chat --alias ds
+| File | What it does |
+|------|-------------|
+| `reply.md` | Select an email you received + type your key points → get a full polished reply |
+| `grade.md` | Select student work + type the assignment question → get a score and encouraging feedback |
+
+**Example — Grade:**
+Select the student's essay → type the assignment question → click Regenerate (🔄)
+→ `Score: 87/100` + one warm, constructive sentence
+
+---
+
+## Themes
+
+Switch themes in **auracfg → General Settings → Theme**, then right-click the tray → **Reload Settings**.
+
+<table>
+<tr>
+<td align="center"><b>Default (Shanshui)</b><br/><img src="images/shanshui.png" width="200" alt="Default light"/></td>
+<td align="center"><b>Pink</b><br/><img src="images/pink.png" width="200" alt="Pink"/></td>
+<td align="center"><b>Cyan</b><br/><img src="images/cyan.png" width="200" alt="Cyan"/></td>
+</tr>
+<tr>
+<td align="center"><b>Blue</b><br/><img src="images/blue.png" width="200" alt="Blue"/></td>
+<td align="center"><b>Gold</b><br/><img src="images/gold.png" width="200" alt="Gold"/></td>
+<td align="center"><b>Grey</b><br/><img src="images/gray.png" width="200" alt="Gray"/></td>
+</tr>
+</table>
+
+
+**Create your own theme:** copy any `.json` file in `themes\`, change the hex color values, and save. AuraTxt discovers it on the next reload — no restart required.
+
+---
+
+## Profile System
+
+AuraTxt uses **profiles** to handle model-specific quirks — especially the thinking/reasoning toggle that differs across providers.
+
+### Why profiles?
+
+Different AI APIs control "thinking mode" in completely different ways:
+
+| Model family | How to enable thinking |
+|-------------|----------------------|
+| DeepSeek V4 | `chat_template_kwargs: {"thinking": true}` |
+| Gemini Flash | `generationConfig.thinkingConfig: {"thinkingBudget": 1024}` |
+| Qwen3 | `chat_template_kwargs: {"enable_thinking": true}` |
+| Gemma 4 | `generationConfig.thinkingConfig: {"thinkingLevel": "high"}` |
+
+Profiles abstract this away. In auracfg you simply choose **Thinking: On** or **Off** per action — AuraTxt sends the correct payload automatically.
+
+### How profiles are matched
+
+When you add a model, AuraTxt looks through all profiles and picks the one whose name patterns best match your model name. No manual assignment needed in most cases:
+
+```
+deepseek-ai/DeepSeek-V3  →  matches "*deepseek-v*"  →  deepseek-v4.json  ✓
+gemini-2.5-flash-preview  →  matches "*flash*"       →  gemini-flash.json ✓
 ```
 
-### Configuring an action
+### Generate a profile for a new model
 
-In auracfg: **Action Features → Add** — pick a name, a [Lucide](https://lucide.dev) icon, a model, and a prompt. Prompts are `.md` files under `prompts/`; use `{SelectedText}` for the highlighted text and `{UserInput}` for interactive-mode input. Optionally assign a global hotkey (e.g. `Alt+T`).
+Open `profiles\AI_PROMPT.md`, paste its content into any AI chat along with your model's API documentation or a sample curl command. The AI will produce a ready-to-use profile JSON you can drop into the `profiles\` folder.
 
-```sh
-auracfg action --set --id translate --name Translate --icon languages --model-id deepseek/deepseek-chat --interactive false --prompt prompts/translate.md --hotkey Alt+T
+---
+
+## Model Recommendations
+
+### Cloud APIs
+
+| Provider | Model | Adapter | Notes |
+|----------|-------|---------|-------|
+| [Google AI Studio](https://aistudio.google.com) | `gemini-2.5-flash-preview-05-20` | `gemini_native` | Free tier, fast, thinking support |
+| [DeepSeek](https://platform.deepseek.com) | `deepseek-chat` | `openai_compatible` | Very affordable, excellent Chinese/English |
+| [OpenAI](https://platform.openai.com) | `gpt-4o-mini` | `openai_compatible` | Reliable all-rounder |
+| [NVIDIA NIM](https://build.nvidia.com) | `meta/llama-3.3-70b-instruct` | `openai_compatible` | Free credits on sign-up |
+| [Groq](https://console.groq.com) | `llama-3.3-70b-versatile` | `openai_compatible` | Extremely fast, generous free tier |
+
+**Common base URLs:**
+```
+OpenAI              https://api.openai.com/v1
+Google AI Studio    https://generativelanguage.googleapis.com
+NVIDIA NIM          https://integrate.api.nvidia.com/v1
+Groq                https://api.groq.com/openai/v1
 ```
 
-### Result window keys
+### Local Models via Ollama
 
-| Key | Function |
-|-----|----------|
-| `Esc` | Close |
-| `R` | Regenerate |
-| `P` | Edit prompt and rerun |
-| `C` | Copy all output |
-| `T` | Pin (disable click-outside dismiss) |
-| `Ctrl+C` | Copy selected portion of the output |
+Run AI completely offline — no API key, no internet connection required after model download.
 
-The model dropdown in the title bar switches models on the fly and persists the choice.
+**Setup (one time):**
+1. Install [Ollama](https://ollama.com)
+2. Pull a model: `ollama run translategemma`
+3. In auracfg → Model Platform → Add Provider:
+   - Base URL: `http://localhost:11434/v1`
+   - API Key: `ollama` *(any non-empty string)*
+   - Adapter: `openai_compatible`
+   - Model name: `qwen2.5:7b`
 
-### Tray menu
+**Recommended local models:**
 
-| Item | Function |
-|------|----------|
-| Service: Pause/Resume | Suspend text monitoring and global hotkeys |
-| Hide/Show Menu | Suppress the popup menu (hotkeys still work) |
-| Reload Settings | Re-read config.json, re-apply theme and hotkeys |
-| Settings (auracfg) | Open the config tool |
-| About | Project page on GitHub |
-| Exit | Quit |
+| Model | Pull command | RAM needed | Best for |
+|-------|-------------|-----------|---------|
+| translategemma | `ollama pull translategemma` | ~3 GB | Chinese/English, balanced |
+| Mistral 7B | `ollama pull mistral` | ~6 GB | English prose, fast |
+| Llama 3.2 3B | `ollama pull llama3.2:3b` | ~3 GB | Ultra-light, low-end PCs |
+| Qwen3.5 4B | `ollama pull qwen3.5:4b` | ~3.4 GB | Higher quality output |
 
-### Troubleshooting
+---
 
-- `AuraTxt.exe --log` writes all requests and streamed responses to `auratxt.log`
-- `auracfg doctor` validates the config and reports problems
-- `auracfg restore` rolls back to `config.json.bak`
+## Configuration with auracfg
 
-## Build
+<img src="images/aruatxt_paused_bak.ico" width="20" alt="auracfg"/> `auracfg.exe` is AuraTxt's configuration companion. Launch it from the tray menu (**Settings**) or run it directly in a terminal.
 
-```sh
-dotnet build
-dotnet test
+### Interactive TUI
 
-# Single-file framework-dependent → publish/release/ (requires .NET 8 on the target machine)
-dotnet publish AuraTxt/AuraTxt.csproj     -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -o publish/release
-dotnet publish AuraTxt.Cli/AuraTxt.Cli.csproj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -o publish/release
+```
+auracfg
 ```
 
-## License
+Navigate with arrow keys or number/letter shortcuts. Press `S` to save, `Q` to quit.
 
-MIT
+```
+AuraCfg › Main Menu
+
+  [1] General Settings     Font size, opacity, theme, TTS voice…
+  [2] Model Platform       Add/remove AI providers and models
+  [3] Prompt Library       Manage .md prompt files
+  [4] Action Features      Configure actions, hotkeys, order, thinking mode
+  [5] Profiles             View and manage model profiles
+  [D] Doctor               Check configuration for problems
+  [S] Save
+```
+
+**Action Features list** shows at a glance:
+```
+[1] Translate   (●) active   0   Built-in / GTrans   —
+[2] Proofread   (●) active   1   nvidia / qwen-80b   Ctrl+Q
+[3] Reply       (●) active   2   deepseek / ds-v3    Ctrl+W
+```
+*(status · order · provider/model · hotkey)*
+
+### Batch commands (scripting / AI automation)
+
+```bash
+# Show all actions
+auracfg action --list
+
+# Add a provider with one model
+auracfg provider --set --id openai \
+  --url https://api.openai.com/v1 --key sk-... \
+  --model gpt-4o-mini --alias mini
+
+# Change theme and font size
+auracfg settings --set --theme dark --font-size 15
+
+# Validate configuration health (non-zero exit = problems found)
+auracfg doctor
+
+# Restore config from last backup
+auracfg restore
+```
+
+---
+
+## Debug Logging
+
+Launch AuraTxt with the `--log` flag to capture every API request and response:
+
+```
+AuraTxt.exe --log
+```
+
+The log file `auratxt.log` is created next to the executable. It records:
+- Full request URL and body (including thinking payloads)
+- Complete streaming response text (assembled from chunks)
+- Timestamps and action IDs
+
+Useful for debugging wrong output, API errors, or verifying that thinking mode payloads are correct.
+
+---
+
+## Tray Icon Reference
+
+| State | Meaning |
+|-------|---------|
+| <img src="images/aruatxt_active_bak.ico" width="16"/> Active | Monitoring text selection; hotkeys registered |
+| <img src="images/aruatxt_paused_bak.ico" width="16"/> Paused | Monitoring suspended — click **Resume** to restore |
+
+**Tray menu:**
+- **Pause / Resume** — suspend or restore text monitoring and hotkeys
+- **Hide Menu / Show Menu** — stop showing the action bar (hotkeys still work)
+- **Reload Settings** — apply config and theme changes without restarting
+- **Settings** — open auracfg or your configured editor
+- **Exit**
+
+---
+
+## Keyboard Shortcuts
+
+### Result & Interactive Windows
+
+| Key | Action |
+|-----|--------|
+| `Esc` | Close window |
+| `R` | Regenerate (re-run with current input) |
+| `P` | Edit prompt |
+| `C` | Copy all output to clipboard |
+| `T` | Toggle pin (keep window open when clicking elsewhere) |
+| `Ctrl+C` | Copy selected text within the output area |
+| `Enter` | *(Interactive)* Submit input and generate |
+| `Shift+Enter` | *(Interactive)* Insert a newline in the input box |
+
+---
+
+## Tips & Tricks
+
+- **Drag the window edge** to resize — the width is remembered for the session and resets to default on next launch.
+- **Edit prompts live:** change any `.md` file in `prompts\`, save it, then press `R` to regenerate — no restart needed.
+- **Disable an action** in auracfg without deleting it — it disappears from the bar but keeps its hotkey.
+- **Order actions** with the Order field in auracfg (lower number = leftmost in the bar).
+- **Switch models mid-session:** use the model picker inside any result window — the choice is saved to `config.json` for next time.
+- **Prompt injection is blocked** by the built-in system prompt: even if selected text contains instructions like "ignore your task", AuraTxt treats it as data, not commands.
+
+---
+
+<div align="center">
+
+Inspired by [Cherry Studio](https://github.com/CherryHQ/cherry-studio) · Icons by [Lucide](https://lucide.dev) · Built with .NET 8 WPF
+
+</div>

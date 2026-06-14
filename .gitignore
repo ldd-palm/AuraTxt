@@ -16,4 +16,15 @@ Thumbs.db
 
 ## AI session docs (local only)
 AI_*.md
-publish/x64/
+publish/
+CODE_REVIEW.md
+CLAUDE.md
+CODE_REVIEW.md
+google_translate.js
+MODEL_MANAGEMENT_REDESIGN.md
+nim_translator.py
+requirment.md
+youdao.js
+
+## Config files (contain API keys — never push)
+**/config.json.bak
