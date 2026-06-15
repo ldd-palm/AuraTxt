@@ -48,11 +48,16 @@ Inspired by Cherry Studio's selection assistant and Qtranslate, AuraTxt goes fur
 
 ---
 
+## Download
+
+| Package | Size | Requires |
+|---------|------|---------|
+| [AuraTXT_1.0.zip](https://github.com/ldd-palm/AuraTxt/releases/download/v1.0/AuraTXT_1.0.zip) | ~3 MB | Windows 10/11 + [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) |
+| [AuraTXT_1.0_self_contained.zip](https://github.com/ldd-palm/AuraTxt/releases/download/v1.0/AuraTXT_1.0_self_contained.zip) | ~68 MB | Windows 10/11 only (no .NET install needed) |
+
 ## Quick Start
 
-**Requirements:** Windows 10/11, [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0)
-
-1. Extract the release folder anywhere (e.g. `C:\Tools\AuraTxt\`)
+1. Extract the zip to any folder (e.g. `C:\Tools\AuraTxt\`)
 2. Run `AuraTxt.exe` — a small icon appears in the system tray
 3. Highlight any text in any application
 4. The action bar pops up → click an action or press its hotkey
