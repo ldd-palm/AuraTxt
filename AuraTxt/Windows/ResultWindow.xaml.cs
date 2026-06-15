@@ -145,9 +145,11 @@ public partial class ResultWindow : Window
     }
     private async void ReplaceBtn_Click(object sender, RoutedEventArgs e)
     {
+        var text = ResultText.Text;
+        var hwnd = AppState.SourceWindowHandle;
         _closing = true;
-        await ClipboardService.ReplaceInSourceWindowAsync(AppState.SourceWindowHandle, ResultText.Text);
         Close();
+        await ClipboardService.ReplaceInSourceWindowAsync(hwnd, text);
     }
 
     private void EditBtn_Click(object sender, RoutedEventArgs e)

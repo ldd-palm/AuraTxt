@@ -108,7 +108,7 @@ public static class ClipboardService
         {
             System.Windows.Clipboard.SetText(text);
             SetForegroundWindow(hwnd);
-            await Task.Delay(80);
+            await Task.Delay(150);
             keybd_event(VK_CONTROL, 0, 0,              UIntPtr.Zero);
             keybd_event(0x56,       0, 0,              UIntPtr.Zero);  // V
             keybd_event(0x56,       0, KEYEVENTF_KEYUP, UIntPtr.Zero);

@@ -44,6 +44,7 @@ public class HotkeyService
 
     private async Task FireActionAsync(ActionItem action)
     {
+        AppState.SourceWindowHandle = ClipboardService.CaptureSourceWindow();
         var cfg  = _config.Load();
         var text = await ClipboardService.GetSelectedTextAsync(50);
         if (string.IsNullOrWhiteSpace(text)) return;
