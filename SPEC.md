@@ -223,7 +223,7 @@ ActionProcessed LastProcessedText=T   SelectionActioned=true
 
 - `RegisterAll(cfg)`：遍历 Hotkey 非空的 action，解析为 `Key`+`ModifierKeys` 后 `HotkeyManager.Current.AddOrReplace(action.Id, ...)`；被其他程序占用时静默跳过。先 `UnregisterAll()` 再注册（幂等）。
 - 解析规则 [关键]：`"Ctrl+Alt+T"` 按 `+` 切分，至少 2 段；修饰符限 ctrl/alt/shift/win（大小写不敏感）；**未知修饰符必须整体拒绝**（否则 `"Foo+T"` 会注册裸 T 为系统级热键）；尾段用 `Enum.TryParse<Key>`。
-- 热键回调 `FireActionAsync`：取文本（delay 50ms）→ 空则返回 → 置 `SelectionActioned=true` → 系统 action 内联处理（speech/copy/google），AI action 经 Dispatcher 调 `ShowResultFor`。
+- 热键回调 `FireActionAsync`：**[关键]** 第一行立即 `AppState.SourceWindowHandle = ClipboardService.CaptureSourceWindow()`（在任何 await 之前捕获 HWND；热键路径不经过 GlobalHookService，若不在此捕获则 Replace 时 hwnd=Zero，`ReplaceInSourceWindowAsync` early return，无任何反应）→ 取文本（delay 50ms）→ 空则返回 → 置 `SelectionActioned=true` → 系统 action 内联处理（speech/copy/google），AI action 经 Dispatcher 调 `ShowResultFor`。
 - `ShowResultFor(action, text, cfg)`（static）：`IsInteractive` ? InteractiveWindow : ResultWindow，`.Show()`。
 
 ### 5.7 托盘（TrayIconManager）
@@ -375,7 +375,7 @@ LogService：静态类，`Enabled`+`LogPath` 控制；`Info/Error/Raw` 三个方
   - `await foreach` 流式 delta，**首个 chunk 到达时先清空再 AppendText**；持 `CancellationTokenSource`，重跑/关窗时 Cancel；`OperationCanceledException` 静默；其他异常追加 `[Error] {message}`（含 inner）。
 - 关闭行为：`Closed` → `IsResultWindowOpen=false`、`MenuSuppressUntil=+2s`、取消流。`Deactivated` → `SafeClose()`；`SafeClose` 受 `_closing/_editing/_pinned` 三守卫（Pin 按钮切换 `_pinned`，未 pin 时点击外部即关）。
 - **键盘 [关键]**：`PreviewKeyDown`（隧道事件，必须用 Preview——TextBox 会吞 KeyDown）：Esc 关闭；其余单字母快捷键 P(Edit)/G(Regen)/R(Replace)/C(CopyAll)/T(Pin) **仅在无修饰键且焦点不在可编辑 TextBox 时生效**——保证 Ctrl+C 隧道到 TextBox 复制选区、输入框打字不被劫持。
-- **Replace ↩️(R)**：`ClipboardService.ReplaceInSourceWindowAsync(AppState.SourceWindowHandle, text)`——将结果写入剪贴板 → `SetForegroundWindow(hwnd)` → `Task.Delay(80)` → `keybd_event` 模拟 Ctrl+V → 关窗。源窗口 HWND 在 GlobalHookService 触发取文本前由 `CaptureSourceWindow()` 记录到 `AppState.SourceWindowHandle`。
+- **Replace ↩️(R) [关键]**：点击时先保存 `text=ResultText.Text`、`hwnd=AppState.SourceWindowHandle`，然后**先 `Close()`**，再 `await ReplaceInSourceWindowAsync(hwnd, text)`。顺序至关重要——结果窗若仍可见时调 `SetForegroundWindow` 会与 OS 焦点管理竞争导致失败；窗口关闭后 OS 自然归还焦点给源窗口，再显式 `SetForegroundWindow` 更可靠。`ReplaceInSourceWindowAsync` 内：写剪贴板 → `SetForegroundWindow(hwnd)` → `Task.Delay(150ms)` → `keybd_event(Ctrl+V)` → 关闭（已在调用前完成）。HWND 来源：鼠标路径由 GlobalHookService 在 `Dispatcher.BeginInvoke` 前捕获；**热键路径由 `HotkeyService.FireActionAsync` 在首个 await 前捕获**。
 - Edit Prompt：内置模型 → 只读弹窗提示"内置模型不支持自定义 prompt，目标语言是 X"；AI 模型 → `PromptEditDialog` 编辑当前 prompt 文本，确认后立即重跑。弹窗期间 `_editing=true` 防 Deactivated 误关父窗。
 
 ### 7.3 InteractiveWindow（交互窗）
@@ -454,7 +454,7 @@ LogService：静态类，`Enabled`+`LogPath` 控制；`Info/Error/Raw` 三个方
 - **Model 详情**：1 Full Name / 2 Alias / 3 Profile（空=`(auto)` 按 glob 自动匹配；输入 profile id 强制绑定）/ 4 Status（启用↔禁用；禁用前检查 action 引用）。
 - **Profiles 页**：表格显示所有 profile（Priority / Id / Adapter / Thinking / Strip / Source）；[O] 在 ConfigEditor 打开（嵌入 profile 先提取到 `profiles/` 目录）；[R] Reload；[N] 新建向导（6 步：adapter→id→base→patterns→priority→保存）。
 - **Prompt Library**：列出 prompts 目录 .md 文件及使用方（action Name 或 "(General Settings)"；路径比较须先 IsFileRef 判断且相对路径以 BaseDirectory 解析 [关键]，否则全显示 unused）；新建（从模板）、用 PromptEditor 打开、删除（被引用拒绝）。
-- **Action Features**：action 列表，每项格式 `[n] Name  (●/○) active/inactive  {Order}  {model}  {Hotkey}`；列表渲染规则：Model 列——`IsSystem=true` 的 action 显示 `"(system)"`（不需要模型），普通 action 无 ModelId 时显示 `"—"`；Hotkey 列——`Id=="copy"` 显示 `"Ctrl+C"`（仅显示用，不注册热键），其他无热键显示 `"—"`；Detail 页 Hotkey 字段遵循相同规则（copy 显示 `"Ctrl+C"`，按 Enter 弹出 "Copy action hotkey is fixed (empty)." 提示，不允许编辑）。增删改：Name/Icon（可联网验证 lucide 名）/Model（SelectModelFlow 只列 enabled）/Prompt（选 .md 文件或内联）/Interactive/Hotkey（**手动输入字符串**+HotkeyValidator 校验 [关键]，不用 ReadKey 捕获；copy action 锁定为空）/Enabled/Order/ThinkingMode（9 键在 `disable` ↔ `enable_high` 之间切换）。
+- **Action Features**：action 列表，每项格式 `[n] Name  (●/○) active/inactive  {Order}  {model}  {Hotkey}`；列表渲染规则：Model 列——`IsSystem=true` 的 action 显示 `"(system)"`（不需要模型），普通 action 无 ModelId 时显示 `"—"`；Hotkey 列——`Id=="copy"` 显示 `"Ctrl+C"`（仅显示用，不注册热键），其他无热键显示 `"—"`；Detail 页 Hotkey 字段遵循相同规则（copy 显示 `"Ctrl+C"`，按 Enter 弹出 "Copy action hotkey is fixed (empty)." 提示，不允许编辑）。增删改：Name/Icon（可联网验证 lucide 名）/Model（SelectModelFlow 只列 enabled）/Prompt（选 .md 文件或内联）/Interactive/Hotkey（**手动输入字符串**+HotkeyValidator 校验 [关键]，不用 ReadKey 捕获；copy action 锁定为空）/Enabled/Position（内部字段仍为 `Order`，TUI 标签显示为 "Position"）/ThinkingMode（9 键在 `disable` ↔ `enable_high` 之间切换）。
 - **General Settings**：AppSettings 各字段编辑；Theme 从 ListThemes 选择；SpeechVoice 从 GetInstalledVoices 选择；SystemPrompt 选 .md 或查看内容预览。
 - **Doctor**：校验 config——action 的 ModelId 可解析、prompt 文件存在、hotkey 合法且不冲突、provider 字段完整等，输出问题清单或 clean。
 
