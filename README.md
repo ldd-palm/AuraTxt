@@ -136,6 +136,48 @@ Select the student's essay → type the assignment question → click Regenerate
 
 ---
 
+## Creating a Custom Action
+
+AuraTxt is designed to be extended. Three ingredients and a few minutes of configuration are all you need to build a new action.
+
+### Step 1 — Get your model credentials
+
+From your AI provider, collect three values:
+
+| Field | Example |
+|-------|---------|
+| Base URL | `https://api.groq.com/openai/v1` |
+| API Key | `sk-...` |
+| Model name | `llama-3.3-70b-versatile` |
+
+See [Model Recommendations](#model-recommendations) below for a list of providers. Many offer a free tier — no credit card required.
+
+### Step 2 — Write a prompt
+
+Open `prompts\template.md` — it defines the structure every prompt follows (`{SelectedText}` is replaced by whatever text you highlight). Paste its contents into any AI chat and describe what you want your action to do. The AI will return a ready-to-use `.md` file.
+
+Save the file into the `prompts\` folder next to the other prompt files.
+
+### Step 3 — Pick an icon
+
+Browse **[lucide.dev/icons](https://lucide.dev/icons)** and find a icon that fits your action. Note the slug shown under the icon (e.g. `book-open`, `flask-conical`, `pencil-line`). AuraTxt downloads and caches the SVG automatically on first use — no manual download needed.
+
+### Step 4 — Wire it up in auracfg
+
+1. **Model Platform → Add Provider** — enter your Base URL, API Key, and add the model name
+2. **Action Features → Add Action** — fill in:
+   - **Name** — label shown in the action bar
+   - **Icon** — the slug from step 3
+   - **Model** — the model you just added
+   - **Prompt** — select the `.md` file from step 2
+   - **Position** — display order in the bar (lower = leftmost)
+   - **Hotkey** *(optional)* — global keyboard shortcut, e.g. `Ctrl+Shift+E`
+3. Press **S** to save, then right-click the tray → **Reload Settings**
+
+Your new action is now live in the action bar.
+
+---
+
 ## Themes
 
 Switch themes in **auracfg → General Settings → Theme**, then right-click the tray → **Reload Settings**.
