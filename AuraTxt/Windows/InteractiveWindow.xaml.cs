@@ -197,7 +197,7 @@ public partial class InteractiveWindow : Window
 
     private void UserInput_KeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Return && (Keyboard.Modifiers & ModifierKeys.Shift) == 0)
+        if (e.Key == Key.Return && (Keyboard.Modifiers & ModifierKeys.Control) != 0)
         {
             e.Handled = true;
             _ = GenerateAsync();

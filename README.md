@@ -328,8 +328,8 @@ Useful for debugging wrong output, API errors, or verifying that thinking mode p
 | `C` | Copy all output to clipboard |
 | `T` | Toggle pin (keep window open when clicking elsewhere) |
 | `Ctrl+C` | Copy selected text within the output area |
-| `Enter` | *(Interactive)* Submit input and generate |
-| `Shift+Enter` | *(Interactive)* Insert a newline in the input box |
+| `Enter` | *(Interactive)* Insert a newline in the input box |
+| `Ctrl+Enter` | *(Interactive)* Submit input and generate |
 
 ---
 

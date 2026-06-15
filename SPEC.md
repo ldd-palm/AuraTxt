@@ -383,7 +383,7 @@ LogService：静态类，`Enabled`+`LogPath` 控制；`Info/Error/Raw` 三个方
 - 三行布局：标题栏 / **用户输入区** / 结果区；输入区与结果区各占 `Height="*"`（等比平分），输入区带垂直滚动条（`VerticalScrollBarVisibility="Auto"`）。
 - **会话宽度记忆**：同 ResultWindow，但使用 `AppState.SessionInteractiveWindowWidth`。
 - 模型 ComboBox **排除内置模型**（`default/` 前缀过滤）；label 格式同 ResultWindow；action.ModelId 为内置时不预选。
-- 标题栏**无 ▶ Generate 按钮**（与 ResultWindow 一致）；输入框内按 **Enter** 触发 `GenerateAsync`（Shift+Enter 换行），或点击 🔄 Regenerate 按钮重跑。
+- 标题栏**无 ▶ Generate 按钮**（与 ResultWindow 一致）；输入框内按 **Ctrl+Enter** 触发 `GenerateAsync`（Enter 换行），或点击 🔄 Regenerate 按钮重跑。
 - 输入区标签文字为 "Input"。
 - 占位符 `{UserInput}` 替换为输入框文本。未选模型时提示 "[Error] Please select a model first."
 
