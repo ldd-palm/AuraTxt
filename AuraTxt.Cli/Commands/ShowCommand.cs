@@ -203,7 +203,7 @@ public class ShowCommand(ConfigService config)
             Console.Write("  Status:    ");
             PrintEnabled(a.Enabled);
             Console.WriteLine();
-            PrintLabel("Order", a.Order.ToString());
+            PrintLabel("Position", a.Order.ToString());
 
             if (!a.IsSystem)
             {

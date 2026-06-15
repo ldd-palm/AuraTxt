@@ -63,7 +63,7 @@ public class ActionDetailPage(string actionId) : PageBase
             list.Add(new MenuItem("5", "Prompt",       isBuiltin ? "(n/a — built-in)" : TuiRenderer.PromptLabel(a.Prompt)));
             list.Add(new MenuItem("6", "Hotkey",       hk));
             list.Add(new MenuItem("7", "Status",       TuiRenderer.StatusBadge(a.Enabled), TuiRenderer.StatusStyle(a.Enabled)));
-            list.Add(new MenuItem("8", "Order",        a.Order.ToString()));
+            list.Add(new MenuItem("8", "Position",        a.Order.ToString()));
             if (!isBuiltin)
                 list.Add(new MenuItem("9", "Thinking", ThinkingLabel(a.ThinkingMode), ThinkingStyle(a.ThinkingMode)));
         }
@@ -71,7 +71,7 @@ public class ActionDetailPage(string actionId) : PageBase
         {
             list.Add(new MenuItem("3", "Hotkey",       hk));
             list.Add(new MenuItem("4", "Status",       TuiRenderer.StatusBadge(a.Enabled), TuiRenderer.StatusStyle(a.Enabled)));
-            list.Add(new MenuItem("5", "Order",        a.Order.ToString()));
+            list.Add(new MenuItem("5", "Position",        a.Order.ToString()));
         }
         return list;
     }
