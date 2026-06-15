@@ -34,6 +34,12 @@ public static class ClipboardService
     [DllImport("user32.dll")]
     private static extern uint GetClipboardSequenceNumber();
 
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
+
     private const byte VK_CONTROL     = 0x11;
     private const byte VK_C           = 0x43;
     private const uint KEYEVENTF_KEYUP = 0x0002;
@@ -90,6 +96,25 @@ public static class ClipboardService
             }
             catch { }
         }
+    }
+
+    // ── Replace in source window ──────────────────────────────────────────────
+    public static IntPtr CaptureSourceWindow() => GetForegroundWindow();
+
+    public static async Task ReplaceInSourceWindowAsync(IntPtr hwnd, string text)
+    {
+        if (string.IsNullOrWhiteSpace(text) || hwnd == IntPtr.Zero) return;
+        try
+        {
+            System.Windows.Clipboard.SetText(text);
+            SetForegroundWindow(hwnd);
+            await Task.Delay(80);
+            keybd_event(VK_CONTROL, 0, 0,              UIntPtr.Zero);
+            keybd_event(0x56,       0, 0,              UIntPtr.Zero);  // V
+            keybd_event(0x56,       0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+            keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+        }
+        catch { }
     }
 
     // ── Public entry point ────────────────────────────────────────────────────

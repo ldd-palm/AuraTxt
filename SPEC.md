@@ -189,6 +189,7 @@ class ActionItem {
 | SelectionActioned | 选区状态机标志（见下） |
 | SessionResultWindowWidth (double?) | ResultWindow 当前会话宽度覆盖；null=使用 XAML 默认值；重启后归零 |
 | SessionInteractiveWindowWidth (double?) | InteractiveWindow 同上 |
+| SourceWindowHandle (IntPtr) | 触发动作前记录的源窗口句柄；Replace 按钮用此 HWND 切回源窗口并模拟 Ctrl+V |
 
 ### 5.4 选区状态机 [关键]
 
@@ -366,14 +367,15 @@ LogService：静态类，`Enabled`+`LogPath` 控制；`Info/Error/Raw` 三个方
 构造参数 `(ActionItem, selectedText, ConfigRoot)`：
 - `WindowChrome`：`ResizeBorderThickness=6, CaptionHeight=0, GlassFrameThickness=0`（**[关键]** GlassFrame 必须为 0，否则与 AllowsTransparency 渲染冲突）。MinWidth=320, MinHeight=200。
 - **会话宽度记忆**：构造时若 `AppState.SessionResultWindowWidth` 非 null 则覆盖 `Width`；`SizeChanged` 事件同步写回该字段。重启后归零、恢复 XAML 默认宽度。
-- 标题栏：关闭圆钮、action 图标+名称（DockPanel 保证 TextTrimming）、**模型选择 ComboBox**、按钮组（Edit Prompt ✏️ / Regenerate 🔄 / Pin 📌 / Copy 📋）。标题栏可拖动（DragMove）。
+- 标题栏：关闭圆钮、action 图标+名称（DockPanel 保证 TextTrimming）、**模型选择 ComboBox**、按钮组（Edit Prompt ✏️(P) / Regenerate 🔄(G) / Replace ↩️(R) / Copy 📋(C) / Pin 📌(T)）。标题栏可拖动（DragMove）。
 - 模型 ComboBox：`AllEnabledModelRefs()` 全量（含内置）；label 格式为 `"DisplayName / Alias"`（内置为 `"Built-in / Alias"`）；初选 `action.ModelId`。**SelectionChanged 持久化 [关键]**：重新 `Load()` 最新配置 → 找到同 Id 的 action → 只改其 `ModelId` → `Save()`（read-modify-write，不得把窗口持有的旧快照整体写回，否则覆盖 auracfg 并发修改）。
 - 打开即执行 `RunAsync()`：
   - `PromptService.Resolve(action.Prompt)` 得到 prompt 文本；占位符替换：`{SelectedText}`→选中文本，`{UserInput}`→空串。system prompt 同样 Resolve+替换。
   - 显示 "Processing…"，调用 `AiClient.StreamAsync(providerId, provider, model, action, selectedText, "", ct)`。内置模型（Google_Translate/Youdao_Dict）在 AiClient 内部拦截路由，不需要 ResultWindow 特殊处理。
   - `await foreach` 流式 delta，**首个 chunk 到达时先清空再 AppendText**；持 `CancellationTokenSource`，重跑/关窗时 Cancel；`OperationCanceledException` 静默；其他异常追加 `[Error] {message}`（含 inner）。
 - 关闭行为：`Closed` → `IsResultWindowOpen=false`、`MenuSuppressUntil=+2s`、取消流。`Deactivated` → `SafeClose()`；`SafeClose` 受 `_closing/_editing/_pinned` 三守卫（Pin 按钮切换 `_pinned`，未 pin 时点击外部即关）。
-- **键盘 [关键]**：`PreviewKeyDown`（隧道事件，必须用 Preview——TextBox 会吞 KeyDown）：Esc 关闭；其余单字母快捷键 P/R/C/T（Edit/Regen/CopyAll/Pin）**仅在无修饰键且焦点不在可编辑 TextBox 时生效**——保证 Ctrl+C 隧道到 TextBox 复制选区、输入框打字不被劫持。
+- **键盘 [关键]**：`PreviewKeyDown`（隧道事件，必须用 Preview——TextBox 会吞 KeyDown）：Esc 关闭；其余单字母快捷键 P(Edit)/G(Regen)/R(Replace)/C(CopyAll)/T(Pin) **仅在无修饰键且焦点不在可编辑 TextBox 时生效**——保证 Ctrl+C 隧道到 TextBox 复制选区、输入框打字不被劫持。
+- **Replace ↩️(R)**：`ClipboardService.ReplaceInSourceWindowAsync(AppState.SourceWindowHandle, text)`——将结果写入剪贴板 → `SetForegroundWindow(hwnd)` → `Task.Delay(80)` → `keybd_event` 模拟 Ctrl+V → 关窗。源窗口 HWND 在 GlobalHookService 触发取文本前由 `CaptureSourceWindow()` 记录到 `AppState.SourceWindowHandle`。
 - Edit Prompt：内置模型 → 只读弹窗提示"内置模型不支持自定义 prompt，目标语言是 X"；AI 模型 → `PromptEditDialog` 编辑当前 prompt 文本，确认后立即重跑。弹窗期间 `_editing=true` 防 Deactivated 误关父窗。
 
 ### 7.3 InteractiveWindow（交互窗）

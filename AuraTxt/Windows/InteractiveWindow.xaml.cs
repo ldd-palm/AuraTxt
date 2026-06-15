@@ -148,6 +148,12 @@ public partial class InteractiveWindow : Window
         try { Clipboard.SetText(ResultText.Text); }
         catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Copy failed: {ex.Message}"); }
     }
+    private async void ReplaceBtn_Click(object sender, RoutedEventArgs e)
+    {
+        _closing = true;
+        await ClipboardService.ReplaceInSourceWindowAsync(AppState.SourceWindowHandle, ResultText.Text);
+        Close();
+    }
 
     private void EditBtn_Click(object sender, RoutedEventArgs e)
     {
@@ -181,10 +187,11 @@ public partial class InteractiveWindow : Window
         if (Keyboard.Modifiers != ModifierKeys.None) return;
         if (Keyboard.FocusedElement is System.Windows.Controls.TextBox { IsReadOnly: false }) return;
 
-        if (e.Key == Key.P)      { EditBtn_Click(sender, new RoutedEventArgs()); e.Handled = true; }
-        else if (e.Key == Key.R) { RegenBtn_Click(sender, new RoutedEventArgs()); e.Handled = true; }
-        else if (e.Key == Key.C) { CopyBtn_Click(sender, new RoutedEventArgs()); e.Handled = true; }
-        else if (e.Key == Key.T) { PinBtn_Click(sender, new RoutedEventArgs()); e.Handled = true; }
+        if (e.Key == Key.P)      { EditBtn_Click(sender, new RoutedEventArgs());    e.Handled = true; }
+        else if (e.Key == Key.G) { RegenBtn_Click(sender, new RoutedEventArgs());   e.Handled = true; }
+        else if (e.Key == Key.R) { ReplaceBtn_Click(sender, new RoutedEventArgs()); e.Handled = true; }
+        else if (e.Key == Key.C) { CopyBtn_Click(sender, new RoutedEventArgs());    e.Handled = true; }
+        else if (e.Key == Key.T) { PinBtn_Click(sender, new RoutedEventArgs());     e.Handled = true; }
     }
 
     private static string FormatError(Exception ex)

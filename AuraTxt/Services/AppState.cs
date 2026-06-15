@@ -27,6 +27,8 @@ public static class AppState
     public static double? SessionResultWindowWidth      { get; set; }
     public static double? SessionInteractiveWindowWidth { get; set; }
 
+    public static IntPtr SourceWindowHandle { get; set; }
+
     /// True after an action was triggered for LastProcessedText (silence shield).
     /// On plain click: if false → clear LastProcessedText immediately (scenario B re-arm);
     ///                 if true → check async whether selection is gone before clearing.

@@ -127,6 +127,7 @@ public class GlobalHookService
             if (AppState.IsResultWindowOpen) return;
 
             var pos = new System.Drawing.Point(e.X, e.Y);
+            AppState.SourceWindowHandle = ClipboardService.CaptureSourceWindow();
 
             Application.Current?.Dispatcher.BeginInvoke(async () =>
             {
@@ -214,6 +215,7 @@ public class GlobalHookService
             if (AppState.IsResultWindowOpen) return;
 
             var pos = new System.Drawing.Point(e.X, e.Y);
+            AppState.SourceWindowHandle = ClipboardService.CaptureSourceWindow();
 
             Application.Current?.Dispatcher.BeginInvoke(async () =>
             {

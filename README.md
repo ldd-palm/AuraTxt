@@ -328,7 +328,8 @@ Useful for debugging wrong output, API errors, or verifying that thinking mode p
 | Key | Action |
 |-----|--------|
 | `Esc` | Close window |
-| `R` | Regenerate (re-run with current input) |
+| `G` | Regenerate (re-run with current input) |
+| `R` | Replace selected text in source app with result |
 | `P` | Edit prompt |
 | `C` | Copy all output to clipboard |
 | `T` | Toggle pin (keep window open when clicking elsewhere) |

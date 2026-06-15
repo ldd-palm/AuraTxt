@@ -68,13 +68,15 @@
             <Button Width="26" Height="26" Style="{StaticResource IconBtnStyle}"
                     ToolTip="Edit Prompt (P)" Click="EditBtn_Click" Content="✏️"/>
             <Button Width="26" Height="26" Style="{StaticResource IconBtnStyle}"
-                    ToolTip="Regenerate (R)" Click="RegenBtn_Click" Content="🔄" Margin="4,0,0,0"/>
-            <Button x:Name="PinBtn" Width="26" Height="26" Style="{StaticResource IconBtnStyle}"
-                    ToolTip="Pin Window (T)" Click="PinBtn_Click" Content="📌" Margin="4,0,0,0" Opacity="0.45"/>
+                    ToolTip="Regenerate (G)" Click="RegenBtn_Click" Content="🔄" Margin="4,0,0,0"/>
+            <Button Width="26" Height="26" Style="{StaticResource IconBtnStyle}"
+                    ToolTip="Replace in Source (R)" Click="ReplaceBtn_Click" Content="↩️" Margin="4,0,0,0"/>
             <Button Width="26" Height="26" Background="{DynamicResource CopyBtn}"
                     BorderBrush="{DynamicResource CopyBtn}"
                     Foreground="White" ToolTip="Copy All (C)" Click="CopyBtn_Click"
                     Content="📋" Margin="4,0,0,0"/>
+            <Button x:Name="PinBtn" Width="26" Height="26" Style="{StaticResource IconBtnStyle}"
+                    ToolTip="Pin Window (T)" Click="PinBtn_Click" Content="📌" Margin="4,0,0,0" Opacity="0.45"/>
           </StackPanel>
         </Grid>
       </Border>
