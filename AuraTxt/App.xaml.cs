@@ -67,6 +67,7 @@ public partial class App : Application
             });
             _hook    = new GlobalHookService(_config, _hotkeys);
             _hook.Start();
+            Microsoft.Win32.SystemEvents.PowerModeChanged += OnPowerModeChanged;
         }
         catch (Exception ex)
         {
@@ -107,6 +108,20 @@ public partial class App : Application
         merged.Insert(0, dict);
     }
 
+    private void OnPowerModeChanged(object sender, Microsoft.Win32.PowerModeChangedEventArgs e)
+    {
+        if (e.Mode != Microsoft.Win32.PowerModes.Resume) return;
+        Dispatcher.BeginInvoke(() =>
+        {
+            try
+            {
+                _hook?.Stop();
+                _hook?.Start();
+            }
+            catch (Exception ex) { LogService.Error("Hook reinit after resume failed", ex); }
+        });
+    }
+
     private void ReloadConfig()
     {
         try
@@ -125,6 +140,7 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        Microsoft.Win32.SystemEvents.PowerModeChanged -= OnPowerModeChanged;
         _hook?.Stop();
         _hotkeys?.UnregisterAll();
         _tray?.Dispose();

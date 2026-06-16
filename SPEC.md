@@ -147,7 +147,7 @@ class ActionItem {
 3. 注册 `DispatcherUnhandledException`（MessageBox + Handled=true）与 `AppDomain.UnhandledException`。
 4. `ThemeService.EnsureScaffold()`、`PromptService.EnsureScaffold()`、**`ProfileService.EnsureScaffold()`**（按此顺序）。
 5. 加载配置、`ApplyTheme(Settings.Theme)`。
-6. 创建 `HotkeyService`、`TrayIconManager`、`GlobalHookService` 并启动钩子。
+6. 创建 `HotkeyService`、`TrayIconManager`、`GlobalHookService` 并启动钩子；随后订阅 `Microsoft.Win32.SystemEvents.PowerModeChanged`（睡眠/唤醒后重装钩子，见 §5.2）。`OnExit` 中对称地取消订阅。
 - App.xaml：`ShutdownMode="OnExplicitShutdown"`（无主窗口）。
 
 ### 5.2 划词触发（GlobalHookService）
@@ -174,6 +174,8 @@ class ActionItem {
 - `KeyPress`（可打印字符）：**[关键]** 先 `if (char.IsControl(e.KeyChar)) return;`（否则 Ctrl+C 的 `\x03` 会误关菜单并污染剪贴板恢复逻辑），然后关闭当前菜单。
 - `KeyDown`：仅 `Back/Delete/LWin/RWin` 或 `Alt+Tab`/`Alt+F4` 时关闭菜单。
 - 关闭统一走 `Dispatcher.BeginInvoke(() => menu.CloseNow())`。
+
+**[关键] 睡眠/唤醒后钩子恢复**：Windows 在系统睡眠/唤醒前后可能静默卸载低级钩子（`WH_MOUSE_LL`，本服务依赖的 `SetWindowsHookEx`）——可能是唤醒过程中回调超过 LowLevelHooksTimeout，也可能是钩子链中其他进程的钩子在挂起期间被破坏。而 `HotkeyService` 走的 `RegisterHotKey`/`WM_HOTKEY` 是完全不同的机制，不受影响，唤醒后热键仍可用但划词菜单失效，正是此故障的典型表现。修复：`App.xaml.cs` 订阅 `Microsoft.Win32.SystemEvents.PowerModeChanged`，在 `PowerModes.Resume` 时通过 `Dispatcher.BeginInvoke` 回到 UI 线程执行 `_hook.Stop()` + `_hook.Start()` 重新安装钩子（`Start()` 内部也会重新 `RegisterAll` 热键，相当于顺带恢复任何被静默丢弃的热键）。`OnExit` 必须 `-=` 取消订阅，否则 `SystemEvents` 的静态订阅会跨进程生命周期泄漏。
 
 ### 5.3 AppState（静态全局状态）
 
