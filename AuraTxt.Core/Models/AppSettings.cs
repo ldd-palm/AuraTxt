@@ -35,4 +35,8 @@ public class AppSettings
 
     /// External editor for config.json. Empty = auracfg.exe in app directory.
     public string ConfigEditor { get; set; } = "";
+
+    /// When true, Terminal actions launch a real, visible cmd.exe window instead of
+    /// capturing output into ResultWindow. Default false = today's redirected-buffer behavior.
+    public bool TerminalUseConsoleWindow { get; set; } = false;
 }

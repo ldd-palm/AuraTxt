@@ -34,6 +34,11 @@ public class GeneralSettingsPage : PageBase
                     HandleKey(n.N.ToString(), s, app);
                     break;
 
+                case MenuKey.Letter l:
+                    JumpTo(sel, items, l.C.ToString());
+                    HandleKey(l.C.ToString(), s, app);
+                    break;
+
                 case MenuKey.Escape:
                     return Task.FromResult(PageResult.Back());
                 case MenuKey.Quit:
@@ -53,6 +58,7 @@ public class GeneralSettingsPage : PageBase
         new MenuItem("7", "Speech Voice",    s.SpeechVoice),
         new MenuItem("8", "Prompt Editor",   string.IsNullOrEmpty(s.PromptEditor) ? "notepad.exe (default)" : s.PromptEditor),
         new MenuItem("9", "Config Editor",   string.IsNullOrEmpty(s.ConfigEditor) ? "auracfg (default)"    : s.ConfigEditor),
+        new MenuItem("T", "Terminal Output", s.TerminalUseConsoleWindow ? "Console window" : "Result window (default)"),
     ];
 
     private bool HandleKey(string key, AppSettings s, TuiApp app)
@@ -93,6 +99,10 @@ public class GeneralSettingsPage : PageBase
                 var ce = app.Renderer.Ask("Config editor (blank = auracfg)", s.ConfigEditor);
                 s.ConfigEditor = ce; app.MarkDirty();
                 app.Renderer.SetNotice($"Config editor → {(string.IsNullOrEmpty(ce) ? "auracfg" : ce)}");
+                break;
+            case "T":
+                s.TerminalUseConsoleWindow = !s.TerminalUseConsoleWindow; app.MarkDirty();
+                app.Renderer.SetNotice($"Terminal Output → {(s.TerminalUseConsoleWindow ? "Console window" : "Result window")}");
                 break;
         }
         return false;

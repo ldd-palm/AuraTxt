@@ -81,6 +81,25 @@ public class HotkeyService
     public static void ShowResultFor(ActionItem action, string selectedText, ConfigRoot cfg)
     {
         AppState.SelectionActioned = true;
+
+        // Terminal console-window mode: the console window IS the output surface, so
+        // skip ResultWindow/InteractiveWindow entirely and fire the command unawaited.
+        var isTerminalConsole = action.ModelId.Equals("default/Terminal", StringComparison.OrdinalIgnoreCase)
+                              && cfg.Settings.TerminalUseConsoleWindow;
+        if (isTerminalConsole)
+        {
+            var resolved = cfg.ResolveModel(action.ModelId);
+            if (resolved is { } r)
+            {
+                _ = Task.Run(async () =>
+                {
+                    try { await new AiClient().CompleteAsync("default", r.provider, r.model, action, selectedText, "", CancellationToken.None); }
+                    catch (Exception ex) { LogService.Error("Terminal console launch failed", ex); }
+                });
+            }
+            return;
+        }
+
         if (action.IsInteractive)
             new InteractiveWindow(action, selectedText, cfg).Show();
         else

@@ -195,6 +195,14 @@ The resolved command is always echoed as the first line of the output, so you ca
 
 Terminal actions currently support the one-shot result window only (not the two-pane Interactive window).
 
+### Output mode: result window vs. console window
+
+By default, Terminal actions capture the command's output and show it in the result window — good for quick, non-interactive commands like the examples above, and gives you Copy/Replace-in-source/Pin/Regenerate plus a guaranteed 30-second timeout with automatic cleanup (closing the window kills the command).
+
+For long-running or interactive commands — a build script, `ssh`, anything that streams output over time or needs typed input — switch to **General Settings → Terminal Output → Console window**. In this mode, clicking a Terminal action opens a real, visible `cmd.exe` window instead: no result window appears at all, there's no captured output (so Copy/Replace/Pin don't apply), and there's no timeout or auto-cleanup — the console window is fully independent and stays open until you close it yourself. Toggle it back to "Result window" to restore the default behavior.
+
+You can also set this from the command line: `auracfg settings --set --terminal-console true|false`.
+
 ---
 
 ## Themes

@@ -19,6 +19,7 @@ public class SettingsCommand(ConfigService config)
         Console.WriteLine($"voice:          {s.SpeechVoice}");
         Console.WriteLine($"prompt-editor:  {(string.IsNullOrEmpty(s.PromptEditor) ? "(notepad.exe)" : s.PromptEditor)}");
         Console.WriteLine($"config-editor:  {(string.IsNullOrEmpty(s.ConfigEditor) ? "(auracfg)" : s.ConfigEditor)}");
+        Console.WriteLine($"terminal-console: {(s.TerminalUseConsoleWindow ? "on" : "off")}");
         return 0;
     }
 
@@ -42,6 +43,8 @@ public class SettingsCommand(ConfigService config)
             s.PromptEditor = pe.Trim();
         if (opts.TryGetValue("config-editor", out var ce))
             s.ConfigEditor = ce.Trim();
+        if (opts.TryGetValue("terminal-console", out var tc) && bool.TryParse(tc, out var tcb))
+            s.TerminalUseConsoleWindow = tcb;
         config.Save(cfg);
         Console.WriteLine("✓ Settings saved");
         return 0;
@@ -50,7 +53,7 @@ public class SettingsCommand(ConfigService config)
     private static int PrintHelp()
     {
         Console.WriteLine("auracfg settings --show");
-        Console.WriteLine("auracfg settings --set [--font-size <n>] [--opacity <0-1>] [--delay-ms <n>] [--target-lang <code>] [--theme <id>] [--voice <name>] [--prompt-editor <exe>] [--config-editor <exe>]");
+        Console.WriteLine("auracfg settings --set [--font-size <n>] [--opacity <0-1>] [--delay-ms <n>] [--target-lang <code>] [--theme <id>] [--voice <name>] [--prompt-editor <exe>] [--config-editor <exe>] [--terminal-console true|false]");
         return 1;
     }
 }

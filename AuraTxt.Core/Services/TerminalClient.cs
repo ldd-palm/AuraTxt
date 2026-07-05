@@ -25,6 +25,9 @@ public static class TerminalClient
         var resolved = BuildResolvedCommand(commandTemplate, selectedText, userInput);
         LogService.Raw($"──── TERMINAL COMMAND\n{resolved}");
 
+        if (ConfigService.DefaultSettings?.TerminalUseConsoleWindow ?? false)
+            return RunInConsoleWindow(resolved);
+
         var psi = new ProcessStartInfo
         {
             FileName               = "cmd.exe",
@@ -63,5 +66,25 @@ public static class TerminalClient
         var combined = stdout + stderr;
         var footer = process.ExitCode != 0 ? $"\n[exit code: {process.ExitCode}]" : "";
         return $"> {resolved}\n\n{combined}{footer}";
+    }
+
+    /// Launches a real, visible, interactive cmd.exe window and returns immediately —
+    /// no redirection, no timeout, no kill-on-cancel. The window's lifecycle is
+    /// intentionally independent of the caller (long-running/interactive commands need
+    /// to outlive whatever triggered them), so there is no captured output to return
+    /// and no orphan-process cleanup here.
+    private static string RunInConsoleWindow(string resolved)
+    {
+        var psi = new ProcessStartInfo
+        {
+            FileName         = "cmd.exe",
+            UseShellExecute  = false,
+            WorkingDirectory = AppContext.BaseDirectory,
+        };
+        psi.ArgumentList.Add("/c");
+        psi.ArgumentList.Add("chcp 65001>nul & " + resolved);
+
+        Process.Start(psi);
+        return $"> {resolved}\n\n[Launched in a separate console window.]";
     }
 }

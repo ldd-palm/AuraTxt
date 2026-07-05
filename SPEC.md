@@ -118,6 +118,7 @@ class ActionItem {
 | Theme | "light" | 主题 id（themes/{id}.json） |
 | SpeechVoice | "" | SAPI5 语音名；空=系统默认 |
 | PromptEditor | "" | 打开 .md 的编辑器；空=notepad.exe |
+| TerminalUseConsoleWindow | false | Terminal 输出模式：false=重定向缓冲到 ResultWindow（默认），true=启动可见交互式 cmd.exe 窗口，ResultWindow 被跳过（见 §5.6、§9.3） |
 | ConfigEditor | "" | 托盘 Settings 用的编辑器；空=启动 auracfg.exe |
 
 ### 3.6 首次运行默认配置
@@ -227,7 +228,7 @@ ActionProcessed LastProcessedText=T   SelectionActioned=true
 - `RegisterAll(cfg)`：遍历 Hotkey 非空的 action，解析为 `Key`+`ModifierKeys` 后 `HotkeyManager.Current.AddOrReplace(action.Id, ...)`；被其他程序占用时静默跳过。先 `UnregisterAll()` 再注册（幂等）。
 - 解析规则 [关键]：`"Ctrl+Alt+T"` 按 `+` 切分，至少 2 段；修饰符限 ctrl/alt/shift/win（大小写不敏感）；**未知修饰符必须整体拒绝**（否则 `"Foo+T"` 会注册裸 T 为系统级热键）；尾段用 `Enum.TryParse<Key>`。
 - 热键回调 `FireActionAsync`：**[关键]** 第一行立即 `AppState.SourceWindowHandle = ClipboardService.CaptureSourceWindow()`（在任何 await 之前捕获 HWND；热键路径不经过 GlobalHookService，若不在此捕获则 Replace 时 hwnd=Zero，`ReplaceInSourceWindowAsync` early return，无任何反应）→ 取文本（delay 50ms）→ 空则返回 → 置 `SelectionActioned=true` → 系统 action 内联处理（speech/copy/google），AI action 经 Dispatcher 调 `ShowResultFor`。
-- `ShowResultFor(action, text, cfg)`（static）：`IsInteractive` ? InteractiveWindow : ResultWindow，`.Show()`。
+- `ShowResultFor(action, text, cfg)`（static）：`IsInteractive` ? InteractiveWindow : ResultWindow，`.Show()`。**[关键]** 鼠标路径（ActionMenuWindow 按钮点击）与热键路径（`FireActionAsync`）都调用这同一个静态方法——这是唯一的分支点。当 `action.ModelId=="default/Terminal"` 且 `Settings.TerminalUseConsoleWindow=true` 时短路：**不**打开 ResultWindow/InteractiveWindow 中的任何一个，而是 `cfg.ResolveModel` 解析出 `(provider, model)` 后以 `Task.Run` 方式不等待地调用 `AiClient.CompleteAsync("default", provider, model, action, selectedText, "", CancellationToken.None)`（异常经 try/catch 走 `LogService.Error`，避免 unobserved task exception），随后直接返回。
 
 ### 5.7 托盘（TrayIconManager）
 
@@ -442,6 +443,15 @@ LogService：静态类，`Enabled`+`LogPath` 控制；`Info/Error/Raw` 三个方
 - **[关键] 超时 + 取消必须真正杀死进程**：30s 硬编码超时与调用方 `CancellationToken`（ResultWindow 关闭/Regenerate 触发）通过 `CreateLinkedTokenSource` 合并；触发时必须 `process.Kill(entireProcessTree: true)`，否则关闭结果窗口或超时只会放弃 await，子进程（及其可能派生的孙进程）会成为孤儿继续运行。
 - **透明而非拦截**：不设确认对话框——像其他 action 一样立即执行；但返回字符串以 `"> {resolved}\n\n"` 开头回显实际执行的命令，`--log` 开启时额外 `LogService.Raw` 记录一份，用于事后审计。退出码非 0 时追加尾行 `"[exit code: N]"`（非 0 退出如 ping 失败是正常输出，不视为异常抛出）。
 - **[关键] 安全边界**：`{SelectedText}` 是外部不可信数据（见 §8.2 DATA BOUNDARY 的同一前提），被直接拼进一条真实执行的 shell 命令——这是有意接受的高级用户/本地自动化权衡（用户自己配置命令模板、自己划选文本、在自己机器上执行），不做转义/沙箱化。缓解手段仅限于回显+日志（可审计）与超时+强制杀进程（不留孤儿），不做输入消毒。
+
+### 9.3.1 Console-window 输出模式（`Settings.TerminalUseConsoleWindow`）[关键]
+
+`RunAsync` 开头读取 `ConfigService.DefaultSettings?.TerminalUseConsoleWindow`；为 `true` 时不走上述重定向路径，改走 `RunInConsoleWindow(resolved)`：
+
+- 构造另一个 `ProcessStartInfo{ FileName="cmd.exe", UseShellExecute=false, WorkingDirectory=AppContext.BaseDirectory }`，**不设置** `RedirectStandardOutput/Error`、`StandardOutputEncoding/ErrorEncoding`，`CreateNoWindow` 保持默认 `false`——这是让无控制台的 WPF 子进程获得一个全新可见控制台窗口的标准 .NET 技巧。同样保留 `chcp 65001>nul & ` 前缀以保证可见窗口内 CJK 正确显示。
+- 只调用 `Process.Start(psi)`，不 `WaitForExitAsync`、不 `ReadToEndAsync`、不设置 30s 超时或 `CancellationTokenSource`/kill-on-cancel——这些机制均不适用于一个设计上应长期存活、由用户自行操作的窗口。方法立即返回确认字符串 `"> {resolved}\n\n[Launched in a separate console window.]"`。
+- **[关键] 这是有意的行为回退，不是缺陷**：该模式下没有捕获输出，因此 ResultWindow 的 Copy/Replace/Pin/Regenerate 均不适用；进程生命周期与触发它的窗口彻底解耦——关闭 AuraTxt 的任何窗口都不会杀死这个控制台或其运行的命令，没有"防孤儿进程"的保障。这与默认重定向模式的安全保障是互斥的两种取舍，不要试图两者兼得。
+- 配合 §5.6 的 `ShowResultFor` 短路：此模式下 ResultWindow 根本不会创建，上述确认字符串实际上不会被用户看到（仅作为一个安全的返回值兜底，供未来可能绕过 `ShowResultFor` 短路直接调用 `RunAsync` 的调用方使用）。
 
 ## 10. 其他服务
 
