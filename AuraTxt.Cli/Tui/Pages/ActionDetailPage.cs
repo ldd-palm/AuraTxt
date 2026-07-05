@@ -50,7 +50,8 @@ public class ActionDetailPage(string actionId) : PageBase
         var hk        = a.Id == "copy" ? "Ctrl+C"
                       : string.IsNullOrEmpty(a.Hotkey) ? "(none)"
                       : a.Hotkey;
-        var isBuiltin = a.ModelId.StartsWith("default/");
+        var isBuiltin  = a.ModelId.StartsWith("default/");
+        var isTerminal = a.ModelId.Equals("default/Terminal", StringComparison.OrdinalIgnoreCase);
         var list = new List<MenuItem>
         {
             new MenuItem("1", "Name",   a.Name),
@@ -60,7 +61,7 @@ public class ActionDetailPage(string actionId) : PageBase
         {
             list.Add(new MenuItem("3", "Model",       app.ModelLabel(a.ModelId)));
             list.Add(new MenuItem("4", "Interactive",  isBuiltin ? "(n/a — built-in)" : a.IsInteractive.ToString()));
-            list.Add(new MenuItem("5", "Prompt",       isBuiltin ? "(n/a — built-in)" : TuiRenderer.PromptLabel(a.Prompt)));
+            list.Add(new MenuItem("5", "Prompt",       isBuiltin && !isTerminal ? "(n/a — built-in)" : TuiRenderer.PromptLabel(a.Prompt)));
             list.Add(new MenuItem("6", "Hotkey",       hk));
             list.Add(new MenuItem("7", "Status",       TuiRenderer.StatusBadge(a.Enabled), TuiRenderer.StatusStyle(a.Enabled)));
             list.Add(new MenuItem("8", "Position",        a.Order.ToString()));
@@ -78,7 +79,8 @@ public class ActionDetailPage(string actionId) : PageBase
 
     private bool HandleKey(string key, ActionItem a, TuiApp app)
     {
-        var isBuiltin = a.ModelId.StartsWith("default/");
+        var isBuiltin  = a.ModelId.StartsWith("default/");
+        var isTerminal = a.ModelId.Equals("default/Terminal", StringComparison.OrdinalIgnoreCase);
         switch (key)
         {
             case "1":
@@ -101,7 +103,9 @@ public class ActionDetailPage(string actionId) : PageBase
                     if (mid != null)
                     {
                         a.ModelId = mid; app.MarkDirty();
-                        if (mid.StartsWith("default/")) { a.IsInteractive = false; a.Prompt = ""; }
+                        var midIsTerminal = mid.Equals("default/Terminal", StringComparison.OrdinalIgnoreCase);
+                        if (mid.StartsWith("default/") && !midIsTerminal) { a.IsInteractive = false; a.Prompt = ""; }
+                        else if (mid.StartsWith("default/")) { a.IsInteractive = false; }
                         app.Renderer.SetNotice($"Model → {app.ModelLabel(mid)}");
                     }
                 }
@@ -126,7 +130,13 @@ public class ActionDetailPage(string actionId) : PageBase
             case "5":
                 if (!a.IsSystem)
                 {
-                    if (isBuiltin) { app.Renderer.SetNotice("Built-in service: no prompt needed.", NoticeKind.Info); break; }
+                    if (isBuiltin && !isTerminal) { app.Renderer.SetNotice("Built-in service: no prompt needed.", NoticeKind.Info); break; }
+                    if (isTerminal)
+                    {
+                        var cmd = app.Renderer.Ask("Command template", a.Prompt);
+                        if (!string.IsNullOrWhiteSpace(cmd)) { a.Prompt = cmd; app.MarkDirty(); app.Renderer.SetNotice("Command updated."); }
+                        break;
+                    }
                     var pf = SelectPromptFileFlow.Run(app);
                     if (pf != null) { a.Prompt = pf; app.MarkDirty(); app.Renderer.SetNotice("Prompt updated."); }
                 }
@@ -173,7 +183,7 @@ public class ActionDetailPage(string actionId) : PageBase
 
     private static void EditOrder(ActionItem a, TuiApp app)
     {
-        var v = app.Renderer.Ask("Order (0-99)", a.Order.ToString());
-        if (int.TryParse(v, out var ov)) { a.Order = ov; app.MarkDirty(); app.Renderer.SetNotice($"Order → {ov}"); }
+        var v = app.Renderer.Ask("Position (0-99)", a.Order.ToString());
+        if (int.TryParse(v, out var ov)) { a.Order = ov; app.MarkDirty(); app.Renderer.SetNotice($"Position → {ov}"); }
     }
 }

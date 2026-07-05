@@ -1,6 +1,6 @@
 # AuraTxt 需求说明书（Requirements Specification）
 
-> 版本：2026-06-13。本文档是 AuraTxt 的完整功能与实现规格，目标是让一个开发者（或 AI）在不参考原始代码的情况下复现整个项目。
+> 版本：2026-07-04。本文档是 AuraTxt 的完整功能与实现规格，目标是让一个开发者（或 AI）在不参考原始代码的情况下复现整个项目。
 > 行为规则中标注 **[关键]** 的条目是踩坑后确定的实现约束，偏离会复现历史 bug。
 
 ---
@@ -96,7 +96,7 @@ class ActionItem {
     string Name          = "";       // 显示名
     string Icon          = "";       // Lucide 图标名（lucide.dev）
     string ModelId       = "";       // "providerId/TargetModel"；系统 action 为空
-    string Prompt        = "";       // .md 文件路径（首选）或内联文本
+    string Prompt        = "";       // .md 文件路径（首选）或内联文本；ModelId 为 default/Terminal 时此字段是 cmd.exe 命令模板（见 §9.3），复用同一字段与替换机制
     bool   IsInteractive = false;    // true→InteractiveWindow，false→ResultWindow
     bool   IsSystem      = false;    // 内置系统 action（copy/speech），不可删除
     string Hotkey        = "";       // 全局热键，如 "Ctrl+E"；空=无
@@ -123,7 +123,7 @@ class ActionItem {
 ### 3.6 首次运行默认配置
 
 `ConfigService.Load()` 在文件不存在时生成并保存默认配置：
-- `Models["default"]`：DisplayName="Built-in"，含 2 个模型：`Google_Translate`（Alias=GTrans）、`Youdao_Dict`（Alias=Youdao），均 `Enabled=true`。
+- `Models["default"]`：DisplayName="Built-in"，含 3 个模型：`Google_Translate`（Alias=GTrans）、`Youdao_Dict`（Alias=Youdao）、`Terminal`（Alias=Terminal，见 §9.3），均 `Enabled=true`。
 - 3 个系统 action：`copy`（Icon=clipboard-copy，Hotkey 恒为空且锁定）、`speech`（Icon=speech，Hotkey=Ctrl+E）、`google`（Icon=search，Hotkey 默认空）。均 `IsSystem=true`、无 ModelId。
 
 ## 4. ConfigService（配置读写）
@@ -134,6 +134,7 @@ class ActionItem {
   2. **mtime 缓存**：静态 `Dictionary<path,(mtime,jsonText)>` + lock；`File.GetLastWriteTimeUtc` 未变则直接用缓存文本，**反序列化仍每次执行**（每个调用方拿到独立可变对象）。
   3. IOException（另一进程写入中）→ 重试最多 3 次，间隔 100ms。
   4. **系统 action 迁移守卫**：反序列化后调用 `EnsureSystemAction(cfg, id, name, icon, hotkey)` 补全缺失的内置 system action（copy/speech/google）。仅注入内存，不写盘——保证老版本 config.json 升级后也能看到新系统 action，同时不污染文件（用户可通过 auracfg Save 持久化）。
+  5. **内置模型迁移守卫**：同理调用 `EnsureBuiltinModel(cfg, targetModel, alias)` 补全 `Models["default"]` 中缺失的内置模型（如 `Terminal`）；`Models["default"]` 本身不存在时一并创建。同样仅注入内存，不写盘。
 - `Save(cfg)`：写 `config.json.tmp` 再 `File.Move(overwrite:true)`（原子替换）。
 - `SaveWithBackup(cfg)`：先复制现有文件到 `config.json.bak` 再 Save。
 - `Restore()`：从 .bak 复原；无备份抛 FileNotFoundException。
@@ -262,7 +263,7 @@ AdapterRegistry.Get(adapterType) → IAdapter
 IAdapter.CompleteAsync / StreamAsync(AdapterRequest, ct)
 ```
 
-内置模型（`providerId == "default"`）在 `AiClient.CompleteAsync/StreamAsync` 中最先拦截，直接路由到 `GoogleTranslateClient` 或 `YoudaoClient`，不走 adapter 路径。
+内置模型（`providerId == "default"`）在 `AiClient.CompleteAsync/StreamAsync` 中最先拦截，交给 `BuiltinDispatch(model, action, selectedText, userInput, ct)` 按 `model.TargetModel` 路由到 `GoogleTranslateClient`、`YoudaoClient` 或 `TerminalClient`（见 §9.3），不走 adapter/profile 路径。`action`/`userInput` 仅 `Terminal` 需要（命令模板 = `action.Prompt`），GTrans/Youdao 不使用。
 
 ### 6.2 ProfileService
 
@@ -431,6 +432,17 @@ LogService：静态类，`Enabled`+`LogPath` 控制；`Info/Error/Raw` 三个方
 - 只有 `DictionaryAsync(word)`：`GET https://dict.youdao.com/w/{urlencode(word)}/`，需 UA/Referer/Cookie(`OUTFOX_SEARCH_USER_ID`) 头。**[关键]** 旧的 fanyi.youdao.com 签名接口已被封（errorCode 50），不要实现/恢复。
 - HTML→文本提取：取 `results-content">` 到 `<div id="ads"` 之间；剔除 `webTrans` 块（到 `wordArticle` 兄弟节点）；去 `<style>`；`\s+` 归一化；`baav` div、块级闭标签（div/p/li/h1-6/tr/ul/ol/table）、`<br>` 转换行；剥所有标签；HtmlDecode；压缩空白与连续空行；去噪声行（"相关文章"、"更多权威例句"）。
 
+### 9.3 TerminalClient（第三个内置模型）[关键]
+
+不调用任何 AI，而是把 `ActionItem.Prompt` 当作 **cmd.exe 命令模板**运行，输出显示在与 AI action 相同的 ResultWindow 中。复用 `Prompt` 字段本身即命令模板，未新增 `ActionItem` 字段。
+
+- **`BuildResolvedCommand(commandTemplate, selectedText, userInput)`**：纯函数，`PromptService.Resolve(commandTemplate).Replace("{SelectedText}", selectedText).Replace("{UserInput}", userInput)`——与 `AiClient.BuildRequest` 中 prompt 替换完全相同的两行惯用法，因此命令模板同样可以是 `.md` 文件路径（首选内联文本）。
+- **`RunAsync(...)` 执行**：`ProcessStartInfo{ FileName="cmd.exe", ArgumentList=["/c", "chcp 65001>nul & "+resolved] }`（`UseShellExecute=false`，`RedirectStandardOutput/Error=true`，`CreateNoWindow=true`，`WorkingDirectory=AppContext.BaseDirectory`，`StandardOutputEncoding`/`StandardErrorEncoding=UTF8`）。把整条已解析命令作为**单个** `ArgumentList` 元素传入，由 .NET 处理外层参数转义，cmd.exe 自身的解析器仍能识别内部的 `>>`/`|`/`&` 等；`chcp 65001` 前缀保证 CJK 文本正确往返。
+- **[关键] 先起读取任务再等退出**：`ReadToEndAsync()` 必须在 `WaitForExitAsync` **之前**发起（不能先等退出再读），否则子进程输出缓冲区写满会死锁——经典的 stdout/stderr 重定向死锁陷阱。
+- **[关键] 超时 + 取消必须真正杀死进程**：30s 硬编码超时与调用方 `CancellationToken`（ResultWindow 关闭/Regenerate 触发）通过 `CreateLinkedTokenSource` 合并；触发时必须 `process.Kill(entireProcessTree: true)`，否则关闭结果窗口或超时只会放弃 await，子进程（及其可能派生的孙进程）会成为孤儿继续运行。
+- **透明而非拦截**：不设确认对话框——像其他 action 一样立即执行；但返回字符串以 `"> {resolved}\n\n"` 开头回显实际执行的命令，`--log` 开启时额外 `LogService.Raw` 记录一份，用于事后审计。退出码非 0 时追加尾行 `"[exit code: N]"`（非 0 退出如 ping 失败是正常输出，不视为异常抛出）。
+- **[关键] 安全边界**：`{SelectedText}` 是外部不可信数据（见 §8.2 DATA BOUNDARY 的同一前提），被直接拼进一条真实执行的 shell 命令——这是有意接受的高级用户/本地自动化权衡（用户自己配置命令模板、自己划选文本、在自己机器上执行），不做转义/沙箱化。缓解手段仅限于回显+日志（可审计）与超时+强制杀进程（不留孤儿），不做输入消毒。
+
 ## 10. 其他服务
 
 - **SpeechService**（Core，static）：`Speak(text, voiceName)` → `Task.Run` 内 new `SpeechSynthesizer`（SAPI5），voiceName 非空则 `SelectVoice`（失败静默回退默认），同步 `Speak`；全部异常吞掉。`GetInstalledVoices()` 列出启用的语音名。
@@ -498,7 +510,7 @@ CLI 项目须与 WPF 输出到相同目录（托盘 Settings 按 `{exe}/auracfg.
 ## 13. 测试要求（xunit）
 
 至少覆盖：
-- ConfigService：默认生成（含 2 内置模型/2 系统 action）、Save/Load 往返、原子保存无 .tmp 残留、备份/恢复。
+- ConfigService：默认生成（含 3 内置模型/3 系统 action）、Save/Load 往返、原子保存无 .tmp 残留、备份/恢复、`EnsureBuiltinModel` 迁移守卫（老 config.json 缺 Terminal 时 Load() 后内存中补全，磁盘文件不变）。
 - HotkeyValidator：格式/保留键/冲突。
 - GoogleTranslateClient.GenerateTk：已知输入输出锁定算法。
 - ProfileService：EnsureScaffold 播种嵌入 profile；Resolve 自动 glob 匹配（DeepSeek/Llama/Qwen3）；优先级（qwen3-next-instruct > qwen3-thinking）；Gemini 模型路由到 gemini_native profile；显式 ProfileId；不匹配时 fallback；adapter 不兼容时异常；openai profile 不返回给 gemini adapter。
@@ -506,8 +518,9 @@ CLI 项目须与 WPF 输出到相同目录（托盘 Settings 按 `{exe}/auracfg.
 - TagStripFilter（internal）：无标签直通、单 chunk 剥除、标签跨 chunk 切断、多块、未闭合丢弃。
 - GlobMatcher：精确匹配、* 通配、区分大小写选项。
 - JsonPathSetter：顶层注入、点路径深层注入、多次调用不覆盖。
-- ConfigRoot：AllEnabledModel* 过滤 disabled、内置恒在、ResolveModel 边界。
+- ConfigRoot：AllEnabledModel* 过滤 disabled、内置恒在（含第三个内置模型，验证不再依赖硬编码的 Google_Translate/Youdao_Dict 查找）、ResolveModel 边界。
 - PromptService.IsFileRef：单行路径 true、多行含 `/` 的内联 false（回归）、Resolve 文件/内联/空。
+- TerminalClient.BuildResolvedCommand（纯函数，不启动进程）：`{SelectedText}`/`{UserInput}` 替换、多次出现、无占位符时原样返回、命令模板为 .md 文件路径时经 PromptService 解析。进程启动/超时/取消路径不纳入常规 xunit 套件（避免 CI 抖动/耗时），改由手动验证覆盖。
 
 ## 14. 验收清单（端到端）
 
@@ -520,4 +533,5 @@ CLI 项目须与 WPF 输出到相同目录（托盘 Settings 按 `{exe}/auracfg.
 7. 热键在任意应用触发对应 action；Pause 后划词与热键全部失效，Resume 恢复。
 8. auracfg：增删 provider/model/action、测试连接（NIM/Gemini/generic 各自正确报错与成功）、doctor、批量命令；禁用的模型不出现在 WPF 模型选择中，auracfg 列表中灰显。
 9. 改 themes/*.json 或切主题 + Reload Settings → 颜色热更新。
-10. `--log` 运行后 auratxt.log 含请求体与流式响应全文。
+10. `--log` 运行后 auratxt.log 含请求体与流式响应全文，Terminal action 额外含 `──── TERMINAL COMMAND` 与已解析命令原文。
+11. Terminal action（如 `ping {SelectedText}`）：结果窗显示回显的命令行 + 真实输出；关闭结果窗口中途运行的命令后，任务管理器中确认无残留 cmd.exe/子进程；输出含 CJK 文本时正确显示（非乱码）；命令非 0 退出时显示 `[exit code: N]` 而不崩溃。

@@ -19,7 +19,7 @@ public class AiClient
         CancellationToken ct = default)
     {
         if (providerId == "default")
-            return await BuiltinDispatch(model, selectedText, ct);
+            return await BuiltinDispatch(model, action, selectedText, userInput, ct);
 
         var (req, stripPatterns) = BuildRequest(provider, model, action, selectedText, userInput);
         var result = await _getAdapter(provider.AdapterType).CompleteAsync(req, ct);
@@ -33,7 +33,7 @@ public class AiClient
     {
         if (providerId == "default")
         {
-            yield return await BuiltinDispatch(model, selectedText, ct);
+            yield return await BuiltinDispatch(model, action, selectedText, userInput, ct);
             yield break;
         }
 
@@ -114,13 +114,14 @@ public class AiClient
     }
 
     private static async Task<string> BuiltinDispatch(
-        ModelEntry model, string selectedText, CancellationToken ct)
+        ModelEntry model, ActionItem action, string selectedText, string userInput, CancellationToken ct)
     {
         var lang = ConfigService.DefaultSettings?.TargetLanguage ?? "zh-CN";
         return model.TargetModel switch
         {
             "Google_Translate" => await new GoogleTranslateClient().TranslateAsync(selectedText, "auto", lang, ct),
             "Youdao_Dict"      => await new YoudaoClient().DictionaryAsync(selectedText, ct),
+            "Terminal"         => await TerminalClient.RunAsync(action.Prompt, selectedText, userInput, ct),
             _                  => $"[Error] Unknown built-in model: {model.TargetModel}"
         };
     }

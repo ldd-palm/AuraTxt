@@ -81,4 +81,30 @@ public class ModelTests
         Assert.Equal("default/Google_Translate", refs[1].Ref);
         Assert.Equal("default/Youdao_Dict",      refs[2].Ref);
     }
+
+    [Fact]
+    public void ConfigRoot_AllModelRefs_IncludesAnyBuiltinModelGenerically()
+    {
+        // Regression: AllModelRefs/AllEnabledModelRefs used to hardcode lookups for exactly
+        // Google_Translate/Youdao_Dict, so a third built-in (e.g. Terminal) wouldn't appear.
+        var cfg = new ConfigRoot();
+        cfg.Models["default"] = new ProviderConfig
+        {
+            DisplayName = "Built-in",
+            Models = new()
+            {
+                new ModelEntry { TargetModel = "Google_Translate", Alias = "GTrans",   Enabled = true },
+                new ModelEntry { TargetModel = "Youdao_Dict",      Alias = "Youdao",   Enabled = true },
+                new ModelEntry { TargetModel = "Terminal",         Alias = "Terminal", Enabled = true }
+            }
+        };
+
+        var refs        = cfg.AllModelRefs().ToList();
+        var enabledRefs = cfg.AllEnabledModelRefs().ToList();
+
+        Assert.Contains(refs,        r => r.Ref == "default/Terminal");
+        Assert.Contains(enabledRefs, r => r.Ref == "default/Terminal");
+        Assert.Equal(3, refs.Count);
+        Assert.Equal(3, enabledRefs.Count);
+    }
 }

@@ -178,6 +178,25 @@ Your new action is now live in the action bar.
 
 ---
 
+## Terminal Actions
+
+Alongside GTrans and Youdao, AuraTxt ships a third built-in model: **Terminal**. Instead of calling an AI provider, a Terminal action runs a `cmd.exe` command template against the highlighted text and shows its output in the same result window used for AI responses — no API key needed.
+
+Set an action's **Model** to `Built-in / Terminal` and its **Prompt** to a command template using the same `{SelectedText}` placeholder as any other action:
+
+```
+ping {SelectedText}
+cat "{SelectedText}" >> file.txt
+```
+
+The resolved command is always echoed as the first line of the output, so you can see exactly what ran before reading its result.
+
+> **Security warning:** highlighted text is not trusted input — it can come from any webpage, document, or message you select — and it is substituted directly into a live shell command. A Terminal action will run whatever ends up in that command line, including any shell metacharacters (`&`, `|`, `>`, `"`, etc.) that happen to be in the text you highlighted. Only wire up Terminal actions with command templates you personally trust, and be mindful of what you highlight before clicking one.
+
+Terminal actions currently support the one-shot result window only (not the two-pane Interactive window).
+
+---
+
 ## Themes
 
 Switch themes in **auracfg → General Settings → Theme**, then right-click the tray → **Reload Settings**.
@@ -221,8 +240,8 @@ Profiles abstract this away. In auracfg you simply choose **Thinking: On** or **
 When you add a model, AuraTxt looks through all profiles and picks the one whose name patterns best match your model name. No manual assignment needed in most cases:
 
 ```
-deepseek-ai/DeepSeek-V3  →  matches "*deepseek-v*"  →  deepseek-v4.json  ✓
-gemini-2.5-flash-preview  →  matches "*flash*"       →  gemini-flash.json ✓
+deepseek-ai/deepseek-v4-flash  →  matches "*deepseek-v4*"    →  deepseek-v4.json  ✓
+gemini-2.5-flash-preview        →  matches "gemini-2.5-flash*" →  gemini-flash.json ✓
 ```
 
 ### Generate a profile for a new model
@@ -257,7 +276,7 @@ Run AI completely offline — no API key, no internet connection required after 
 
 **Setup (one time):**
 1. Install [Ollama](https://ollama.com)
-2. Pull a model: `ollama run translategemma`
+2. Pull a model: `ollama pull qwen2.5:7b`
 3. In auracfg → Model Platform → Add Provider:
    - Base URL: `http://localhost:11434/v1`
    - API Key: `ollama` *(any non-empty string)*
@@ -385,7 +404,7 @@ Useful for debugging wrong output, API errors, or verifying that thinking mode p
 - **Drag the window edge** to resize — the width is remembered for the session and resets to default on next launch.
 - **Edit prompts live:** change any `.md` file in `prompts\`, save it, then press `R` to regenerate — no restart needed.
 - **Disable an action** in auracfg without deleting it — it disappears from the bar but keeps its hotkey.
-- **Order actions** with the Order field in auracfg (lower number = leftmost in the bar).
+- **Order actions** with the Position field in auracfg (lower number = leftmost in the bar).
 - **Switch models mid-session:** use the model picker inside any result window — the choice is saved to `config.json` for next time.
 - **Prompt injection is blocked** by the built-in system prompt: even if selected text contains instructions like "ignore your task", AuraTxt treats it as data, not commands.
 

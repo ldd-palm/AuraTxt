@@ -58,6 +58,7 @@ public class ConfigService
                 EnsureSystemAction(cfg, "copy",   "Copy",   "clipboard-copy", "");
                 EnsureSystemAction(cfg, "speech", "Speech", "speech",         "Ctrl+E");
                 EnsureSystemAction(cfg, "google", "Google", "search",         "");
+                EnsureBuiltinModel(cfg, "Terminal", "Terminal");
                 DefaultSettings = cfg.Settings;
                 return cfg;
             }
@@ -104,6 +105,20 @@ public class ConfigService
         });
     }
 
+    /// Migration guard: injects a missing built-in model into Models["default"] in-memory
+    /// (not persisted), so existing config.json files gain new built-ins after an upgrade
+    /// without being rewritten. Mirrors EnsureSystemAction's non-destructive contract.
+    private static void EnsureBuiltinModel(ConfigRoot cfg, string targetModel, string alias)
+    {
+        if (!cfg.Models.TryGetValue("default", out var def))
+        {
+            def = new ProviderConfig { DisplayName = "Built-in", AdapterType = "openai_compatible" };
+            cfg.Models["default"] = def;
+        }
+        if (def.Models.Any(m => m.TargetModel == targetModel)) return;
+        def.Models.Add(new ModelEntry { TargetModel = targetModel, Alias = alias, Enabled = true });
+    }
+
     private static void NormaliseThinkingModes(ConfigRoot cfg)
     {
         foreach (var action in cfg.Actions)
@@ -127,8 +142,9 @@ public class ConfigService
             AdapterType = "openai_compatible",
             Models      = new()
             {
-                new ModelEntry { TargetModel = "Google_Translate", Alias = "GTrans", Enabled = true },
-                new ModelEntry { TargetModel = "Youdao_Dict",      Alias = "Youdao",  Enabled = true }
+                new ModelEntry { TargetModel = "Google_Translate", Alias = "GTrans",   Enabled = true },
+                new ModelEntry { TargetModel = "Youdao_Dict",      Alias = "Youdao",   Enabled = true },
+                new ModelEntry { TargetModel = "Terminal",         Alias = "Terminal", Enabled = true }
             }
         };
 

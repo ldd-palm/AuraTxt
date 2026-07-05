@@ -33,7 +33,7 @@ public class ConfigRoot
     }
 
     /// Returns all model refs for WPF ComboBox.
-    /// Order: user providers alphabetically, then default/Google_Translate, then default/Youdao_Dict.
+    /// Order: user providers alphabetically, then all built-in models.
     public IEnumerable<(string Ref, string Label)> AllModelRefs()
     {
         foreach (var (pid, p) in Models.Where(kv => kv.Key != "default").OrderBy(kv => kv.Key))
@@ -41,10 +41,8 @@ public class ConfigRoot
                 yield return ($"{pid}/{m.TargetModel}", $"{p.DisplayName} / {m.Alias}");
 
         if (!Models.TryGetValue("default", out var def)) yield break;
-        var gtrans = def.Models.FirstOrDefault(m => m.TargetModel == "Google_Translate");
-        var youdao = def.Models.FirstOrDefault(m => m.TargetModel == "Youdao_Dict");
-        if (gtrans is not null) yield return ("default/Google_Translate", $"Built-in / {gtrans.Alias}");
-        if (youdao is not null) yield return ("default/Youdao_Dict",      $"Built-in / {youdao.Alias}");
+        foreach (var m in def.Models)
+            yield return ($"default/{m.TargetModel}", $"Built-in / {m.Alias}");
     }
 
     /// Like <see cref="AllModelAliases"/> but only enabled user models + all built-in models.
@@ -67,9 +65,7 @@ public class ConfigRoot
                 yield return ($"{pid}/{m.TargetModel}", $"{p.DisplayName} / {m.Alias}");
 
         if (!Models.TryGetValue("default", out var def)) yield break;
-        var gtrans = def.Models.FirstOrDefault(m => m.TargetModel == "Google_Translate");
-        var youdao = def.Models.FirstOrDefault(m => m.TargetModel == "Youdao_Dict");
-        if (gtrans is not null) yield return ("default/Google_Translate", $"Built-in / {gtrans.Alias}");
-        if (youdao is not null) yield return ("default/Youdao_Dict",      $"Built-in / {youdao.Alias}");
+        foreach (var m in def.Models)
+            yield return ($"default/{m.TargetModel}", $"Built-in / {m.Alias}");
     }
 }

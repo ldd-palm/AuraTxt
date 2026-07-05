@@ -18,9 +18,25 @@ public class ConfigServiceTests : IDisposable
         var cfg = _svc.Load();
         Assert.True(cfg.Models.ContainsKey("default"));
         var def = cfg.Models["default"];
-        Assert.Equal(2, def.Models.Count);
+        Assert.Equal(3, def.Models.Count);
         Assert.Equal("Google_Translate", def.Models[0].TargetModel);
         Assert.Equal("Youdao_Dict",      def.Models[1].TargetModel);
+        Assert.Equal("Terminal",         def.Models[2].TargetModel);
+    }
+
+    [Fact]
+    public void Load_InjectsTerminalBuiltin_ForExistingConfigMissingIt()
+    {
+        // Simulate an old config.json saved before the Terminal built-in existed.
+        var cfg = _svc.Load();
+        cfg.Models["default"].Models.RemoveAll(m => m.TargetModel == "Terminal");
+        _svc.Save(cfg);
+        var onDiskBefore = File.ReadAllText(_tmpPath);
+
+        var reloaded = _svc.Load();
+
+        Assert.Contains(reloaded.Models["default"].Models, m => m.TargetModel == "Terminal");
+        Assert.Equal(onDiskBefore, File.ReadAllText(_tmpPath)); // in-memory only, not persisted
     }
 
     [Fact]

@@ -26,6 +26,7 @@ public static class AddActionFlow
         if (modelId is null) return;
 
         var isBuiltin     = modelId.StartsWith("default/");
+        var isTerminal    = modelId.Equals("default/Terminal", StringComparison.OrdinalIgnoreCase);
         var isInteractive = false;
         var prompt        = "";
 
@@ -34,6 +35,11 @@ public static class AddActionFlow
             isInteractive = app.Renderer.Confirm("Interactive action?", defaultYes: false);
             var pf = SelectPromptFileFlow.Run(app);
             if (pf != null) prompt = pf;
+        }
+        else if (isTerminal)
+        {
+            var cmd = app.Renderer.AskOrCancel("Command template (e.g. ping {SelectedText})");
+            if (cmd != null) prompt = cmd;
         }
 
         var hotkey  = HotkeyCapture.Capture(app.Cfg.Actions);
