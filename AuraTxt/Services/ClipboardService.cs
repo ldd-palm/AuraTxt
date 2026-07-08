@@ -52,8 +52,31 @@ public static class ClipboardService
         keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP,  UIntPtr.Zero);
     }
 
+    // Set by GlobalHookService.OnKeyDown when it observes a real, physical Ctrl+C.
+    // Guards against racing our own synthetic Ctrl+C below with a genuine one: if both
+    // land at once, the target app's modifier-key state can desync and the real 'C'
+    // keyup gets delivered as an unmodified 'c' character, overwriting the selection.
+    private static DateTime _lastRealCtrlC = DateTime.MinValue;
+    public static void NotifyRealCtrlC() => _lastRealCtrlC = DateTime.UtcNow;
+
     private static async Task<string?> TryClipboardAsync()
     {
+        // A real Ctrl+C landed moments ago (or is still in flight) — it already is/will be
+        // putting the selection on the clipboard. Don't inject our own synthetic Ctrl+C on
+        // top of it (see _lastRealCtrlC), and don't Clear()/restore — that clipboard content
+        // is the user's real copy now, not our scratch space.
+        if (DateTime.UtcNow - _lastRealCtrlC < TimeSpan.FromMilliseconds(600))
+        {
+            var seqStart = GetClipboardSequenceNumber();
+            for (int waited = 0; waited < 300; waited += 25)
+            {
+                if (GetClipboardSequenceNumber() != seqStart) break;
+                await Task.Delay(25);
+            }
+            var t = System.Windows.Clipboard.ContainsText() ? System.Windows.Clipboard.GetText() : "";
+            return string.IsNullOrWhiteSpace(t) ? null : t;
+        }
+
         string prev = "";
         uint seqAfterRead = 0;
         try
@@ -120,13 +143,17 @@ public static class ClipboardService
     // ── Public entry point ────────────────────────────────────────────────────
     public static async Task<string> GetSelectedTextAsync(int delayMs = 100)
     {
-        await Task.Delay(delayMs);
-
-        // Fast path: UI Automation (no clipboard involved).
+        // Fast path: UI Automation has no side effects, so try it immediately — most apps
+        // (browsers, Office, VSCode) commit the selection to the accessibility tree
+        // synchronously on mouse-up, so this skips delayMs entirely in the common case.
         var text = TryUiAutomation();
         if (!string.IsNullOrWhiteSpace(text)) return text;
 
-        // Slow path: Ctrl+C simulation.
+        // Slow path: give the app more time to settle, retry, then fall back to Ctrl+C simulation.
+        await Task.Delay(delayMs);
+        text = TryUiAutomation();
+        if (!string.IsNullOrWhiteSpace(text)) return text;
+
         return await TryClipboardAsync() ?? "";
     }
 }

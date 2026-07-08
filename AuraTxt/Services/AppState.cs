@@ -33,4 +33,29 @@ public static class AppState
     /// On plain click: if false → clear LastProcessedText immediately (scenario B re-arm);
     ///                 if true → check async whether selection is gone before clearing.
     public static bool SelectionActioned { get; set; }
+
+    // ── Selection state machine (SPEC.md §5.4) ──────────────────────────────
+    // Idle / MenuShowing / ActionProcessed, encoded via LastProcessedText +
+    // SelectionActioned. These are the only methods that should write either
+    // field, so the three states stay consistent across call sites.
+
+    /// Idle: no selection tracked, dedup cache cleared.
+    public static void MarkDeselected()
+    {
+        LastProcessedText = "";
+        SelectionActioned = false;
+    }
+
+    /// MenuShowing: a fresh selection was captured.
+    public static void MarkNewSelection(string text)
+    {
+        LastProcessedText = text;
+        SelectionActioned = false;
+    }
+
+    /// ActionProcessed: an action was triggered for the current selection.
+    public static void MarkActionTaken()
+    {
+        SelectionActioned = true;
+    }
 }

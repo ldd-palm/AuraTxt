@@ -131,42 +131,45 @@ public class GlobalHookService
 
             Application.Current?.Dispatcher.BeginInvoke(async () =>
             {
-                try
-                {
-                    if (AppState.IsResultWindowOpen) return;
-
-                    var cfg  = _config.Load();
-                    var text = await ClipboardService.GetSelectedTextAsync(
-                        cfg.Settings.MenuTriggerDelayMs);
-
-                    // Empty selection → re-arm dedup cache.
-                    if (string.IsNullOrWhiteSpace(text)) { AppState.LastProcessedText = ""; return; }
-
-                    // Same text + menu already visible → don't rebuild unnecessarily.
-                    if (text == AppState.LastProcessedText
-                        && AppState.ActiveMenu is not null
-                        && AppState.ActiveMenu.IsVisible)
-                        return;
-
-                    AppState.LastProcessedText = text;
-
-                    if (AppState.ActiveMenu is ActionMenuWindow existingMenu
-                        && existingMenu.IsVisible)
-                    {
-                        // In-place update: reposition and rebuild content.
-                        existingMenu.UpdateMenu(text, pos);
-                    }
-                    else
-                    {
-                        // No menu visible → create new one.
-                        var menu = new ActionMenuWindow(cfg, text, pos);
-                        menu.Show();
-                    }
-                }
+                try { await CaptureAndShowMenuAsync(pos, allowInPlaceUpdate: true); }
                 catch { }
             });
         }
         catch { }
+    }
+
+    /// Captures the current selection and shows or updates the action menu.
+    /// Shared by the drag-selection (OnMouseUp) and double-click paths, which only
+    /// differ in whether an already-visible menu may be updated in place.
+    private async Task CaptureAndShowMenuAsync(System.Drawing.Point pos, bool allowInPlaceUpdate)
+    {
+        if (AppState.IsResultWindowOpen) return;
+
+        var cfg  = _config.Load();
+        var text = await ClipboardService.GetSelectedTextAsync(cfg.Settings.MenuTriggerDelayMs);
+
+        // Empty selection → re-arm dedup cache.
+        if (string.IsNullOrWhiteSpace(text)) { AppState.MarkDeselected(); return; }
+
+        // Same text still relevant → don't rebuild unnecessarily. Drag-selection always
+        // skips on a text match; double-click only skips if the menu is still visible
+        // (otherwise it should reopen for the same word).
+        var menuVisible = AppState.ActiveMenu is ActionMenuWindow { IsVisible: true };
+        if (text == AppState.LastProcessedText && (!allowInPlaceUpdate || menuVisible)) return;
+
+        AppState.MarkNewSelection(text);
+
+        if (allowInPlaceUpdate && AppState.ActiveMenu is ActionMenuWindow existing && existing.IsVisible)
+        {
+            // In-place update: reposition and rebuild content.
+            existing.UpdateMenu(text, pos);
+        }
+        else
+        {
+            // No menu visible (or in-place update not allowed) → create new one.
+            var menu = new ActionMenuWindow(cfg, text, pos);
+            menu.Show();
+        }
     }
 
     // ── Mouse-up: capture selected text and show the action menu ─────────────
@@ -192,7 +195,7 @@ public class GlobalHookService
                 {
                     // No action was taken — user dismissed the menu without acting.
                     // Plain click likely cleared the selection → re-arm immediately (Scenario B).
-                    AppState.LastProcessedText = "";
+                    AppState.MarkDeselected();
                 }
                 else
                 {
@@ -202,10 +205,7 @@ public class GlobalHookService
                     {
                         var t = await ClipboardService.GetSelectedTextAsync(50);
                         if (string.IsNullOrWhiteSpace(t))
-                        {
-                            AppState.LastProcessedText = "";
-                            AppState.SelectionActioned = false;
-                        }
+                            AppState.MarkDeselected();
                     });
                 }
                 return;
@@ -219,30 +219,7 @@ public class GlobalHookService
 
             Application.Current?.Dispatcher.BeginInvoke(async () =>
             {
-                try
-                {
-                    if (AppState.IsResultWindowOpen) return;
-
-                    var cfg  = _config.Load();
-                    var text = await ClipboardService.GetSelectedTextAsync(
-                        cfg.Settings.MenuTriggerDelayMs);
-
-                    // Empty selection = user deselected → re-arm.
-                    if (string.IsNullOrWhiteSpace(text))
-                    {
-                        AppState.LastProcessedText = "";
-                        AppState.SelectionActioned = false;
-                        return;
-                    }
-
-                    // Same text still highlighted → don't re-pop the menu.
-                    if (text == AppState.LastProcessedText) return;
-
-                    AppState.LastProcessedText = text;
-                    AppState.SelectionActioned = false;   // fresh selection resets the actioned flag
-                    var menu = new ActionMenuWindow(cfg, text, pos);
-                    menu.Show();
-                }
+                try { await CaptureAndShowMenuAsync(pos, allowInPlaceUpdate: false); }
                 catch { }
             });
         }
@@ -262,6 +239,11 @@ public class GlobalHookService
     /// Catch Backspace, Delete, and app-switch keys (Win, Alt+Tab) which KeyPress does not fire for.
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
+        // Track real Ctrl+C so ClipboardService can avoid injecting its own synthetic
+        // Ctrl+C on top of a genuine one (see ClipboardService.NotifyRealCtrlC).
+        if (e.Control && e.KeyCode == Keys.C)
+            ClipboardService.NotifyRealCtrlC();
+
         var dismiss = e.KeyCode is Keys.Back or Keys.Delete or Keys.LWin or Keys.RWin
                    || (e.Alt && e.KeyCode is Keys.Tab or Keys.F4);
         if (!dismiss) return;

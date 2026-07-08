@@ -52,7 +52,7 @@ public class HotkeyService
         // System actions (speech/copy) don't have a ModelId — handle inline.
         if (string.IsNullOrEmpty(action.ModelId))
         {
-            AppState.SelectionActioned = true;
+            AppState.MarkActionTaken();
             switch (action.Id)
             {
                 case "speech":
@@ -80,7 +80,7 @@ public class HotkeyService
 
     public static void ShowResultFor(ActionItem action, string selectedText, ConfigRoot cfg)
     {
-        AppState.SelectionActioned = true;
+        AppState.MarkActionTaken();
 
         // Terminal console-window mode: the console window IS the output surface, so
         // skip ResultWindow/InteractiveWindow entirely and fire the command unawaited.
