@@ -59,6 +59,12 @@ public static class ClipboardService
     private static DateTime _lastRealCtrlC = DateTime.MinValue;
     public static void NotifyRealCtrlC() => _lastRealCtrlC = DateTime.UtcNow;
 
+    // Set just before PressCtrlC() below, for the short window a synthetic Ctrl+C is in
+    // flight. Lets GlobalHookService.OnKeyDown tell our own injected Ctrl+C apart from a
+    // real one — both otherwise look identical on the global keyboard hook.
+    private static DateTime _syntheticCtrlCUntil = DateTime.MinValue;
+    public static bool IsSyntheticCtrlCInFlight() => DateTime.UtcNow < _syntheticCtrlCUntil;
+
     private static async Task<string?> TryClipboardAsync()
     {
         // A real Ctrl+C landed moments ago (or is still in flight) — it already is/will be
@@ -86,6 +92,7 @@ public static class ClipboardService
 
             System.Windows.Clipboard.Clear();
             var seqBefore = GetClipboardSequenceNumber();
+            _syntheticCtrlCUntil = DateTime.UtcNow.AddMilliseconds(200);
             PressCtrlC();
 
             // Poll the clipboard sequence number instead of a fixed wait: most apps

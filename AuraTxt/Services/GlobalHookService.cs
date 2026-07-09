@@ -236,15 +236,36 @@ public class GlobalHookService
             Application.Current.Dispatcher.BeginInvoke(() => menu.CloseNow());
     }
 
-    /// Catch Backspace, Delete, and app-switch keys (Win, Alt+Tab) which KeyPress does not fire for.
+    private static readonly HashSet<Keys> ModifierKeyCodes = new()
+    {
+        Keys.ControlKey, Keys.LControlKey, Keys.RControlKey,
+        Keys.ShiftKey,   Keys.LShiftKey,   Keys.RShiftKey,
+        Keys.Menu,       Keys.LMenu,       Keys.RMenu,
+        Keys.LWin,       Keys.RWin
+    };
+
+    /// Catch Backspace, Delete, app-switch keys (Win, Alt+Tab), and editing shortcuts
+    /// (Ctrl+anything, Shift+Insert) which KeyPress does not fire for.
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
         // Track real Ctrl+C so ClipboardService can avoid injecting its own synthetic
         // Ctrl+C on top of a genuine one (see ClipboardService.NotifyRealCtrlC).
-        if (e.Control && e.KeyCode == Keys.C)
+        var isCtrlC = e.Control && e.KeyCode == Keys.C;
+        var isOwnSyntheticCtrlC = isCtrlC && ClipboardService.IsSyntheticCtrlCInFlight();
+
+        if (isCtrlC && !isOwnSyntheticCtrlC)
             ClipboardService.NotifyRealCtrlC();
 
-        var dismiss = e.KeyCode is Keys.Back or Keys.Delete or Keys.LWin or Keys.RWin
+        // Any real Ctrl+<key> combo (copy/paste/cut/undo/bold/... — standard editing
+        // shortcuts) or a legacy Shift+Insert paste means the user wants to do something
+        // else entirely, not act on the selection via the menu — dismiss it immediately.
+        // Our own synthetic capture Ctrl+C is excluded so it doesn't prematurely close a
+        // menu that's mid in-place-update (see ClipboardService.IsSyntheticCtrlCInFlight).
+        var isShortcut = (e.Control && !ModifierKeyCodes.Contains(e.KeyCode) && !isOwnSyntheticCtrlC)
+                       || (e.Shift && e.KeyCode == Keys.Insert);
+
+        var dismiss = isShortcut
+                   || e.KeyCode is Keys.Back or Keys.Delete or Keys.LWin or Keys.RWin
                    || (e.Alt && e.KeyCode is Keys.Tab or Keys.F4);
         if (!dismiss) return;
         if (AppState.ActiveMenu is ActionMenuWindow menu)
