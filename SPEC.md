@@ -164,17 +164,22 @@ class ActionItem {
 3. 非左键 → 返回。
 4. **[关键] 位移判定**：`|dx|<5 && |dy|<5` 视为纯点击，不碰剪贴板直接处理"平点击"逻辑（见选区状态机 §5.4）后返回。
 5. `MenuSuppressUntil` 冷却中 → 返回；`IsResultWindowOpen` → 返回。
-6. Dispatcher.BeginInvoke 异步：取文本（§5.5）→ 空文本则清空去重缓存并返回；与 `LastProcessedText` 相同则返回；否则记录新文本、`SelectionActioned=false`、创建并显示 ActionMenuWindow。
+6. Dispatcher.BeginInvoke 异步调用 `CaptureAndShowMenuAsync(pos, allowInPlaceUpdate: false)`（见下）。
 
 **MouseDoubleClick（双击选词）**：
 1. 取消挂起的 DeferredClose（双击"认领"了这次点击）。
 2. 置 `_skipNextMouseUp=true`。
 3. 同样的 Paused/Hidden/冷却/ResultWindow 检查。
-4. 取文本；若菜单已可见且文本相同 → 不重建；若菜单可见且文本不同 → `UpdateMenu(text,pos)` 原地更新；否则新建菜单。
+4. Dispatcher.BeginInvoke 异步调用 `CaptureAndShowMenuAsync(pos, allowInPlaceUpdate: true)`。
+
+**`CaptureAndShowMenuAsync(pos, allowInPlaceUpdate)`**（MouseUp 拖拽与 MouseDoubleClick 共用的取词/弹菜单逻辑，避免两份实现分叉）：取文本（§5.5）→ 空文本则 `AppState.MarkDeselected()` 并返回 → 若文本与 `LastProcessedText` 相同且（`allowInPlaceUpdate=false` 或菜单仍可见）→ 直接返回（去重）→ 否则 `AppState.MarkNewSelection(text)`（重置 `SelectionActioned=false`）→ `allowInPlaceUpdate=true` 且已有可见菜单时 `UpdateMenu(text,pos)` 原地更新，否则新建 ActionMenuWindow。**[关键]** 两条路径共用同一份实现，保证"新选区重置 SelectionActioned"这一步不会像早期分叉实现那样只在拖拽路径生效、双击路径遗漏（曾是真实 bug）。
 
 **键盘关闭菜单**：
-- `KeyPress`（可打印字符）：**[关键]** 先 `if (char.IsControl(e.KeyChar)) return;`（否则 Ctrl+C 的 `\x03` 会误关菜单并污染剪贴板恢复逻辑），然后关闭当前菜单。
-- `KeyDown`：仅 `Back/Delete/LWin/RWin` 或 `Alt+Tab`/`Alt+F4` 时关闭菜单。
+- `KeyPress`（可打印字符）：**[关键]** 先 `if (char.IsControl(e.KeyChar)) return;`（否则内部模拟 Ctrl+C 产生的 `\x03` 会误关菜单），然后关闭当前菜单。
+- `KeyDown`：
+  - `Back/Delete/LWin/RWin` 或 `Alt+Tab`/`Alt+F4` 时关闭菜单。
+  - **[关键]** 任意真实的 `Ctrl+<非修饰键>` 组合（Ctrl+C/V/X/Z/B/... 等标准编辑快捷键，泛化判定、不逐个枚举）或 `Shift+Insert`（老式粘贴）同样关闭菜单——按这类快捷键说明用户意图是常规剪贴板/编辑操作而非对选中文本使用 action，菜单继续悬浮没有意义（Shift+Delete 剪切已被前一条 `Keys.Delete` 无条件覆盖，无需单独判断）。
+  - 该判定必须排除"自己模拟出来的 Ctrl+C"（`ClipboardService.IsSyntheticCtrlCInFlight()`，见 §5.5），否则双击切词触发的原地更新捕获过程中若命中 Ctrl+C 模拟兜底，会把仍在原地更新中的旧菜单误判为"用户手动按了 Ctrl+C"而关闭，产生闪烁。
 - 关闭统一走 `Dispatcher.BeginInvoke(() => menu.CloseNow())`。
 
 **[关键] 睡眠/唤醒后钩子恢复**：Windows 在系统睡眠/唤醒前后可能静默卸载低级钩子（`WH_MOUSE_LL`，本服务依赖的 `SetWindowsHookEx`）——可能是唤醒过程中回调超过 LowLevelHooksTimeout，也可能是钩子链中其他进程的钩子在挂起期间被破坏。而 `HotkeyService` 走的 `RegisterHotKey`/`WM_HOTKEY` 是完全不同的机制，不受影响，唤醒后热键仍可用但划词菜单失效，正是此故障的典型表现。修复：`App.xaml.cs` 订阅 `Microsoft.Win32.SystemEvents.PowerModeChanged`，在 `PowerModes.Resume` 时通过 `Dispatcher.BeginInvoke` 回到 UI 线程执行 `_hook.Stop()` + `_hook.Start()` 重新安装钩子（`Start()` 内部也会重新 `RegisterAll` 热键，相当于顺带恢复任何被静默丢弃的热键）。`OnExit` 必须 `-=` 取消订阅，否则 `SystemEvents` 的静态订阅会跨进程生命周期泄漏。
@@ -195,6 +200,8 @@ class ActionItem {
 | SessionInteractiveWindowWidth (double?) | InteractiveWindow 同上 |
 | SourceWindowHandle (IntPtr) | 触发动作前记录的源窗口句柄；Replace 按钮用此 HWND 切回源窗口并模拟 Ctrl+V |
 
+**写入约束 [关键]**：`LastProcessedText`/`SelectionActioned` 只应通过 `AppState.MarkDeselected()`/`MarkNewSelection(text)`/`MarkActionTaken()` 三个方法写入（见 §5.4），不要在别处直接赋值——早期分散赋值的实现曾导致双击路径遗漏重置 `SelectionActioned`（已修复）。
+
 ### 5.4 选区状态机 [关键]
 
 解决"菜单消失后同文本无法再次触发"与"动作执行后菜单不该重弹"的矛盾：
@@ -205,19 +212,23 @@ MenuShowing     LastProcessedText=T   SelectionActioned=false
 ActionProcessed LastProcessedText=T   SelectionActioned=true
 ```
 
-- 触发动作前（HotkeyService.ShowResultFor 与热键 FireActionAsync）置 `SelectionActioned=true`。
+三个转换分别对应 `AppState.MarkDeselected()`、`AppState.MarkNewSelection(text)`、`AppState.MarkActionTaken()`——仅有的三个允许写这两个字段的入口，把转换规则收敛到一处。
+
+- 触发动作前（HotkeyService.ShowResultFor 与热键 FireActionAsync）调用 `MarkActionTaken()`。
 - **平点击**（位移<5px）时：
-  - `SelectionActioned=false`（用户没执行动作就点掉了菜单）→ **立即**清空 LastProcessedText，同文本可立刻重新触发。
-  - `SelectionActioned=true`（动作已执行，"静音盾"）→ 异步 `GetSelectedTextAsync(50)` 探测：选区已空 → 清空两个标志回 Idle；仍有选区 → 保持静音。
-- 取到**新文本**时重置 `SelectionActioned=false`。
+  - `SelectionActioned=false`（用户没执行动作就点掉了菜单）→ **立即** `MarkDeselected()`，同文本可立刻重新触发。
+  - `SelectionActioned=true`（动作已执行，"静音盾"）→ 异步 `GetSelectedTextAsync(50)` 探测：选区已空 → `MarkDeselected()` 回 Idle；仍有选区 → 保持静音。
+- 取到**新文本**时调用 `MarkNewSelection(text)`（隐含重置 `SelectionActioned=false`）——拖拽与双击两条路径都经过 `CaptureAndShowMenuAsync`（§5.2）调用这同一个方法，不会再出现某条路径遗漏重置的情况。
 
 ### 5.5 取选中文本（ClipboardService，static）
 
-`GetSelectedTextAsync(delayMs)`：先 `Task.Delay(delayMs)`，然后两级策略：
+`GetSelectedTextAsync(delayMs)`：
 
-1. **UI Automation**（无副作用）：`AutomationElement.FocusedElement` → `TextPattern.GetSelection()[0].GetText(-1)`。任何异常或空结果 → 进入第 2 级。
-2. **模拟 Ctrl+C**：
-   - 备份剪贴板现有文本 `prev`；`Clipboard.Clear()`；记录 `seqBefore = GetClipboardSequenceNumber()`（user32 P/Invoke）。
+1. **UI Automation 立即尝试一次**（无副作用）：`AutomationElement.FocusedElement` → `TextPattern.GetSelection()[0].GetText(-1)`。**[关键]** 不等待就先试——多数应用（浏览器/Office/VSCode 等）在 mouse-up 时已同步把选区提交到 accessibility tree，命中时直接省掉整个 `delayMs`（默认 100ms）延迟，直接返回。
+2. 未命中 → `Task.Delay(delayMs)` 后重试一次 UI Automation（给较慢的应用一点时间）。仍未命中 → 进入第 3 级。
+3. **模拟 Ctrl+C**（`TryClipboardAsync`）：
+   - **[关键] 与真实 Ctrl+C 冲突规避**：若最近 600ms 内 `ClipboardService.NotifyRealCtrlC()` 被调用过（由 `GlobalHookService.OnKeyDown` 在观测到真实 `Ctrl+C` 按键时触发），说明用户刚手动按过真实 Ctrl+C——此时完全跳过下面的 Clear/模拟按键/恢复流程，只轮询剪贴板序号变化（最多 300ms）后直接读取。**原因**：若仍自行注入一次合成 Ctrl+C，会与用户真实的物理按键在系统输入流里交叠，导致前台应用的修饰键状态被合成的 `Ctrl↑` 提前"释放"，随后真实的 `C` 键被当作无 Ctrl 修饰的裸字符交付，选区被替换成字面的 "c"（曾经的真实 bug，已修复）。
+   - 否则按原逻辑：备份剪贴板现有文本 `prev`；`Clipboard.Clear()`；记录 `seqBefore = GetClipboardSequenceNumber()`（user32 P/Invoke）；**在调用 `PressCtrlC()` 前**设置 `_syntheticCtrlCUntil = now + 200ms`（对外暴露为 `IsSyntheticCtrlCInFlight()`），供 `GlobalHookService.OnKeyDown` 区分"这是自己刚模拟的按键"，避免误判成真实 Ctrl+C（见 §5.2 的菜单误关闭场景）。
    - **[关键]** 用 `keybd_event`（P/Invoke：Ctrl down, C down, C up, Ctrl up）模拟按键。**禁止用 SendKeys**——`SendWait` 在无 WinForms 消息循环的 STA 线程必然失败且异常被吞。
    - **序号轮询**：每 25ms 检查序号是否变化，最多 300ms。
    - 读取剪贴板文本，记录 `seqAfterRead`。
@@ -545,3 +556,6 @@ CLI 项目须与 WPF 输出到相同目录（托盘 Settings 按 `{exe}/auracfg.
 9. 改 themes/*.json 或切主题 + Reload Settings → 颜色热更新。
 10. `--log` 运行后 auratxt.log 含请求体与流式响应全文，Terminal action 额外含 `──── TERMINAL COMMAND` 与已解析命令原文。
 11. Terminal action（如 `ping {SelectedText}`）：结果窗显示回显的命令行 + 真实输出；关闭结果窗口中途运行的命令后，任务管理器中确认无残留 cmd.exe/子进程；输出含 CJK 文本时正确显示（非乱码）；命令非 0 退出时显示 `[exit code: N]` 而不崩溃。
+12. 划词后（菜单弹出前或弹出后）立即手动按真实 Ctrl+C：不出现字面 "c"、选区不受影响、剪贴板确为选中文本，随后菜单仍能正常弹出。
+13. 菜单弹出期间按 Ctrl+C/Ctrl+V/Ctrl+X/Ctrl+Z/Ctrl+B 等编辑快捷键或 Shift+Insert：菜单立即消失，对应的复制/粘贴/剪切/撤销/加粗等操作在源应用中正常生效；点击菜单里的 action 按钮不受此逻辑影响。
+14. 菜单已弹出时双击另一个词（原地更新路径，命中 Ctrl+C 模拟兜底的应用）：菜单不因内部模拟按键而闪烁关闭，正常原地更新为新词的菜单内容。
