@@ -68,6 +68,8 @@ public partial class App : Application
             _hook    = new GlobalHookService(_config, _hotkeys);
             _hook.Start();
             Microsoft.Win32.SystemEvents.PowerModeChanged += OnPowerModeChanged;
+
+            _ = _tray.CheckForUpdatesAsync(manual: false);
         }
         catch (Exception ex)
         {
