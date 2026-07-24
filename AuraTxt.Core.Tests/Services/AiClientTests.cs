@@ -99,7 +99,7 @@ public class AiClientTests
         var model = new ModelEntry { TargetModel = "gemma-4-26b-a4b-it" };
         var (req, _) = client.BuildRequest(GemProvider(), model, DisableAction(), "hi", "");
         var gc = (JsonObject)req.ExtraBody["generationConfig"]!;
-        Assert.Equal("none", gc["thinkingConfig"]!["thinkingLevel"]!.GetValue<string>());
+        Assert.Equal("NONE", gc["thinkingConfig"]!["thinkingLevel"]!.GetValue<string>());
     }
 
     [Fact]
