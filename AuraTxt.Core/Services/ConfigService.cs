@@ -134,6 +134,13 @@ public class ConfigService
     private ConfigRoot CreateDefault()
     {
         var cfg = new ConfigRoot();
+
+        // Point the default SystemPrompt at the scaffolded file instead of leaving
+        // AppSettings' inline-text fallback — otherwise Prompt Library shows the
+        // freshly-seeded system.md as "(unused)" even though it's the live default.
+        PromptService.EnsureScaffold();
+        cfg.Settings.SystemPrompt = PromptService.SystemFile;
+
         cfg.Models["default"] = new ProviderConfig
         {
             DisplayName = "Built-in",

@@ -1,5 +1,6 @@
 using AuraTxt.Cli.Tui.Flows;
 using AuraTxt.Core.Models;
+using AuraTxt.Core.Services;
 
 namespace AuraTxt.Cli.Tui.Pages;
 
@@ -11,16 +12,12 @@ public class ActionFeaturesPage : PageBase
     {
         while (true)
         {
-            var sorted = app.Cfg.Actions
-                .OrderBy(a => a.Enabled ? 0 : 1)
-                .ThenBy(a => a.Order)
-                .ThenBy(a => a.Name, StringComparer.OrdinalIgnoreCase)
-                .ToList();
+            var sorted = BuildSorted(app);
 
             var items = BuildItems(sorted, app);
             var (cursor, sel) = BuildCursorState(items);
             app.Renderer.DrawFrame(app.GetBreadcrumb(), items, cursor,
-                "↑↓ Navigate  │  [Enter] Edit  │  [A] Add  │  [D] Delete  │  [S] Save  │  [Esc] Back");
+                "↑↓ Navigate  │  [Enter] Edit  │  [U/I] Move Up/Down  │  [A] Add  │  [D] Delete  │  [S] Save  │  [Esc] Back");
 
             var key = app.Renderer.ReadMenuKey();
             switch (key)
@@ -43,6 +40,18 @@ public class ActionFeaturesPage : PageBase
                     else
                         app.Renderer.SetNotice("Navigate to an action first.", NoticeKind.Warning);
                     break;
+                case MenuKey.Letter l when l.C == 'U':
+                    if (int.TryParse(items[cursor].Key, out var mui) && mui >= 1 && mui <= sorted.Count)
+                        MoveAction(sorted[mui - 1], up: true, app);
+                    else
+                        app.Renderer.SetNotice("Navigate to an action first.", NoticeKind.Warning);
+                    break;
+                case MenuKey.Letter l when l.C == 'I':
+                    if (int.TryParse(items[cursor].Key, out var mdi) && mdi >= 1 && mdi <= sorted.Count)
+                        MoveAction(sorted[mdi - 1], up: false, app);
+                    else
+                        app.Renderer.SetNotice("Navigate to an action first.", NoticeKind.Warning);
+                    break;
                 case MenuKey.Letter l:
                     JumpTo(sel, items, l.C.ToString());
                     var r3 = Activate(l.C.ToString(), sorted, app);
@@ -56,23 +65,46 @@ public class ActionFeaturesPage : PageBase
         }
     }
 
+    private static List<ActionItem> BuildSorted(TuiApp app) =>
+        app.Cfg.Actions
+            .OrderBy(a => a.Enabled ? 0 : 1)
+            .ThenBy(a => a.Order)
+            .ThenBy(a => a.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+    private const int BadgeCol  = 14;
+    private const int PromptCol = 20;
+    private const int ModelCol  = 26;
+
     private IReadOnlyList<MenuItem> BuildItems(List<ActionItem> sorted, TuiApp app)
     {
         var list = new List<MenuItem>();
         for (int i = 0; i < sorted.Count; i++)
         {
-            var a     = sorted[i];
-            var hk    = a.Id == "copy" ? "Ctrl+C"
-                      : string.IsNullOrEmpty(a.Hotkey) ? "—"
-                      : a.Hotkey;
-            var model = a.IsSystem ? "(system)"
-                      : string.IsNullOrEmpty(a.ModelId) ? "—"
-                      : app.ModelLabel(a.ModelId);
-            var ord   = a.Order.ToString();
-            var val   = $"{TuiRenderer.StatusBadge(a.Enabled)}  {ord}  {model}  {hk}";
+            var a      = sorted[i];
+            var hk     = a.Id == "copy" ? "Ctrl+C"
+                       : string.IsNullOrEmpty(a.Hotkey) ? "—"
+                       : a.Hotkey;
+            var model  = a.IsSystem ? "(system)"
+                       : string.IsNullOrEmpty(a.ModelId) ? "—"
+                       : app.ModelLabel(a.ModelId);
+            var badge  = TuiRenderer.StatusBadge(a.Enabled).PadRight(BadgeCol);
+            var prompt = TuiRenderer.Truncate(PromptFileName(a), PromptCol - 2).PadRight(PromptCol);
+            var modelC = TuiRenderer.Truncate(model, ModelCol - 2).PadRight(ModelCol);
+            var val    = $"{badge}{prompt}{modelC}{hk}";
             list.Add(new MenuItem((i + 1).ToString(), a.Name, val, TuiRenderer.StatusStyle(a.Enabled)));
         }
         return list;
+    }
+
+    // IsFileRef alone would misclassify inline templates that merely contain '/'
+    // (e.g. Terminal's "cmd.exe /C {SelectedText}", see SPEC.md §8.1) — confirm the
+    // path actually resolves to a file, same pattern TuiApp.SamePath uses.
+    private static string PromptFileName(ActionItem a)
+    {
+        if (string.IsNullOrEmpty(a.Prompt) || !PromptService.IsFileRef(a.Prompt)) return "-";
+        var full = Path.IsPathRooted(a.Prompt) ? a.Prompt : Path.Combine(AppContext.BaseDirectory, a.Prompt);
+        return File.Exists(full) ? Path.GetFileName(a.Prompt) : "-";
     }
 
     private PageResult? Activate(string key, List<ActionItem> sorted, TuiApp app)
@@ -95,5 +127,32 @@ public class ActionFeaturesPage : PageBase
         app.Cfg.Actions.Remove(action);
         app.MarkDirty();
         app.Renderer.SetNotice($"Action '{action.Name}' deleted.");
+    }
+
+    /// Reorders within the Enabled/disabled group only — Order only matters for
+    /// enabled actions (it drives the real popup menu, see SPEC §7.1), so crossing
+    /// that boundary would silently change Order without moving anything on screen.
+    private void MoveAction(ActionItem action, bool up, TuiApp app)
+    {
+        var group = app.Cfg.Actions
+            .Where(a => a.Enabled == action.Enabled)
+            .OrderBy(a => a.Order)
+            .ThenBy(a => a.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var idx     = group.IndexOf(action);
+        var swapIdx = up ? idx - 1 : idx + 1;
+        if (swapIdx < 0 || swapIdx >= group.Count)
+        {
+            app.Renderer.SetNotice($"'{action.Name}' is already at the {(up ? "top" : "bottom")}.", NoticeKind.Warning);
+            return;
+        }
+
+        (group[idx], group[swapIdx]) = (group[swapIdx], group[idx]);
+        for (int i = 0; i < group.Count; i++) group[i].Order = i;
+
+        app.MarkDirty();
+        app.Renderer.SetNotice($"Moved '{action.Name}' {(up ? "up" : "down")}.");
+        SetCursorPos(BuildSorted(app).IndexOf(action));
     }
 }

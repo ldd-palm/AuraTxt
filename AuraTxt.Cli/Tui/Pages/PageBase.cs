@@ -28,6 +28,10 @@ public abstract class PageBase : IMenuPage
     protected void MoveDown(int selectableCount) =>
         _cursorPos = (_cursorPos + 1) % selectableCount;
 
+    /// Lets a page point the cursor at a specific selectable-item index directly,
+    /// e.g. to keep the cursor on an item that was just moved to a new position.
+    protected void SetCursorPos(int pos) => _cursorPos = Math.Max(0, pos);
+
     protected void JumpTo(IReadOnlyList<int> selectableIndices, IReadOnlyList<MenuItem> items, string key)
     {
         for (int i = 0; i < selectableIndices.Count; i++)

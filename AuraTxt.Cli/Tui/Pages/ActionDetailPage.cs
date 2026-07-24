@@ -7,7 +7,9 @@ namespace AuraTxt.Cli.Tui.Pages;
 
 public class ActionDetailPage(string actionId) : PageBase
 {
-    public override string Title => $"Action: {actionId}";
+    private string _displayName = actionId;
+
+    public override string Title => $"Action: {_displayName}";
 
     public override Task<PageResult> RunAsync(TuiApp app, CancellationToken ct)
     {
@@ -15,6 +17,7 @@ public class ActionDetailPage(string actionId) : PageBase
         {
             var action = app.Cfg.Actions.FirstOrDefault(a => a.Id == actionId);
             if (action is null) return Task.FromResult(PageResult.Back());
+            _displayName = action.Name;
 
             var items = BuildItems(action, app);
             var (cursor, sel) = BuildCursorState(items);
@@ -64,15 +67,13 @@ public class ActionDetailPage(string actionId) : PageBase
             list.Add(new MenuItem("5", "Prompt",       isBuiltin && !isTerminal ? "(n/a — built-in)" : TuiRenderer.PromptLabel(a.Prompt)));
             list.Add(new MenuItem("6", "Hotkey",       hk));
             list.Add(new MenuItem("7", "Status",       TuiRenderer.StatusBadge(a.Enabled), TuiRenderer.StatusStyle(a.Enabled)));
-            list.Add(new MenuItem("8", "Position",        a.Order.ToString()));
             if (!isBuiltin)
-                list.Add(new MenuItem("9", "Thinking", ThinkingLabel(a.ThinkingMode), ThinkingStyle(a.ThinkingMode)));
+                list.Add(new MenuItem("8", "Thinking", ThinkingLabel(a.ThinkingMode), ThinkingStyle(a.ThinkingMode)));
         }
         else
         {
             list.Add(new MenuItem("3", "Hotkey",       hk));
             list.Add(new MenuItem("4", "Status",       TuiRenderer.StatusBadge(a.Enabled), TuiRenderer.StatusStyle(a.Enabled)));
-            list.Add(new MenuItem("5", "Position",        a.Order.ToString()));
         }
         return list;
     }
@@ -140,10 +141,6 @@ public class ActionDetailPage(string actionId) : PageBase
                     var pf = SelectPromptFileFlow.Run(app);
                     if (pf != null) { a.Prompt = pf; app.MarkDirty(); app.Renderer.SetNotice("Prompt updated."); }
                 }
-                else // system: order is slot 5
-                {
-                    EditOrder(a, app);
-                }
                 break;
             case "6":
                 if (!a.IsSystem) { EditHotkey(a, app); }
@@ -153,9 +150,6 @@ public class ActionDetailPage(string actionId) : PageBase
                 { a.Enabled = !a.Enabled; app.MarkDirty(); app.Renderer.SetNotice($"Status → {TuiRenderer.StatusBadge(a.Enabled)}"); }
                 break;
             case "8":
-                if (!a.IsSystem) { EditOrder(a, app); }
-                break;
-            case "9":
                 if (!a.IsSystem && !isBuiltin)
                 {
                     a.ThinkingMode = a.ThinkingMode == "disable" ? "enable_high" : "disable";
@@ -179,11 +173,5 @@ public class ActionDetailPage(string actionId) : PageBase
         if (hk is null) return;
         a.Hotkey = hk; app.MarkDirty();
         if (!string.IsNullOrEmpty(hk)) app.Renderer.SetNotice($"Hotkey → {hk}");
-    }
-
-    private static void EditOrder(ActionItem a, TuiApp app)
-    {
-        var v = app.Renderer.Ask("Position (0-99)", a.Order.ToString());
-        if (int.TryParse(v, out var ov)) { a.Order = ov; app.MarkDirty(); app.Renderer.SetNotice($"Position → {ov}"); }
     }
 }
