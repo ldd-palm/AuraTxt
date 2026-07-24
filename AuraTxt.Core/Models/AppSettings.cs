@@ -39,4 +39,9 @@ public class AppSettings
     /// When true, Terminal actions launch a real, visible cmd.exe window instead of
     /// capturing output into ResultWindow. Default false = today's redirected-buffer behavior.
     public bool TerminalUseConsoleWindow { get; set; } = false;
+
+    /// Last release version (e.g. "1.4") a tray balloon notification was already shown
+    /// for. Prevents re-notifying on every launch for a release the user hasn't acted on
+    /// yet. Internal bookkeeping only — not exposed in auracfg's General Settings page.
+    public string LastNotifiedUpdateVersion { get; set; } = "";
 }
