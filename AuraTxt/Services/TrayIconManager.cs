@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using H.NotifyIcon;
+using H.NotifyIcon.Core;
 using AuraTxt.Core.Services;
 
 namespace AuraTxt.Services;
@@ -8,12 +9,16 @@ namespace AuraTxt.Services;
 public class TrayIconManager : IDisposable
 {
     private readonly TaskbarIcon _icon;
+    private readonly ConfigService _config;
     private readonly MenuItem _toggleMonitorItem = null!;
     private readonly MenuItem _toggleMenuItem = null!;
     private readonly MenuItem _settingsItem = null!;
+    private readonly MenuItem _updateItem = null!;
+    private UpdateInfo? _pendingUpdate;
 
     public TrayIconManager(ConfigService config, Action onReload, Action onExit, Action? onToggleMonitor = null)
     {
+        _config = config;
         _icon = new TaskbarIcon
         {
             ToolTipText = "AuraTxt"
@@ -62,6 +67,16 @@ public class TrayIconManager : IDisposable
             }
         };
 
+        _updateItem = new MenuItem { Header = "Check for Updates" };
+        _updateItem.Click += (_, _) =>
+        {
+            if (_pendingUpdate is { } info)
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+                    info.Url) { UseShellExecute = true });
+            else
+                _ = CheckForUpdatesAsync(manual: true);
+        };
+
         menu.Opened += (_, _) =>
         {
             var editor = config.Load().Settings.ConfigEditor;
@@ -69,6 +84,10 @@ public class TrayIconManager : IDisposable
                 ? "auracfg"
                 : System.IO.Path.GetFileNameWithoutExtension(editor);
             _settingsItem.Header = $"Settings ({name})";
+
+            _updateItem.Header = _pendingUpdate is { } pending
+                ? $"⬆ Update available (v{pending.Version})"
+                : "Check for Updates";
         };
 
         var aboutItem = new MenuItem { Header = "About" };
@@ -83,6 +102,7 @@ public class TrayIconManager : IDisposable
         menu.Items.Add(_toggleMenuItem);
         menu.Items.Add(reloadItem);
         menu.Items.Add(_settingsItem);
+        menu.Items.Add(_updateItem);
         menu.Items.Add(aboutItem);
         menu.Items.Add(exitItem);
 
@@ -102,6 +122,49 @@ public class TrayIconManager : IDisposable
     }
 
     public void RefreshIcon() => SetTrayIcon();
+
+    /// Checks GitHub for a newer release. `manual` controls whether "no update"
+    /// and "check failed" outcomes also get a balloon — they don't for the silent
+    /// startup check. See docs/superpowers/specs/2026-07-24-auto-update-design.md §3/§4.
+    public async Task CheckForUpdatesAsync(bool manual)
+    {
+        var current = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version
+            ?? new Version(0, 0);
+
+        UpdateInfo? info;
+        try
+        {
+            info = await UpdateService.CheckAsync(current);
+        }
+        catch
+        {
+            if (manual)
+                Application.Current.Dispatcher.Invoke(() =>
+                    _icon.ShowNotification("AuraTxt", "Could not check for updates.", NotificationIcon.Error));
+            return;
+        }
+
+        if (info is null)
+        {
+            if (manual)
+                Application.Current.Dispatcher.Invoke(() =>
+                    _icon.ShowNotification("AuraTxt", $"You're up to date (v{current.ToString(2)}).", NotificationIcon.Info));
+            return;
+        }
+
+        Application.Current.Dispatcher.Invoke(() =>
+        {
+            _pendingUpdate = info;
+
+            var cfg = _config.Load();
+            if (info.Version != cfg.Settings.LastNotifiedUpdateVersion)
+            {
+                _icon.ShowNotification("AuraTxt", $"Version {info.Version} is available.", NotificationIcon.Info);
+                cfg.Settings.LastNotifiedUpdateVersion = info.Version;
+                _config.Save(cfg);
+            }
+        });
+    }
 
     public void Dispose() => _icon.Dispose();
 }

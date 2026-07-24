@@ -150,6 +150,7 @@ class ActionItem {
 4. `ThemeService.EnsureScaffold()`、`PromptService.EnsureScaffold()`、**`ProfileService.EnsureScaffold()`**（按此顺序）。
 5. 加载配置、`ApplyTheme(Settings.Theme)`。
 6. 创建 `HotkeyService`、`TrayIconManager`、`GlobalHookService` 并启动钩子；随后订阅 `Microsoft.Win32.SystemEvents.PowerModeChanged`（睡眠/唤醒后重装钩子，见 §5.2）。`OnExit` 中对称地取消订阅。
+7. `_ = _tray.CheckForUpdatesAsync(manual: false)`：fire-and-forget 触发一次静默更新检查（不 await，不阻塞启动），见 §5.8。
 - App.xaml：`ShutdownMode="OnExplicitShutdown"`（无主窗口）。
 
 ### 5.2 划词触发（GlobalHookService）
@@ -248,8 +249,29 @@ ActionProcessed LastProcessedText=T   SelectionActioned=true
 2. **Hide Menu / Show Menu** —— 切换 `IsMenuHidden`。
 3. **Reload Settings** —— 重新 Load + ApplyTheme + RegisterAll + 刷新图标。
 4. **Settings ({编辑器名})** —— `ConfigEditor` 为空：启动 `{exe}/auracfg.exe`；非空：用该编辑器打开 config.json。菜单每次 `Opened` 时动态刷新此项标题。
-5. **About** —— `Process.Start(new ProcessStartInfo(url){UseShellExecute=true})` 打开项目主页。
-6. **Exit** —— `Application.Shutdown()`。
+5. **Check for Updates / ⬆ Update available (v{X})** —— 动态标题，见 §5.8。
+6. **About** —— `Process.Start(new ProcessStartInfo(url){UseShellExecute=true})` 打开项目主页。
+7. **Exit** —— `Application.Shutdown()`。
+
+### 5.8 自动更新检查（UpdateService + TrayIconManager）[关键]
+
+**Core 层**（`AuraTxt.Core/Services/UpdateService.cs`，static class，static 共享 `HttpClient`，10s 超时，`User-Agent: AuraTxt-UpdateCheck`——GitHub API 拒绝无 UA 的请求）：
+- `CheckAsync(Version currentVersion, CancellationToken ct = default)`：`GET https://api.github.com/repos/ldd-palm/AuraTxt/releases/latest`，解析 `tag_name`/`html_url`。**检查成功但没有更新版本 → 返回 `null`；请求/解析失败（网络、超时、非 2xx、JSON 错误）→ 抛异常**——两者语义不同是有意为之：手动检查需要分别提示"已是最新"和"检查失败"，启动时的静默检查则两者一视同仁（见下）。
+- `IsNewer(string tagName, Version current)`（internal，纯函数，不联网）：去掉 tagName 开头的 `v`/`V` 后 `Version.TryParse`，解析失败或不比 current 新都返回 `false`，绝不抛异常、绝不误报。**[关键]** `<Version>1.3</Version>` 这种两段式在 csproj 里会被 MSBuild 补齐成 4 段 `AssemblyVersion`（如 `1.3.0.0`），而 tag 如 `"v1.3"` 解析出的 `Version` 只有 2 段（`Build`/`Revision` 为 -1）；`Version` 比较时缺失字段视为小于任何非负数，因此同一版本号（`v1.3` vs `1.3.0.0`）比较结果稳定为"不是更新"，不会误报。
+
+**版本号来源 [关键]**：`CheckAsync` 的 `currentVersion` 由调用方（WPF 层）传入，而不是在 `UpdateService` 内部自己读 `Assembly.GetExecutingAssembly().GetName().Version`——因为 `UpdateService` 位于 `AuraTxt.Core.dll`，那样读到的会是 Core 自己的程序集版本（永远不设 `<Version>`），不是 `AuraTxt.exe` 的。`AuraTxt.csproj` 单独有 `<Version>`（如 `1.3`，需跟发布时打的 git tag 手动保持一致），`AuraTxt.Cli.csproj` 不需要——auracfg 本身不做更新检查。
+
+**WPF 层**（`TrayIconManager`）：
+- 状态：`UpdateInfo? _pendingUpdate`（仅存在于本次运行内存中，不持久化）；`AppSettings.LastNotifiedUpdateVersion`（持久化到 config.json，纯内部记账用，**不出现在** auracfg 的 General Settings 页面）记录"气泡已经提醒过的版本号"，避免同一版本每次启动都弹。
+- `CheckForUpdatesAsync(bool manual)`：
+  1. `await UpdateService.CheckAsync(current)`（`current` 来自 `Assembly.GetExecutingAssembly().GetName().Version`，此处在 `AuraTxt.exe` 内执行，正确解析到主程序版本）。
+  2. 抛异常（检查失败）→ `manual=true` 时气泡提示 "Could not check for updates."，`manual=false`（启动时）静默放弃。
+  3. 返回 `null`（无更新）→ `manual=true` 时气泡提示 "You're up to date (v{current})."，`manual=false` 静默放弃。
+  4. 返回有效 `UpdateInfo` → `_pendingUpdate` 赋值；若其 `Version` ≠ `Settings.LastNotifiedUpdateVersion` → 气泡提示 "Version {X} is available." 并把新版本号写入 `LastNotifiedUpdateVersion`（`ConfigService.Save`）；若已经等于上次提醒过的版本 → 只更新 `_pendingUpdate`（菜单项仍会显示"有更新"），不再弹气泡。
+- **[关键] 线程安全**：`CheckForUpdatesAsync` 会被两处调用——App 启动时的后台 `Task.Run`（非 UI 线程）和菜单项 `Click`（UI 线程）。`TaskbarIcon` 是 WPF 相关类型，`ShowNotification` 目前在 H.NotifyIcon 2.1.0 内部实现里恰好没有校验调用线程，但这不是文档保证的跨线程契约。因此 `await UpdateService.CheckAsync(...)` 之后所有触碰 `_icon`/`_pendingUpdate`/`_config` 的代码统一包在 `Application.Current.Dispatcher.Invoke(...)` 里执行——与 §5.2 睡眠/唤醒后 `OnPowerModeChanged` 用 `Dispatcher.BeginInvoke` 回到 UI 线程重装钩子是同一个原则。`Dispatcher.Invoke` 在已经身处 UI 线程时会直接同步执行、不会死锁，因此菜单点击这条路径同样安全。
+- 菜单项标题：复用 §5.7 "Settings" 项每次 `ContextMenu.Opened` 动态刷新标题的同一模式——`_pendingUpdate == null` 时显示 "Check for Updates"，否则显示 "⬆ Update available (v{Version})"。
+- 菜单项点击：`_pendingUpdate == null` → 触发一次 `CheckForUpdatesAsync(manual: true)`；`_pendingUpdate != null` → 直接 `Process.Start(new ProcessStartInfo(_pendingUpdate.Url){UseShellExecute=true})` 打开 release 页面，不重新检查。
+- **不做的事**：不下载、不自动安装、不重启、General Settings 里没有开关——检查行为恒定开启，用户仍然手动去浏览器完成更新。
 
 ## 6. AiClient + Profile + Adapter 层（位于 Core）
 
@@ -535,13 +557,14 @@ CLI 项目须与 WPF 输出到相同目录（托盘 Settings 按 `{exe}/auracfg.
 - HotkeyValidator：格式/保留键/冲突。
 - GoogleTranslateClient.GenerateTk：已知输入输出锁定算法。
 - ProfileService：EnsureScaffold 播种嵌入 profile；Resolve 自动 glob 匹配（DeepSeek/Llama/Qwen3）；优先级（qwen3-next-instruct > qwen3-thinking）；Gemini 模型路由到 gemini_native profile；显式 ProfileId；不匹配时 fallback；adapter 不兼容时异常；openai profile 不返回给 gemini adapter。
-- AiClient.BuildRequest（internal）：DeepSeek disable 带 chat_template_kwargs；Llama/QwenNextInstruct disable 不带；GeminiFlash disable 带 thinkingBudget=0；Gemma4 disable 带 thinkingLevel=none；GeminiLegacy disable 无 thinkingConfig；MiniMax 有 strip_patterns；GLM5 两个 thinking key 都设。
+- AiClient.BuildRequest（internal）：DeepSeek disable 带 chat_template_kwargs；Llama/QwenNextInstruct disable 不带；GeminiFlash disable 带 thinkingBudget=0；Gemma4 disable 带 thinkingLevel=NONE（**[关键]** 必须大写——Gemini REST API 拒绝小写枚举值，`gemma-4.json` profile 曾被后续大改动误改回小写+空 payload，回归过一次）；GeminiLegacy disable 无 thinkingConfig；MiniMax 有 strip_patterns；GLM5 两个 thinking key 都设。
 - TagStripFilter（internal）：无标签直通、单 chunk 剥除、标签跨 chunk 切断、多块、未闭合丢弃。
 - GlobMatcher：精确匹配、* 通配、区分大小写选项。
 - JsonPathSetter：顶层注入、点路径深层注入、多次调用不覆盖。
 - ConfigRoot：AllEnabledModel* 过滤 disabled、内置恒在（含第三个内置模型，验证不再依赖硬编码的 Google_Translate/Youdao_Dict 查找）、ResolveModel 边界。
 - PromptService.IsFileRef：单行路径 true、多行含 `/` 的内联 false（回归）、Resolve 文件/内联/空。
 - TerminalClient.BuildResolvedCommand（纯函数，不启动进程）：`{SelectedText}`/`{UserInput}` 替换、多次出现、无占位符时原样返回、命令模板为 .md 文件路径时经 PromptService 解析。进程启动/超时/取消路径不纳入常规 xunit 套件（避免 CI 抖动/耗时），改由手动验证覆盖。
+- UpdateService.IsNewer（internal，纯函数）：tag 比 current 新→true；相同/更旧→false；`v`/`V` 前缀两种大小写都能去掉；tag 格式解析不出来→false 且不抛异常。`CheckAsync` 的真实网络请求路径同样不纳入常规 xunit 套件，改由手动验证覆盖（见 §5.8）。
 
 ## 14. 验收清单（端到端）
 
