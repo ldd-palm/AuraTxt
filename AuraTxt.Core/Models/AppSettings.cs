@@ -49,4 +49,10 @@ public class AppSettings
     /// Surfaced as a checkbox in the About window. Default true preserves the
     /// previously-shipped always-on behavior for existing users.
     public bool AutoUpdateCheckEnabled { get; set; } = true;
+
+    /// UI display language for AuraTxt's windows and tray menu: "auto" (follow
+    /// Windows' UI language, falling back to English) or an explicit code from
+    /// LocalizationService.SupportedLanguages ("en", "zh-Hans", "ja", "ko", "es",
+    /// "fr", "de"). Does not affect auracfg's own TUI, which stays English-only.
+    public string UiLanguage { get; set; } = "auto";
 }
