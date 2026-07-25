@@ -544,26 +544,55 @@ auracfg restore     # 从 config.json.bak 恢复
 
 ## 12. 构建、测试与发布
 
+### 12.1 编译与测试
+
 ```sh
 dotnet build && dotnet test
+```
 
-# 单文件框架依赖发布到 publish/release/（~3MB；目标机器需 .NET 8；发布前停止运行中的 AuraTxt，否则 MSB3027 锁文件）
+发布前停止运行中的 `AuraTxt.exe`（占用 exe 会导致 `dotnet publish` 报 MSB3027 锁文件错误）。
+
+### 12.2 发布（dotnet publish）
+
+`publish/release/` 是发布输出目录，但里面同时存放着真实运行数据（`config.json`/`prompts/`/`profiles/`/`themes/`/`icons/`），并非全是构建产物——不可整目录删除或当作纯临时目录清空。CLI 项目须与 WPF 输出到同一目录（托盘 Settings 按 `{exe}/auracfg.exe` 启动）。
+
+```sh
+# 单文件框架依赖版（~3MB；目标机器需 .NET 8 Desktop Runtime）
 dotnet publish AuraTxt/AuraTxt.csproj         -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -o publish/release
 dotnet publish AuraTxt.Cli/AuraTxt.Cli.csproj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -o publish/release
 # 删除 AuraTxt.pdb / auracfg.pdb / AuraTxt.Core.pdb（不随包发布）
-
-# 单文件自包含发布（~125MB；目标机器无需安装 .NET）
-dotnet publish AuraTxt/AuraTxt.csproj         -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -o publish/release
-dotnet publish AuraTxt.Cli/AuraTxt.Cli.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -o publish/release
 ```
-
-CLI 项目须与 WPF 输出到相同目录（托盘 Settings 按 `{exe}/auracfg.exe` 启动）。打包前把仓库根目录的 `readme.txt` 复制进 `publish/release`。
-
-打包 zip 时不要直接压缩 `publish/release/*`——先把内容拷进一层 `auratxt/` 子目录（如 `publish/staging/auratxt/`），再对该子目录整体压缩，使 zip 内容形如 `auratxt/AuraTxt.exe`、`auratxt/config.json` 等，用户解压后得到一个 `auratxt` 文件夹而不是散落的文件（PowerShell: `Compress-Archive -Path publish/staging/auratxt -DestinationPath xxx.zip`，传目录路径而非 `目录\*`，才会保留根目录层级）。
 
 **[关键]** 两个发布命令都必须带 `-p:PublishSingleFile=true`，框架依赖版本漏掉这个参数会产出十几个零散依赖 dll，而不是预期的单文件 exe（+ 视依赖情况可能有的 `runtimes\` 目录）。
 
-**[关键]** `publish/release` 里同时存放着真实运行数据（`config.json`/`prompts/`/`profiles/`/`themes/`/`icons/`），并非全是构建产物。在同一个输出目录切换 `--self-contained` 模式（true↔false）会触发 SDK 的过期产物清理，该清理不区分"自己生成的文件"和"目录里本来就有的其他文件"，会把这些真实数据一并删除。切换发布模式前务必先把这些文件/目录备份到别处。
+```sh
+# 单文件自包含版（~125MB；目标机器无需安装 .NET）
+dotnet publish AuraTxt/AuraTxt.csproj         -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -o publish/release
+dotnet publish AuraTxt.Cli/AuraTxt.Cli.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -o publish/release
+# 删除 AuraTxt.pdb / auracfg.pdb / AuraTxt.Core.pdb（不随包发布）
+```
+
+**[关键]** 在同一个 `publish/release` 输出目录切换 `--self-contained` 模式（true↔false）会触发 .NET SDK 的过期产物清理，该清理不区分"自己生成的文件"和"目录里本来就有的其他文件"，会把 `config.json`/`prompts/`/`profiles/`/`themes/`/`icons/`/`readme.txt` 等真实数据一并删除。**切换发布模式前务必先把这些文件/目录备份到别处**，发布完成后再拷回（或核对目录内容确认健在）。
+
+### 12.3 打包（zip）
+
+打包前把仓库根目录的 `readme.txt` 复制进 `publish/release`。
+
+不要直接压缩 `publish/release/*`——先把内容拷进一层 `auratxt/` 子目录（如 `publish/staging/auratxt/`），再对该子目录整体压缩，使 zip 内容形如 `auratxt/AuraTxt.exe`、`auratxt/config.json` 等，用户解压后得到一个 `auratxt` 文件夹而不是散落的文件：
+
+```powershell
+Compress-Archive -Path publish/staging/auratxt -DestinationPath AuraTXT_X.Y.zip
+```
+
+传目录路径本身（而非 `目录\*` 通配符）才会保留 `auratxt/` 这层根目录。框架依赖版和自包含版各自独立 stage + 压缩一次（自包含版发布会覆盖 `publish/release` 里的 exe，需重新 stage）。
+
+### 12.4 上传到 GitHub Release
+
+```sh
+gh release upload vX.Y AuraTXT_X.Y.zip AuraTXT_X.Y_self_contained.zip --clobber
+```
+
+`--clobber` 用于覆盖已存在同名资产（原地更新同一个 tag，而非发新版本号）；发新版本号则用 `gh release create`。发布说明（release notes）里若涉及升级风险，应同步提醒"解压到新目录、不要覆盖已有安装"（见 `readme.txt` 的 UPGRADING 一节）。
 
 ## 13. 测试要求（xunit）
 
