@@ -1,4 +1,5 @@
 using System.Windows;
+using AuraTxt.Resources;
 
 namespace AuraTxt.Windows;
 
@@ -13,9 +14,9 @@ public partial class PromptEditDialog : Window
         if (readOnly)
         {
             PromptBox.IsReadOnly = true;
-            Title = "Built-in Model";
+            Title = Strings.PromptEdit_BuiltinTitle;
             CancelBtn.Visibility = Visibility.Collapsed;
-            OkBtn.Content = "Close";
+            OkBtn.Content = Strings.Common_Close;
         }
     }
 
