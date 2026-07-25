@@ -270,7 +270,7 @@ ActionProcessed LastProcessedText=T   SelectionActioned=true
 
 **`TrayIconManager.NotePendingUpdate(UpdateInfo? info)`**：单纯赋值 `_pendingUpdate = info`，供 `AboutWindow`（见下）把它自己查到的结果同步回托盘共享状态，不弹气泡、不碰 `LastNotifiedUpdateVersion`（那个字段只跟启动气泡的"是否已经提醒过"有关）。
 
-**托盘菜单**：`About` 菜单项复用 §5.7 "Settings" 项每次 `ContextMenu.Opened` 动态刷新标题的同一模式——`_pendingUpdate == null` 时显示 "About"，否则显示 "About  ⬆ v{Version}"。点击**始终**打开 `AboutWindow`（不直接跳转链接，不重新触发检查）。
+**托盘菜单**：`About` 菜单项复用 §5.7 "Settings" 项每次 `ContextMenu.Opened` 动态刷新标题的同一模式——`_pendingUpdate == null` 时 Header 是纯字符串 "About"，否则 Header 换成一个 `TextBlock`（"About" 一个 `Run` + "  ⬆ v{Version}" 一个 `Run`，后者 `Foreground` 显式设成蓝色 `#2563EB`，与 AboutWindow 的"已是最新版本"用色一致）——MenuItem 的 Header 若是普通字符串会走 ContentPresenter 隐式生成的 TextBlock，继承 `PickerFgFill` 主题色，无法局部变色，所以有更新时必须换成显式 `TextBlock`/`Run` 才能只给提示部分上色、"About" 本身保持主题默认色。点击**始终**打开 `AboutWindow`（不直接跳转链接，不重新触发检查）。
 
 **`AboutWindow`**（`AuraTxt/Windows/AboutWindow.xaml`+`.xaml.cs`）——托盘"About"项现在打开的就是这个窗口，取代了原来直接开浏览器的行为。普通窗口样式（`WindowStartupLocation=CenterScreen`，非 ActionMenuWindow/ResultWindow 那套无边框置顶风格，跟 `PromptEditDialog` 一致）：
 - 内容：App logo + "AuraTxt" + 版本号（`v{Assembly版本.ToString(2)}`）、".NET 运行时"行（`RuntimeInformation.FrameworkDescription`）、更新状态行、"Automatically check for updates on startup" 复选框（绑定/即时存盘 `AutoUpdateCheckEnabled`）、底部一行：GitHub 图标链接（官方 octocat 图形，MIT 许可 Simple Icons 素材，内嵌 `Path` 跟随主题着色）→ 项目主页、"Releases" 文字链接 → releases 页面、"Close" 按钮。

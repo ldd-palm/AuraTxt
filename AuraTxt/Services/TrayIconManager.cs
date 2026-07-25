@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using H.NotifyIcon;
 using H.NotifyIcon.Core;
 using AuraTxt.Core.Services;
@@ -19,6 +20,11 @@ public class TrayIconManager : IDisposable
     private readonly MenuItem _reloadItem = null!;
     private readonly MenuItem _exitItem = null!;
     private UpdateInfo? _pendingUpdate;
+
+    // Same blue as AboutWindow's "up to date" status text, reused here for the
+    // update-available hint so the two surfaces read consistently.
+    private static readonly System.Windows.Media.SolidColorBrush UpdateHintBrush =
+        new(System.Windows.Media.Color.FromRgb(0x25, 0x63, 0xEB));
 
     public TrayIconManager(ConfigService config, Action onReload, Action onExit, Action? onToggleMonitor = null)
     {
@@ -82,9 +88,17 @@ public class TrayIconManager : IDisposable
                 : System.IO.Path.GetFileNameWithoutExtension(editor);
             _settingsItem.Header = $"{Strings.Tray_Settings} ({name})";
 
-            _aboutItem.Header = _pendingUpdate is { } pending
-                ? $"{Strings.Tray_About}  ⬆ v{pending.Version}"
-                : Strings.Tray_About;
+            if (_pendingUpdate is { } pending)
+            {
+                var header = new TextBlock();
+                header.Inlines.Add(new Run(Strings.Tray_About));
+                header.Inlines.Add(new Run($"  ⬆ v{pending.Version}") { Foreground = UpdateHintBrush });
+                _aboutItem.Header = header;
+            }
+            else
+            {
+                _aboutItem.Header = Strings.Tray_About;
+            }
         };
 
         _exitItem = new MenuItem { Header = Strings.Tray_Exit };
