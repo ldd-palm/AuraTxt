@@ -1,5 +1,5 @@
 ====================================================================
- AuraTxt v1.4
+ AuraTxt v1.5
  A portable, highly customizable AI text assistant for Windows
 ====================================================================
 
@@ -25,8 +25,8 @@ WHAT YOU GET
 QUICK START
 --------------------------------------------------------------------
 1. Extract this zip to any folder, e.g. C:\Tools\ -- it unpacks
-   into an "auratxt" subfolder
-2. Run auratxt\AuraTxt.exe -- a small icon appears in the system tray
+   into an "AuraTXT" subfolder
+2. Run AuraTXT\AuraTxt.exe -- a small icon appears in the system tray
 3. Highlight some text in any application and try the action bar
 4. To configure providers, models, and actions: right-click the
    tray icon -> Settings (opens auracfg.exe)

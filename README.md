@@ -59,8 +59,8 @@ Inspired by Cherry Studio's selection assistant and Qtranslate, AuraTxt goes fur
 
 ## Quick Start
 
-1. Extract the zip to any folder (e.g. `C:\Tools\`) — it unpacks into an `auratxt\` subfolder
-2. Run `auratxt\AuraTxt.exe` — a small icon appears in the system tray
+1. Extract the zip to any folder (e.g. `C:\Tools\`) — it unpacks into an `AuraTXT\` subfolder
+2. Run `AuraTXT\AuraTxt.exe` — a small icon appears in the system tray
 3. Highlight any text in any application
 4. The action bar pops up → click an action or press its hotkey
 5. To configure: right-click the tray icon → **Settings** (opens `auracfg.exe`)

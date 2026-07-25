@@ -596,13 +596,13 @@ dotnet publish AuraTxt.Cli/AuraTxt.Cli.csproj -c Release -r win-x64 --self-conta
 
 打包前把仓库根目录的 `readme.txt` 复制进 `publish/release`。
 
-不要直接压缩 `publish/release/*`——先把内容拷进一层 `auratxt/` 子目录（如 `publish/staging/auratxt/`），再对该子目录整体压缩，使 zip 内容形如 `auratxt/AuraTxt.exe`、`auratxt/config.json` 等，用户解压后得到一个 `auratxt` 文件夹而不是散落的文件：
+不要直接压缩 `publish/release/*`——先把内容拷进一层 `AuraTXT/` 子目录（如 `publish/staging/AuraTXT/`），再对该子目录整体压缩，使 zip 内容形如 `AuraTXT/AuraTxt.exe`、`AuraTXT/config.json` 等，用户解压后得到一个 `AuraTXT` 文件夹而不是散落的文件：
 
 ```powershell
-Compress-Archive -Path publish/staging/auratxt -DestinationPath AuraTXT_X.Y.zip
+Compress-Archive -Path publish/staging/AuraTXT -DestinationPath AuraTXT_X.Y.zip
 ```
 
-传目录路径本身（而非 `目录\*` 通配符）才会保留 `auratxt/` 这层根目录。框架依赖版和自包含版各自独立 stage + 压缩一次（自包含版发布会覆盖 `publish/release` 里的 exe，需重新 stage）。
+传目录路径本身（而非 `目录\*` 通配符）才会保留 `AuraTXT/` 这层根目录（大小写需与 zip 文件名一致）。框架依赖版和自包含版各自独立 stage + 压缩一次（自包含版发布会覆盖 `publish/release` 里的 exe，需重新 stage）。
 
 ### 12.4 上传到 GitHub Release
 
