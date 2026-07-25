@@ -44,4 +44,9 @@ public class AppSettings
     /// for. Prevents re-notifying on every launch for a release the user hasn't acted on
     /// yet. Internal bookkeeping only — not exposed in auracfg's General Settings page.
     public string LastNotifiedUpdateVersion { get; set; } = "";
+
+    /// Whether the app checks GitHub for a newer release once, silently, at startup.
+    /// Surfaced as a checkbox in the About window. Default true preserves the
+    /// previously-shipped always-on behavior for existing users.
+    public bool AutoUpdateCheckEnabled { get; set; } = true;
 }
