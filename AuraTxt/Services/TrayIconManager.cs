@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using H.NotifyIcon;
 using H.NotifyIcon.Core;
 using AuraTxt.Core.Services;
+using AuraTxt.Windows;
 
 namespace AuraTxt.Services;
 
@@ -13,6 +14,7 @@ public class TrayIconManager : IDisposable
     private readonly MenuItem _toggleMonitorItem = null!;
     private readonly MenuItem _toggleMenuItem = null!;
     private readonly MenuItem _settingsItem = null!;
+    private readonly MenuItem _aboutItem = null!;
     private UpdateInfo? _pendingUpdate;
 
     public TrayIconManager(ConfigService config, Action onReload, Action onExit, Action? onToggleMonitor = null)
@@ -66,6 +68,9 @@ public class TrayIconManager : IDisposable
             }
         };
 
+        _aboutItem = new MenuItem { Header = "About" };
+        _aboutItem.Click += (_, _) => new AboutWindow(_config, this).Show();
+
         menu.Opened += (_, _) =>
         {
             var editor = config.Load().Settings.ConfigEditor;
@@ -73,12 +78,11 @@ public class TrayIconManager : IDisposable
                 ? "auracfg"
                 : System.IO.Path.GetFileNameWithoutExtension(editor);
             _settingsItem.Header = $"Settings ({name})";
-        };
 
-        var aboutItem = new MenuItem { Header = "About" };
-        aboutItem.Click += (_, _) =>
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
-                "https://github.com/ldd-palm/AuraTxt") { UseShellExecute = true });
+            _aboutItem.Header = _pendingUpdate is { } pending
+                ? $"About  ⬆ v{pending.Version}"
+                : "About";
+        };
 
         var exitItem = new MenuItem { Header = "Exit" };
         exitItem.Click += (_, _) => onExit();
@@ -87,7 +91,8 @@ public class TrayIconManager : IDisposable
         menu.Items.Add(_toggleMenuItem);
         menu.Items.Add(reloadItem);
         menu.Items.Add(_settingsItem);
-        menu.Items.Add(aboutItem);
+        menu.Items.Add(_aboutItem);
+        menu.Items.Add(new Separator());
         menu.Items.Add(exitItem);
 
         _icon.ContextMenu = menu;
