@@ -70,14 +70,19 @@ public class DoctorCommand(ConfigService config)
             seen.Add(a);
         }
 
-        // Prompt file references must point to existing files
+        // Prompt file references must point to existing files.
+        // Terminal actions (ModelId == default/Terminal) store a cmd.exe command
+        // template in Prompt, not a file ref — see SPEC.md §3/§9.3.
         int badPrompts = 0;
         foreach (var a in cfg.Actions)
+        {
+            if (a.ModelId.Equals("default/Terminal", StringComparison.OrdinalIgnoreCase)) continue;
             if (PromptService.IsFileRef(a.Prompt) && !File.Exists(a.Prompt))
             {
                 Error($"Action \"{a.Id}\": prompt file not found — {a.Prompt}");
                 badPrompts++;
             }
+        }
         if (PromptService.IsFileRef(cfg.Settings.SystemPrompt) && !File.Exists(cfg.Settings.SystemPrompt))
         {
             Error($"System prompt file not found — {cfg.Settings.SystemPrompt}");
