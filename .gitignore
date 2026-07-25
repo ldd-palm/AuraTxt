@@ -25,6 +25,7 @@ MODEL_MANAGEMENT_REDESIGN.md
 nim_translator.py
 requirment.md
 youdao.js
+docs/
 
 ## Config files (contain API keys — never push)
 **/config.json.bak
