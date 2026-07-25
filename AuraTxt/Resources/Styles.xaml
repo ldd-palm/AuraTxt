@@ -63,6 +63,20 @@
     </Setter>
   </Style>
 
+  <!-- Tray context menu separator — flush with MenuItem's edges (Margin 2,1 on its
+       Border), not the default theme's icon-gutter-indented inset. -->
+  <Style TargetType="Separator">
+    <Setter Property="Background" Value="{DynamicResource SurfaceStroke}"/>
+    <Setter Property="Margin" Value="2,4"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Separator">
+          <Border Background="{TemplateBinding Background}" Height="1"/>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
   <!-- ComboBox dropdown items — always light bg + black text -->
   <Style TargetType="ComboBoxItem">
     <Setter Property="Background"  Value="{DynamicResource PickerBgFill}"/>
