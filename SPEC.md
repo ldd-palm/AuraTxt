@@ -283,7 +283,7 @@ ActionProcessed LastProcessedText=T   SelectionActioned=true
 
 **范围**：仅 AuraTxt 本体（托盘菜单 + 5 个窗口）。`auracfg` 自身 TUI 保持英文；日志、异常弹窗、AI prompt 不在范围内。
 
-**语言**：`en`（英语，默认/neutral resx）、`zh-Hans`（简体中文）、`ja`（日语）、`ko`（韩语）、`es`（西班牙语）、`fr`（法语）、`de`（德语），共 7 种，由 `LocalizationService.SupportedLanguages` 枚举（含 `"auto"` 共 8 项）。
+**语言**：`en`（英语，默认/neutral resx）、`zh-Hans`（简体中文）、`zh-Hant`（繁體中文）、`ja`（日语）、`ko`（韩语）、`es`（西班牙语）、`fr`（法语）、`de`（德语），共 8 种，由 `LocalizationService.SupportedLanguages` 枚举（含 `"auto"` 共 9 项）。**[关键]** 中文的 `"auto"` 判定不能只看两字母 ISO 码（`zh` 简繁通用，区分不出来）——`LocalizationService.Resolve` 的测试桩参数因此从"两字母 ISO 码"改成了"完整 culture 名"，按脚本子标签 `hant` 或地区码 `TW`/`HK`/`MO` 判定繁体，其余（含裸 `"zh"`）落回简体。
 
 **设置**：`AppSettings.UiLanguage`（string，默认 `"auto"`）。auracfg General Settings 页面的 "UI Language" 项（`U` 键）可切换；改动只在下次 AuraTxt 的 Reload Settings 后生效，不是实时的。
 
@@ -644,7 +644,7 @@ gh release create vX.Y AuraTXT_X.Y.zip AuraTXT_X.Y_self_contained.zip --title "A
 - PromptService.IsFileRef：单行路径 true、多行含 `/` 的内联 false（回归）、Resolve 文件/内联/空。
 - TerminalClient.BuildResolvedCommand（纯函数，不启动进程）：`{SelectedText}`/`{UserInput}` 替换、多次出现、无占位符时原样返回、命令模板为 .md 文件路径时经 PromptService 解析。进程启动/超时/取消路径不纳入常规 xunit 套件（避免 CI 抖动/耗时），改由手动验证覆盖。
 - UpdateService.IsNewer（internal，纯函数）：tag 比 current 新→true；相同/更旧→false；`v`/`V` 前缀两种大小写都能去掉；tag 格式解析不出来→false 且不抛异常。`CheckAsync` 的真实网络请求路径同样不纳入常规 xunit 套件，改由手动验证覆盖（见 §5.8）。
-- LocalizationService.Resolve（纯函数）：`"auto"` + 已知/未知 `osTwoLetterIso` → 对应 7 种语言之一 / 落回 `en`；显式合法/非法代码 → 透传 / 落回 `en`。`Apply` 实际设置 `CurrentUICulture` 及 `x:Static`/托盘菜单的联动效果不纳入常规 xunit 套件，改由手动验证覆盖（见 §5.9）。
+- LocalizationService.Resolve（纯函数）：`"auto"` + 已知/未知 `osCultureName`（完整 culture 名或裸两字母码）→ 对应 8 种语言之一 / 落回 `en`；中文按 `hant`/`TW`/`HK`/`MO` 区分简繁；显式合法/非法代码 → 透传 / 落回 `en`。`Apply` 实际设置 `CurrentUICulture` 及 `x:Static`/托盘菜单的联动效果不纳入常规 xunit 套件，改由手动验证覆盖（见 §5.9）。
 
 ## 14. 验收清单（端到端）
 

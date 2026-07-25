@@ -2,7 +2,7 @@ using System.Globalization;
 
 namespace AuraTxt.Core.Services;
 
-/// Resolves AppSettings.UiLanguage ("auto" or an explicit code) to one of the 7
+/// Resolves AppSettings.UiLanguage ("auto" or an explicit code) to one of the 8
 /// shipped languages, and applies it to the process's UI culture. Pure BCL logic
 /// (no WPF dependency) so it's usable — and testable — from Core.
 public static class LocalizationService
@@ -12,6 +12,7 @@ public static class LocalizationService
         ("auto",    "Auto"),
         ("en",      "English"),
         ("zh-Hans", "简体中文"),
+        ("zh-Hant", "繁體中文"),
         ("ja",      "日本語"),
         ("ko",      "한국어"),
         ("es",      "Español"),
@@ -22,17 +23,24 @@ public static class LocalizationService
     private static readonly HashSet<string> SupportedCodes =
         SupportedLanguages.Where(l => l.Code != "auto").Select(l => l.Code).ToHashSet();
 
-    /// Resolves "auto" against the OS UI language (or osTwoLetterIso, if given —
-    /// a test seam); explicit codes pass through if recognized, else "en".
-    public static string Resolve(string uiLanguage, string? osTwoLetterIso = null)
+    /// Resolves "auto" against the OS UI language (or osCultureName, if given — a
+    /// test seam accepting either a full culture name like "zh-TW" or a bare
+    /// two-letter code like "ja"); explicit codes pass through if recognized,
+    /// else "en". Chinese needs the script/region, not just the "zh" prefix, to
+    /// tell Simplified and Traditional apart — the two-letter ISO code alone is
+    /// the same for both.
+    public static string Resolve(string uiLanguage, string? osCultureName = null)
     {
         if (uiLanguage != "auto")
             return SupportedCodes.Contains(uiLanguage) ? uiLanguage : "en";
 
-        var iso = osTwoLetterIso ?? CultureInfo.InstalledUICulture.TwoLetterISOLanguageName;
+        var name = osCultureName ?? CultureInfo.InstalledUICulture.Name;
+        if (name.StartsWith("zh", StringComparison.OrdinalIgnoreCase))
+            return IsTraditionalChinese(name) ? "zh-Hant" : "zh-Hans";
+
+        var iso = name.Length >= 2 ? name[..2].ToLowerInvariant() : name.ToLowerInvariant();
         return iso switch
         {
-            "zh" => "zh-Hans",
             "ja" => "ja",
             "ko" => "ko",
             "es" => "es",
@@ -40,6 +48,15 @@ public static class LocalizationService
             "de" => "de",
             _    => "en",
         };
+    }
+
+    /// Traditional Chinese: the zh-Hant* script subtag, or the classic
+    /// region codes TW/HK/MO. Everything else Chinese (zh-Hans*, zh-CN, zh-SG,
+    /// or a bare "zh") defaults to Simplified.
+    private static bool IsTraditionalChinese(string cultureName)
+    {
+        var n = cultureName.ToLowerInvariant();
+        return n.Contains("hant") || n.EndsWith("-tw") || n.EndsWith("-hk") || n.EndsWith("-mo");
     }
 
     /// Sets CurrentUICulture (+ DefaultThreadCurrentUICulture for any non-UI
