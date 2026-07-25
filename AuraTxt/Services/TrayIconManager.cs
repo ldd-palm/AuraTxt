@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using H.NotifyIcon;
 using H.NotifyIcon.Core;
 using AuraTxt.Core.Services;
+using AuraTxt.Resources;
 using AuraTxt.Windows;
 
 namespace AuraTxt.Services;
@@ -15,6 +16,8 @@ public class TrayIconManager : IDisposable
     private readonly MenuItem _toggleMenuItem = null!;
     private readonly MenuItem _settingsItem = null!;
     private readonly MenuItem _aboutItem = null!;
+    private readonly MenuItem _reloadItem = null!;
+    private readonly MenuItem _exitItem = null!;
     private UpdateInfo? _pendingUpdate;
 
     public TrayIconManager(ConfigService config, Action onReload, Action onExit, Action? onToggleMonitor = null)
@@ -29,27 +32,27 @@ public class TrayIconManager : IDisposable
 
         var menu = new ContextMenu();
 
-        _toggleMonitorItem = new MenuItem { Header = "Service: Pause" };
+        _toggleMonitorItem = new MenuItem { Header = Strings.Tray_ServicePause };
         _toggleMonitorItem.Click += (_, _) =>
         {
             AppState.IsMonitoringPaused = !AppState.IsMonitoringPaused;
             _toggleMonitorItem.Header = AppState.IsMonitoringPaused
-                ? "Service: Resume" : "Service: Pause";
+                ? Strings.Tray_ServiceResume : Strings.Tray_ServicePause;
             SetTrayIcon();
             onToggleMonitor?.Invoke();
         };
 
-        _toggleMenuItem = new MenuItem { Header = "Hide Menu" };
+        _toggleMenuItem = new MenuItem { Header = Strings.Tray_HideMenu };
         _toggleMenuItem.Click += (_, _) =>
         {
             AppState.IsMenuHidden = !AppState.IsMenuHidden;
-            _toggleMenuItem.Header = AppState.IsMenuHidden ? "Show Menu" : "Hide Menu";
+            _toggleMenuItem.Header = AppState.IsMenuHidden ? Strings.Tray_ShowMenu : Strings.Tray_HideMenu;
         };
 
-        var reloadItem = new MenuItem { Header = "Reload Settings" };
-        reloadItem.Click += (_, _) => onReload();
+        _reloadItem = new MenuItem { Header = Strings.Tray_ReloadSettings };
+        _reloadItem.Click += (_, _) => onReload();
 
-        _settingsItem = new MenuItem { Header = "Settings (auracfg)" };
+        _settingsItem = new MenuItem { Header = $"{Strings.Tray_Settings} (auracfg)" };
         _settingsItem.Click += (_, _) =>
         {
             var configEditor = config.Load().Settings.ConfigEditor;
@@ -68,7 +71,7 @@ public class TrayIconManager : IDisposable
             }
         };
 
-        _aboutItem = new MenuItem { Header = "About" };
+        _aboutItem = new MenuItem { Header = Strings.Tray_About };
         _aboutItem.Click += (_, _) => new AboutWindow(_config, this).Show();
 
         menu.Opened += (_, _) =>
@@ -77,23 +80,23 @@ public class TrayIconManager : IDisposable
             var name = string.IsNullOrEmpty(editor)
                 ? "auracfg"
                 : System.IO.Path.GetFileNameWithoutExtension(editor);
-            _settingsItem.Header = $"Settings ({name})";
+            _settingsItem.Header = $"{Strings.Tray_Settings} ({name})";
 
             _aboutItem.Header = _pendingUpdate is { } pending
-                ? $"About  ⬆ v{pending.Version}"
-                : "About";
+                ? $"{Strings.Tray_About}  ⬆ v{pending.Version}"
+                : Strings.Tray_About;
         };
 
-        var exitItem = new MenuItem { Header = "Exit" };
-        exitItem.Click += (_, _) => onExit();
+        _exitItem = new MenuItem { Header = Strings.Tray_Exit };
+        _exitItem.Click += (_, _) => onExit();
 
         menu.Items.Add(_toggleMonitorItem);
         menu.Items.Add(_toggleMenuItem);
-        menu.Items.Add(reloadItem);
+        menu.Items.Add(_reloadItem);
         menu.Items.Add(_settingsItem);
         menu.Items.Add(_aboutItem);
         menu.Items.Add(new Separator());
-        menu.Items.Add(exitItem);
+        menu.Items.Add(_exitItem);
 
         _icon.ContextMenu = menu;
         _icon.ForceCreate();
@@ -111,6 +114,19 @@ public class TrayIconManager : IDisposable
     }
 
     public void RefreshIcon() => SetTrayIcon();
+
+    /// Re-applies localized labels to the static-text menu items after a language
+    /// change via "Reload Settings". _settingsItem/_aboutItem don't need this —
+    /// their Header is already recomputed every menu.Opened.
+    public void RefreshMenuText()
+    {
+        _toggleMonitorItem.Header = AppState.IsMonitoringPaused
+            ? Strings.Tray_ServiceResume : Strings.Tray_ServicePause;
+        _toggleMenuItem.Header = AppState.IsMenuHidden
+            ? Strings.Tray_ShowMenu : Strings.Tray_HideMenu;
+        _reloadItem.Header = Strings.Tray_ReloadSettings;
+        _exitItem.Header = Strings.Tray_Exit;
+    }
 
     /// Silent startup check only — does nothing if the user has turned it off, and
     /// never surfaces a failure or "no update" result (both are non-events for a

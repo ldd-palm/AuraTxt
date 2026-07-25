@@ -56,6 +56,7 @@ public partial class App : Application
             PromptService.EnsureScaffold();   // ensure Prompts dir + default system.md/template.md
             ProfileService.EnsureScaffold();  // seed profiles/ dir + embedded JSONs
             _config  = new ConfigService();
+            LocalizationService.Apply(_config.Load().Settings.UiLanguage);
             ApplyTheme(_config.Load().Settings.Theme);
             _hotkeys = new HotkeyService(_config);
             _tray    = new TrayIconManager(_config, ReloadConfig, () => Shutdown(), () =>
@@ -130,9 +131,11 @@ public partial class App : Application
         {
             ProfileService.Reload();
             var cfg = _config!.Load();
+            LocalizationService.Apply(cfg.Settings.UiLanguage);
             ApplyTheme(cfg.Settings.Theme);
             _hotkeys!.RegisterAll(cfg);
             _tray!.RefreshIcon();
+            _tray!.RefreshMenuText();
         }
         catch (Exception ex)
         {
