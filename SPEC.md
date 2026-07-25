@@ -249,29 +249,33 @@ ActionProcessed LastProcessedText=T   SelectionActioned=true
 2. **Hide Menu / Show Menu** —— 切换 `IsMenuHidden`。
 3. **Reload Settings** —— 重新 Load + ApplyTheme + RegisterAll + 刷新图标。
 4. **Settings ({编辑器名})** —— `ConfigEditor` 为空：启动 `{exe}/auracfg.exe`；非空：用该编辑器打开 config.json。菜单每次 `Opened` 时动态刷新此项标题。
-5. **Check for Updates / ⬆ Update available (v{X})** —— 动态标题，见 §5.8。
-6. **About** —— `Process.Start(new ProcessStartInfo(url){UseShellExecute=true})` 打开项目主页。
-7. **Exit** —— `Application.Shutdown()`。
+5. **About / About  ⬆ v{X}** —— 动态标题，见 §5.8。点击打开 AboutWindow。
+6. **Exit** —— `Application.Shutdown()`，上方有一条分隔线（`Separator`）与 About 隔开。
 
-### 5.8 自动更新检查（UpdateService + TrayIconManager）[关键]
+### 5.8 自动更新检查（UpdateService + TrayIconManager + AboutWindow）[关键]
 
-**Core 层**（`AuraTxt.Core/Services/UpdateService.cs`，static class，static 共享 `HttpClient`，10s 超时，`User-Agent: AuraTxt-UpdateCheck`——GitHub API 拒绝无 UA 的请求）：
-- `CheckAsync(Version currentVersion, CancellationToken ct = default)`：`GET https://api.github.com/repos/ldd-palm/AuraTxt/releases/latest`，解析 `tag_name`/`html_url`。**检查成功但没有更新版本 → 返回 `null`；请求/解析失败（网络、超时、非 2xx、JSON 错误）→ 抛异常**——两者语义不同是有意为之：手动检查需要分别提示"已是最新"和"检查失败"，启动时的静默检查则两者一视同仁（见下）。
-- `IsNewer(string tagName, Version current)`（internal，纯函数，不联网）：去掉 tagName 开头的 `v`/`V` 后 `Version.TryParse`，解析失败或不比 current 新都返回 `false`，绝不抛异常、绝不误报。**[关键]** `<Version>1.3</Version>` 这种两段式在 csproj 里会被 MSBuild 补齐成 4 段 `AssemblyVersion`（如 `1.3.0.0`），而 tag 如 `"v1.3"` 解析出的 `Version` 只有 2 段（`Build`/`Revision` 为 -1）；`Version` 比较时缺失字段视为小于任何非负数，因此同一版本号（`v1.3` vs `1.3.0.0`）比较结果稳定为"不是更新"，不会误报。
+**Core 层**（`AuraTxt.Core/Services/UpdateService.cs`）：不变，见原设计（`CheckAsync`/`IsNewer`，静态共享 HttpClient，10s 超时，UA 头，版本号由调用方传入）。
 
-**版本号来源 [关键]**：`CheckAsync` 的 `currentVersion` 由调用方（WPF 层）传入，而不是在 `UpdateService` 内部自己读 `Assembly.GetExecutingAssembly().GetName().Version`——因为 `UpdateService` 位于 `AuraTxt.Core.dll`，那样读到的会是 Core 自己的程序集版本（永远不设 `<Version>`），不是 `AuraTxt.exe` 的。`AuraTxt.csproj` 单独有 `<Version>`（如 `1.3`，需跟发布时打的 git tag 手动保持一致），`AuraTxt.Cli.csproj` 不需要——auracfg 本身不做更新检查。
+**设置**：`AppSettings.AutoUpdateCheckEnabled`（bool，默认 true）——是否在启动时静默检查一次；**不出现在** auracfg 的 General Settings 页面，只能在 AboutWindow 里的复选框切换（切换即存盘）。
 
-**WPF 层**（`TrayIconManager`）：
-- 状态：`UpdateInfo? _pendingUpdate`（仅存在于本次运行内存中，不持久化）；`AppSettings.LastNotifiedUpdateVersion`（持久化到 config.json，纯内部记账用，**不出现在** auracfg 的 General Settings 页面）记录"气泡已经提醒过的版本号"，避免同一版本每次启动都弹。
-- `CheckForUpdatesAsync(bool manual)`：
-  1. `await UpdateService.CheckAsync(current)`（`current` 来自 `Assembly.GetExecutingAssembly().GetName().Version`，此处在 `AuraTxt.exe` 内执行，正确解析到主程序版本）。
-  2. 抛异常（检查失败）→ `manual=true` 时气泡提示 "Could not check for updates."，`manual=false`（启动时）静默放弃。
-  3. 返回 `null`（无更新）→ `manual=true` 时气泡提示 "You're up to date (v{current})."，`manual=false` 静默放弃。
-  4. 返回有效 `UpdateInfo` → `_pendingUpdate` 赋值；若其 `Version` ≠ `Settings.LastNotifiedUpdateVersion` → 气泡提示 "Version {X} is available." 并把新版本号写入 `LastNotifiedUpdateVersion`（`ConfigService.Save`）；若已经等于上次提醒过的版本 → 只更新 `_pendingUpdate`（菜单项仍会显示"有更新"），不再弹气泡。
-- **[关键] 线程安全**：`CheckForUpdatesAsync` 会被两处调用——App 启动时的后台 `Task.Run`（非 UI 线程）和菜单项 `Click`（UI 线程）。`TaskbarIcon` 是 WPF 相关类型，`ShowNotification` 目前在 H.NotifyIcon 2.1.0 内部实现里恰好没有校验调用线程，但这不是文档保证的跨线程契约。因此 `await UpdateService.CheckAsync(...)` 之后所有触碰 `_icon`/`_pendingUpdate`/`_config` 的代码统一包在 `Application.Current.Dispatcher.Invoke(...)` 里执行——与 §5.2 睡眠/唤醒后 `OnPowerModeChanged` 用 `Dispatcher.BeginInvoke` 回到 UI 线程重装钩子是同一个原则。`Dispatcher.Invoke` 在已经身处 UI 线程时会直接同步执行、不会死锁，因此菜单点击这条路径同样安全。
-- 菜单项标题：复用 §5.7 "Settings" 项每次 `ContextMenu.Opened` 动态刷新标题的同一模式——`_pendingUpdate == null` 时显示 "Check for Updates"，否则显示 "⬆ Update available (v{Version})"。
-- 菜单项点击：`_pendingUpdate == null` → 触发一次 `CheckForUpdatesAsync(manual: true)`；`_pendingUpdate != null` → 直接 `Process.Start(new ProcessStartInfo(_pendingUpdate.Url){UseShellExecute=true})` 打开 release 页面，不重新检查。
-- **不做的事**：不下载、不自动安装、不重启、General Settings 里没有开关——检查行为恒定开启，用户仍然手动去浏览器完成更新。
+**启动时（`App.xaml.cs`）**：`_ = _tray.CheckForUpdatesAsync();`（无参数，fire-and-forget）。
+
+**`TrayIconManager.CheckForUpdatesAsync()`**——仅用于启动时的静默检查，[关键] 已不再接受 `manual` 参数（旧设计里唯一需要区分 manual/silent 的调用方——托盘菜单的"Check for Updates"项——已被移除，见下）：
+1. `Settings.AutoUpdateCheckEnabled == false` → 直接返回，什么都不做。
+2. `UpdateService.CheckAsync` 抛异常或返回 `null`（无更新）→ 静默返回，不提示。
+3. 找到更新 → 设置 `_pendingUpdate`；若其 `Version` ≠ `Settings.LastNotifiedUpdateVersion` → 弹气泡通知并把新版本号写入 `LastNotifiedUpdateVersion`（`ConfigService.Save`）。
+4. **[关键] 线程安全**：`await UpdateService.CheckAsync(...)` 之后所有触碰 `_icon`/`_pendingUpdate`/`_config` 的代码统一包在 `Application.Current.Dispatcher.Invoke(...)` 里执行——原因和写法与之前一致（该方法仍会被 App 启动阶段的后台调用触发）。
+
+**`TrayIconManager.NotePendingUpdate(UpdateInfo? info)`**：单纯赋值 `_pendingUpdate = info`，供 `AboutWindow`（见下）把它自己查到的结果同步回托盘共享状态，不弹气泡、不碰 `LastNotifiedUpdateVersion`（那个字段只跟启动气泡的"是否已经提醒过"有关）。
+
+**托盘菜单**：`About` 菜单项复用 §5.7 "Settings" 项每次 `ContextMenu.Opened` 动态刷新标题的同一模式——`_pendingUpdate == null` 时显示 "About"，否则显示 "About  ⬆ v{Version}"。点击**始终**打开 `AboutWindow`（不直接跳转链接，不重新触发检查）。
+
+**`AboutWindow`**（`AuraTxt/Windows/AboutWindow.xaml`+`.xaml.cs`）——托盘"About"项现在打开的就是这个窗口，取代了原来直接开浏览器的行为。普通窗口样式（`WindowStartupLocation=CenterScreen`，非 ActionMenuWindow/ResultWindow 那套无边框置顶风格，跟 `PromptEditDialog` 一致）：
+- 内容：App logo + "AuraTxt" + 版本号（`v{Assembly版本.ToString(2)}`）、".NET 运行时"行（`RuntimeInformation.FrameworkDescription`）、更新状态行、"Automatically check for updates on startup" 复选框（绑定/即时存盘 `AutoUpdateCheckEnabled`）、底部一行：GitHub 图标链接（官方 octocat 图形，MIT 许可 Simple Icons 素材，内嵌 `Path` 跟随主题着色）→ 项目主页、"Releases" 文字链接 → releases 页面、"Close" 按钮。
+- **打开即检查，[关键] 不受 `AutoUpdateCheckEnabled` 开关影响**——开关只管启动时的静默检查，手动打开 About 属于用户主动操作，永远查。构造函数里 `_ = CheckForUpdateAsync(version)` fire-and-forget（此处发起调用的上下文本身就在 UI 线程——菜单项 `Click` 触发——`await` 后的延续按 WPF 默认的 SynchronizationContext 行为会自动回到 UI 线程，不需要像 §5.8 启动路径那样显式 `Dispatcher.Invoke`）。
+- 结果直接更新窗口内的文字（"✓ You're up to date" / "⬆ Update available: v{X}"，可点击打开该 release 的具体页面 / "Could not check for updates"），**不弹气泡**（用户已经在看这个窗口了）；同时调用 `_tray.NotePendingUpdate(info)` 把结果同步回托盘共享状态，供菜单标题下次打开时用。
+
+**不做的事**：不下载、不自动安装、不重启。开关放在 About 窗口里，不放进 auracfg 的 General Settings。
 
 ## 6. AiClient + Profile + Adapter 层（位于 Core）
 
