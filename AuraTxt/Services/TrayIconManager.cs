@@ -39,14 +39,11 @@ public class TrayIconManager : IDisposable
         var menu = new ContextMenu();
 
         _toggleMonitorItem = new MenuItem { Header = Strings.Tray_ServicePause };
-        _toggleMonitorItem.Click += (_, _) =>
-        {
-            AppState.IsMonitoringPaused = !AppState.IsMonitoringPaused;
-            _toggleMonitorItem.Header = AppState.IsMonitoringPaused
-                ? Strings.Tray_ServiceResume : Strings.Tray_ServicePause;
-            SetTrayIcon();
-            onToggleMonitor?.Invoke();
-        };
+        _toggleMonitorItem.Click += (_, _) => ToggleMonitoring(onToggleMonitor);
+
+        // Left-click the tray icon itself toggles pause/resume too — same effect as
+        // the "Service: Pause/Resume" menu item, just without opening the menu first.
+        _icon.TrayLeftMouseUp += (_, _) => ToggleMonitoring(onToggleMonitor);
 
         _toggleMenuItem = new MenuItem { Header = Strings.Tray_HideMenu };
         _toggleMenuItem.Click += (_, _) =>
@@ -114,6 +111,18 @@ public class TrayIconManager : IDisposable
 
         _icon.ContextMenu = menu;
         _icon.ForceCreate();
+    }
+
+    /// Shared by the tray icon's left-click and the "Service: Pause/Resume" menu
+    /// item — both flip AppState.IsMonitoringPaused, refresh the menu label and
+    /// icon, and notify App.xaml.cs to (un)register hotkeys.
+    private void ToggleMonitoring(Action? onToggleMonitor)
+    {
+        AppState.IsMonitoringPaused = !AppState.IsMonitoringPaused;
+        _toggleMonitorItem.Header = AppState.IsMonitoringPaused
+            ? Strings.Tray_ServiceResume : Strings.Tray_ServicePause;
+        SetTrayIcon();
+        onToggleMonitor?.Invoke();
     }
 
     private void SetTrayIcon()

@@ -247,7 +247,7 @@ ActionProcessed LastProcessedText=T   SelectionActioned=true
 ### 5.7 托盘（TrayIconManager）
 
 `TaskbarIcon` + ContextMenu，菜单项依次：
-1. **Service: Pause/Resume** —— 切换 `IsMonitoringPaused`、切换图标（`aruatxt_active.ico`/`aruatxt_paused.ico`）、回调 App 注销/重注册热键。
+1. **Service: Pause/Resume** —— 切换 `IsMonitoringPaused`、切换图标（`aruatxt_active.ico`/`aruatxt_paused.ico`，paused 图标本身就是灰色）、回调 App 注销/重注册热键。**[关键]** 左键单击托盘图标（`TaskbarIcon.TrayLeftMouseUp`）与点这一项走同一个 `ToggleMonitoring` 方法，效果完全一致；`TaskbarIcon.MenuActivation` 默认值是 `RightClick`，左键不会额外弹出菜单，两者互不干扰。
 2. **Hide Menu / Show Menu** —— 切换 `IsMenuHidden`。
 3. **Reload Settings** —— 重新 Load + ApplyTheme + RegisterAll + 刷新图标。
 4. **Settings ({编辑器名})** —— `ConfigEditor` 为空：启动 `{exe}/auracfg.exe`；非空：用该编辑器打开 config.json。菜单每次 `Opened` 时动态刷新此项标题。
