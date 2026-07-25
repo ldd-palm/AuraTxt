@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Media;
 using AuraTxt.Core.Services;
 using AuraTxt.Services;
 
@@ -9,6 +10,9 @@ namespace AuraTxt.Windows;
 
 public partial class AboutWindow : Window
 {
+    private static readonly SolidColorBrush UpToDateBrush = new(System.Windows.Media.Color.FromRgb(0x25, 0x63, 0xEB));
+    private static readonly SolidColorBrush UpdateAvailableBrush = new(System.Windows.Media.Color.FromRgb(0xDC, 0x26, 0x26));
+
     private readonly ConfigService _config;
     private readonly TrayIconManager _tray;
     private UpdateInfo? _foundUpdate;
@@ -23,7 +27,7 @@ public partial class AboutWindow : Window
         VersionText.Text = $"v{version.ToString(2)}";
         RuntimeText.Text = $"Running on {RuntimeInformation.FrameworkDescription}";
 
-        AutoUpdateCheckBox.IsChecked = config.Load().Settings.AutoUpdateCheckEnabled;
+        AutoUpdateToggle.IsChecked = config.Load().Settings.AutoUpdateCheckEnabled;
 
         UpdateStatusText.Text = "Checking for updates…";
         _ = CheckForUpdateAsync(version);
@@ -39,10 +43,12 @@ public partial class AboutWindow : Window
             if (info is null)
             {
                 UpdateStatusText.Text = "✓ You're up to date";
+                UpdateStatusText.Foreground = UpToDateBrush;
             }
             else
             {
                 UpdateStatusText.Text = $"⬆ Update available: v{info.Version}";
+                UpdateStatusText.Foreground = UpdateAvailableBrush;
                 UpdateStatusText.Cursor = System.Windows.Input.Cursors.Hand;
             }
         }
@@ -59,10 +65,10 @@ public partial class AboutWindow : Window
                 info.Url) { UseShellExecute = true });
     }
 
-    private void AutoUpdateCheckBox_Changed(object sender, RoutedEventArgs e)
+    private void AutoUpdateToggle_Changed(object sender, RoutedEventArgs e)
     {
         var cfg = _config.Load();
-        cfg.Settings.AutoUpdateCheckEnabled = AutoUpdateCheckBox.IsChecked == true;
+        cfg.Settings.AutoUpdateCheckEnabled = AutoUpdateToggle.IsChecked == true;
         _config.Save(cfg);
     }
 
