@@ -59,6 +59,7 @@ public class GeneralSettingsPage : PageBase
         new MenuItem("8", "Prompt Editor",   string.IsNullOrEmpty(s.PromptEditor) ? "notepad.exe (default)" : s.PromptEditor),
         new MenuItem("9", "Config Editor",   string.IsNullOrEmpty(s.ConfigEditor) ? "auracfg (default)"    : s.ConfigEditor),
         new MenuItem("T", "Terminal Output", s.TerminalUseConsoleWindow ? "Console window" : "Result window (default)"),
+        new MenuItem("U", "UI Language",     UiLanguageLabel(s.UiLanguage)),
     ];
 
     private bool HandleKey(string key, AppSettings s, TuiApp app)
@@ -104,6 +105,9 @@ public class GeneralSettingsPage : PageBase
                 s.TerminalUseConsoleWindow = !s.TerminalUseConsoleWindow; app.MarkDirty();
                 app.Renderer.SetNotice($"Terminal Output → {(s.TerminalUseConsoleWindow ? "Console window" : "Result window")}");
                 break;
+            case "U":
+                SelectUiLanguage(s, app);
+                break;
         }
         return false;
     }
@@ -123,6 +127,18 @@ public class GeneralSettingsPage : PageBase
         if (!string.IsNullOrWhiteSpace(code))
         { s.TargetLanguage = code; app.MarkDirty(); app.Renderer.SetNotice($"Language → {TuiApp.LangLabel(code)}"); }
     }
+
+    private static void SelectUiLanguage(AppSettings s, TuiApp app)
+    {
+        var labels = LocalizationService.SupportedLanguages.Select(l => l.Name).ToList();
+        var choice = app.Renderer.SelectFromList("UI Language", labels, UiLanguageLabel(s.UiLanguage));
+        var code   = LocalizationService.SupportedLanguages.First(l => l.Name == choice).Code;
+        s.UiLanguage = code; app.MarkDirty();
+        app.Renderer.SetNotice($"UI Language → {choice} (use Reload Settings in AuraTxt's tray menu to apply)");
+    }
+
+    private static string UiLanguageLabel(string code) =>
+        LocalizationService.SupportedLanguages.FirstOrDefault(l => l.Code == code).Name ?? code;
 
     private static void SelectTheme(AppSettings s, TuiApp app)
     {
