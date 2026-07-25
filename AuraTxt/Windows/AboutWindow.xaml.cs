@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 using AuraTxt.Core.Services;
+using AuraTxt.Resources;
 using AuraTxt.Services;
 
 namespace AuraTxt.Windows;
@@ -25,11 +26,11 @@ public partial class AboutWindow : Window
 
         var version = Assembly.GetExecutingAssembly().GetName().Version ?? new Version(0, 0);
         VersionText.Text = $"v{version.ToString(2)}";
-        RuntimeText.Text = $"Running on {RuntimeInformation.FrameworkDescription}";
+        RuntimeText.Text = string.Format(Strings.About_RuntimeFormat, RuntimeInformation.FrameworkDescription);
 
         AutoUpdateToggle.IsChecked = config.Load().Settings.AutoUpdateCheckEnabled;
 
-        UpdateStatusText.Text = "Checking for updates…";
+        UpdateStatusText.Text = Strings.About_CheckingForUpdates;
         _ = CheckForUpdateAsync(version);
     }
 
@@ -42,19 +43,19 @@ public partial class AboutWindow : Window
             _foundUpdate = info;
             if (info is null)
             {
-                UpdateStatusText.Text = "✓ You're up to date";
+                UpdateStatusText.Text = Strings.About_UpToDate;
                 UpdateStatusText.Foreground = UpToDateBrush;
             }
             else
             {
-                UpdateStatusText.Text = $"⬆ Update available: v{info.Version}";
+                UpdateStatusText.Text = string.Format(Strings.About_UpdateAvailableFormat, info.Version);
                 UpdateStatusText.Foreground = UpdateAvailableBrush;
                 UpdateStatusText.Cursor = System.Windows.Input.Cursors.Hand;
             }
         }
         catch
         {
-            UpdateStatusText.Text = "Could not check for updates";
+            UpdateStatusText.Text = Strings.About_CheckFailed;
         }
     }
 
