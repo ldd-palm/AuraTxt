@@ -568,7 +568,7 @@ auracfg restore     # 从 config.json.bak 恢复
 dotnet build && dotnet test
 ```
 
-发布前停止运行中的 `AuraTxt.exe`（占用 exe 会导致 `dotnet publish` 报 MSB3027 锁文件错误）。
+发布前停止运行中的 `AuraTxt.exe`（占用 exe 会导致 `dotnet publish` 报 MSB3027 锁文件错误）。若要发新版本号，先改 `AuraTxt/AuraTxt.csproj` 的 `<Version>`（`auracfg.exe` 没有独立版本号，只有 `AuraTxt.exe` 的程序集版本会显示在 About 窗口）。
 
 ### 12.2 发布（dotnet publish）
 
@@ -594,7 +594,7 @@ dotnet publish AuraTxt.Cli/AuraTxt.Cli.csproj -c Release -r win-x64 --self-conta
 
 ### 12.3 打包（zip）
 
-打包前把仓库根目录的 `readme.txt` 复制进 `publish/release`。
+打包前把仓库根目录的 `readme.txt` 复制进 `publish/release`。**[关键]** 若 `publish/release` 里有 `config.json.bak`（auracfg 保存时自动生成的备份，见 §11），打包前必须删除——它不是发布产物，不该出现在用户拿到的 zip 里。
 
 不要直接压缩 `publish/release/*`——先把内容拷进一层 `AuraTXT/` 子目录（如 `publish/staging/AuraTXT/`），再对该子目录整体压缩，使 zip 内容形如 `AuraTXT/AuraTxt.exe`、`AuraTXT/config.json` 等，用户解压后得到一个 `AuraTXT` 文件夹而不是散落的文件：
 
@@ -606,11 +606,28 @@ Compress-Archive -Path publish/staging/AuraTXT -DestinationPath AuraTXT_X.Y.zip
 
 ### 12.4 上传到 GitHub Release
 
+**给已有 tag 补发资产/修复**（同一版本号内的迭代，如打包后又发现小问题）：
+
 ```sh
 gh release upload vX.Y AuraTXT_X.Y.zip AuraTXT_X.Y_self_contained.zip --clobber
 ```
 
-`--clobber` 用于覆盖已存在同名资产（原地更新同一个 tag，而非发新版本号）；发新版本号则用 `gh release create`。发布说明（release notes）里若涉及升级风险，应同步提醒"解压到新目录、不要覆盖已有安装"（见 `readme.txt` 的 UPGRADING 一节）。
+`--clobber` 覆盖已存在的同名资产，tag 和版本号不变。若还需要改发布说明正文（例如补一条"What's new"），用：
+
+```sh
+gh release view vX.Y --json body --jq '.body' > /tmp/notes.md   # 取现有正文改
+gh release edit vX.Y --notes-file /tmp/notes.md
+```
+
+**发新版本号**：
+
+```sh
+gh release create vX.Y AuraTXT_X.Y.zip AuraTXT_X.Y_self_contained.zip --title "AuraTxt vX.Y" --notes-file /tmp/notes.md
+```
+
+发布说明固定包含几块：What's new（本版变化，按用户能感知到的粒度写，不是 commit log）、Upgrading（涉及升级风险时提醒"解压到新目录、不要覆盖已有安装"，见 `readme.txt` 的 UPGRADING 一节）、Downloads（两个包的大小/依赖对照表）。
+
+**收尾**：`README.md` 的 Download 表格两行链接/版本号同步改成新版本号，commit + push；`publish/release` 里的 exe/dll/pdb 是可重新生成的构建产物，上传完成后可以删掉，只留 `config.json`/`prompts/`/`profiles/`/`themes/`/`icons/`/`readme.txt` 这些真实数据（见 §12.2 的目录混用说明）；`publish/staging/`、根目录下的 `AuraTXT_X.Y*.zip` 也一并清理。
 
 ## 13. 测试要求（xunit）
 
