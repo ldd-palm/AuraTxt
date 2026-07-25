@@ -18,6 +18,12 @@ public class GlobalHookService
     /// plain click (no movement) apart from a real drag-selection on mouse-up.
     private System.Drawing.Point _mouseDownPoint;
 
+    /// True when the left button went down inside the active action menu's bounds
+    /// (e.g. on its drag-handle logo). Lets OnMouseUp recognize a menu drag/click
+    /// — which DragMove reports to us as ordinary large mouse movement — instead of
+    /// mistaking it for a text drag-selection elsewhere. See OnMouseUp.
+    private bool _mouseDownInsideMenu;
+
     /// Min pixel movement between down and up to count as a "drag" (text selection).
     /// A plain click stays under this and is ignored — no Ctrl+C, no menu.
     private const int DragThreshold = 5;
@@ -65,7 +71,7 @@ public class GlobalHookService
             // Record press position for the click-vs-drag test on mouse-up.
             _mouseDownPoint = new System.Drawing.Point(e.X, e.Y);
 
-            if (AppState.ActiveMenu is null) return;
+            if (AppState.ActiveMenu is null) { _mouseDownInsideMenu = false; return; }
 
             var clickX = e.X;
             var clickY = e.Y;
@@ -75,22 +81,16 @@ public class GlobalHookService
                 try
                 {
                     var menu = AppState.ActiveMenu;
-                    if (menu is null || !menu.IsVisible) return;
+                    if (menu is null || !menu.IsVisible) { _mouseDownInsideMenu = false; return; }
 
-                    // Convert menu WPF DIPs → physical pixels for bounds comparison
-                    var src = PresentationSource.FromVisual(menu);
-                    if (src is null) return;
-
-                    var toDevice = src.CompositionTarget.TransformToDevice;
-                    var tl = toDevice.Transform(new System.Windows.Point(menu.Left, menu.Top));
-                    var br = toDevice.Transform(new System.Windows.Point(
-                        menu.Left + menu.ActualWidth,
-                        menu.Top  + menu.ActualHeight));
-
-                    // Click inside menu bounds → do nothing (let normal click handling run)
-                    if (clickX >= tl.X && clickX <= br.X &&
-                        clickY >= tl.Y && clickY <= br.Y)
+                    if (IsPointInsideMenu(menu, clickX, clickY))
+                    {
+                        // Click inside menu bounds → do nothing (let normal click handling
+                        // run) and remember it for OnMouseUp's drag-vs-selection check.
+                        _mouseDownInsideMenu = true;
                         return;
+                    }
+                    _mouseDownInsideMenu = false;
 
                     // Click outside → deferred light-dismiss.
                     // The 500 ms delay gives a MouseDoubleClick time to arrive and
@@ -106,6 +106,26 @@ public class GlobalHookService
             });
         }
         catch { }
+    }
+
+    /// True if (x,y) in physical screen pixels falls within menu's current on-screen
+    /// bounds. Shared by OnMouseDown (gates the deferred light-dismiss) and OnMouseUp
+    /// (recognizes an internal action-menu drag/click) — the menu may have moved
+    /// between the down and up events via DragMove, so this is always re-evaluated
+    /// against the menu's current position, not the one at mouse-down time.
+    private static bool IsPointInsideMenu(Window menu, int x, int y)
+    {
+        if (!menu.IsVisible) return false;
+        var src = PresentationSource.FromVisual(menu);
+        if (src is null) return false;
+
+        var toDevice = src.CompositionTarget.TransformToDevice;
+        var tl = toDevice.Transform(new System.Windows.Point(menu.Left, menu.Top));
+        var br = toDevice.Transform(new System.Windows.Point(
+            menu.Left + menu.ActualWidth,
+            menu.Top  + menu.ActualHeight));
+
+        return x >= tl.X && x <= br.X && y >= tl.Y && y <= br.Y;
     }
 
     // ── Double-click: capture selected word and show/update the action menu ──
@@ -191,6 +211,7 @@ public class GlobalHookService
             var dy = Math.Abs(e.Y - _mouseDownPoint.Y);
             if (dx < DragThreshold && dy < DragThreshold)
             {
+                _mouseDownInsideMenu = false;
                 if (!AppState.SelectionActioned)
                 {
                     // No action was taken — user dismissed the menu without acting.
@@ -215,11 +236,26 @@ public class GlobalHookService
             if (AppState.IsResultWindowOpen) return;
 
             var pos = new System.Drawing.Point(e.X, e.Y);
+            var wasInsideMenuOnDown = _mouseDownInsideMenu;
+            _mouseDownInsideMenu = false;
             AppState.SourceWindowHandle = ClipboardService.CaptureSourceWindow();
 
             Application.Current?.Dispatcher.BeginInvoke(async () =>
             {
-                try { await CaptureAndShowMenuAsync(pos, allowInPlaceUpdate: false); }
+                try
+                {
+                    // The action menu's drag-handle logo moves the window via DragMove —
+                    // to the global hook that looks exactly like a large mouse-down/up
+                    // movement, which would otherwise be mistaken for a text
+                    // drag-selection. If the gesture started and ends inside the
+                    // (possibly now-moved) menu bounds, it's an internal interaction,
+                    // not a selection — leave the menu alone.
+                    if (wasInsideMenuOnDown && AppState.ActiveMenu is { } menu &&
+                        IsPointInsideMenu(menu, pos.X, pos.Y))
+                        return;
+
+                    await CaptureAndShowMenuAsync(pos, allowInPlaceUpdate: false);
+                }
                 catch { }
             });
         }

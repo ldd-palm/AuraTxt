@@ -166,7 +166,8 @@ class ActionItem {
 3. 非左键 → 返回。
 4. **[关键] 位移判定**：`|dx|<5 && |dy|<5` 视为纯点击，不碰剪贴板直接处理"平点击"逻辑（见选区状态机 §5.4）后返回。
 5. `MenuSuppressUntil` 冷却中 → 返回；`IsResultWindowOpen` → 返回。
-6. Dispatcher.BeginInvoke 异步调用 `CaptureAndShowMenuAsync(pos, allowInPlaceUpdate: false)`（见下）。
+6. **[关键] 菜单内拖拽豁免**：ActionMenuWindow 拖动 Logo 走 `DragMove()`（见 §7.1），全局钩子只看得到"按下→大位移→抬起"，和真实划词拖拽在坐标层面完全无法区分。`OnMouseDown` 记录按下点是否落在 `AppState.ActiveMenu` 范围内（`_mouseDownInsideMenu`）；`OnMouseUp` 里若该标志为真，且抬起点用 `IsPointInsideMenu` 重新按菜单**当前**位置（DragMove 期间菜单跟着光标移动，位置已变）判定仍在范围内，则直接返回，不当作划词处理——避免拖动菜单本身被误判成新选区从而把正在拖的菜单顶掉/闪烁。二者共用的 `IsPointInsideMenu` 静态方法与步骤 6 之前 MouseDown 用来判断"点击是否在菜单外"的矩形比较逻辑相同（DIP→物理像素经 `TransformToDevice`）。
+7. Dispatcher.BeginInvoke 异步调用 `CaptureAndShowMenuAsync(pos, allowInPlaceUpdate: false)`（见下）。
 
 **MouseDoubleClick（双击选词）**：
 1. 取消挂起的 DeferredClose（双击"认领"了这次点击）。
