@@ -559,6 +559,8 @@ dotnet publish AuraTxt.Cli/AuraTxt.Cli.csproj -c Release -r win-x64 --self-conta
 
 CLI 项目须与 WPF 输出到相同目录（托盘 Settings 按 `{exe}/auracfg.exe` 启动）。打包前把仓库根目录的 `readme.txt` 复制进 `publish/release`。
 
+打包 zip 时不要直接压缩 `publish/release/*`——先把内容拷进一层 `auratxt/` 子目录（如 `publish/staging/auratxt/`），再对该子目录整体压缩，使 zip 内容形如 `auratxt/AuraTxt.exe`、`auratxt/config.json` 等，用户解压后得到一个 `auratxt` 文件夹而不是散落的文件（PowerShell: `Compress-Archive -Path publish/staging/auratxt -DestinationPath xxx.zip`，传目录路径而非 `目录\*`，才会保留根目录层级）。
+
 **[关键]** 两个发布命令都必须带 `-p:PublishSingleFile=true`，框架依赖版本漏掉这个参数会产出十几个零散依赖 dll，而不是预期的单文件 exe（+ 视依赖情况可能有的 `runtimes\` 目录）。
 
 **[关键]** `publish/release` 里同时存放着真实运行数据（`config.json`/`prompts/`/`profiles/`/`themes/`/`icons/`），并非全是构建产物。在同一个输出目录切换 `--self-contained` 模式（true↔false）会触发 SDK 的过期产物清理，该清理不区分"自己生成的文件"和"目录里本来就有的其他文件"，会把这些真实数据一并删除。切换发布模式前务必先把这些文件/目录备份到别处。

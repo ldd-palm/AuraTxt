@@ -24,8 +24,9 @@ WHAT YOU GET
 --------------------------------------------------------------------
 QUICK START
 --------------------------------------------------------------------
-1. Extract this zip to any folder, e.g. C:\Tools\AuraTxt\
-2. Run AuraTxt.exe -- a small icon appears in the system tray
+1. Extract this zip to any folder, e.g. C:\Tools\ -- it unpacks
+   into an "auratxt" subfolder
+2. Run auratxt\AuraTxt.exe -- a small icon appears in the system tray
 3. Highlight some text in any application and try the action bar
 4. To configure providers, models, and actions: right-click the
    tray icon -> Settings (opens auracfg.exe)
