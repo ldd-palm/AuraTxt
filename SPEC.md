@@ -547,12 +547,21 @@ auracfg restore     # 从 config.json.bak 恢复
 ```sh
 dotnet build && dotnet test
 
-# 单文件框架依赖发布到 publish/release/（目标机器需 .NET 8；发布前停止运行中的 AuraTxt，否则 MSB3027 锁文件）
+# 单文件框架依赖发布到 publish/release/（~3MB；目标机器需 .NET 8；发布前停止运行中的 AuraTxt，否则 MSB3027 锁文件）
 dotnet publish AuraTxt/AuraTxt.csproj         -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -o publish/release
 dotnet publish AuraTxt.Cli/AuraTxt.Cli.csproj -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -o publish/release
+# 删除 AuraTxt.pdb / auracfg.pdb / AuraTxt.Core.pdb（不随包发布）
+
+# 单文件自包含发布（~125MB；目标机器无需安装 .NET）
+dotnet publish AuraTxt/AuraTxt.csproj         -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -o publish/release
+dotnet publish AuraTxt.Cli/AuraTxt.Cli.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -o publish/release
 ```
 
-CLI 项目须与 WPF 输出到相同目录（托盘 Settings 按 `{exe}/auracfg.exe` 启动）。
+CLI 项目须与 WPF 输出到相同目录（托盘 Settings 按 `{exe}/auracfg.exe` 启动）。打包前把仓库根目录的 `readme.txt` 复制进 `publish/release`。
+
+**[关键]** 两个发布命令都必须带 `-p:PublishSingleFile=true`，框架依赖版本漏掉这个参数会产出十几个零散依赖 dll，而不是预期的单文件 exe（+ 视依赖情况可能有的 `runtimes\` 目录）。
+
+**[关键]** `publish/release` 里同时存放着真实运行数据（`config.json`/`prompts/`/`profiles/`/`themes/`/`icons/`），并非全是构建产物。在同一个输出目录切换 `--self-contained` 模式（true↔false）会触发 SDK 的过期产物清理，该清理不区分"自己生成的文件"和"目录里本来就有的其他文件"，会把这些真实数据一并删除。切换发布模式前务必先把这些文件/目录备份到别处。
 
 ## 13. 测试要求（xunit）
 
