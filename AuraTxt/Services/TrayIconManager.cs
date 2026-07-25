@@ -13,7 +13,6 @@ public class TrayIconManager : IDisposable
     private readonly MenuItem _toggleMonitorItem = null!;
     private readonly MenuItem _toggleMenuItem = null!;
     private readonly MenuItem _settingsItem = null!;
-    private readonly MenuItem _updateItem = null!;
     private UpdateInfo? _pendingUpdate;
 
     public TrayIconManager(ConfigService config, Action onReload, Action onExit, Action? onToggleMonitor = null)
@@ -67,16 +66,6 @@ public class TrayIconManager : IDisposable
             }
         };
 
-        _updateItem = new MenuItem { Header = "Check for Updates" };
-        _updateItem.Click += (_, _) =>
-        {
-            if (_pendingUpdate is { } info)
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
-                    info.Url) { UseShellExecute = true });
-            else
-                _ = CheckForUpdatesAsync(manual: true);
-        };
-
         menu.Opened += (_, _) =>
         {
             var editor = config.Load().Settings.ConfigEditor;
@@ -84,10 +73,6 @@ public class TrayIconManager : IDisposable
                 ? "auracfg"
                 : System.IO.Path.GetFileNameWithoutExtension(editor);
             _settingsItem.Header = $"Settings ({name})";
-
-            _updateItem.Header = _pendingUpdate is { } pending
-                ? $"⬆ Update available (v{pending.Version})"
-                : "Check for Updates";
         };
 
         var aboutItem = new MenuItem { Header = "About" };
@@ -102,7 +87,6 @@ public class TrayIconManager : IDisposable
         menu.Items.Add(_toggleMenuItem);
         menu.Items.Add(reloadItem);
         menu.Items.Add(_settingsItem);
-        menu.Items.Add(_updateItem);
         menu.Items.Add(aboutItem);
         menu.Items.Add(exitItem);
 
@@ -123,11 +107,15 @@ public class TrayIconManager : IDisposable
 
     public void RefreshIcon() => SetTrayIcon();
 
-    /// Checks GitHub for a newer release. `manual` controls whether "no update"
-    /// and "check failed" outcomes also get a balloon — they don't for the silent
-    /// startup check. See docs/superpowers/specs/2026-07-24-auto-update-design.md §3/§4.
-    public async Task CheckForUpdatesAsync(bool manual)
+    /// Silent startup check only — does nothing if the user has turned it off, and
+    /// never surfaces a failure or "no update" result (both are non-events for a
+    /// background check nobody asked for). Manual checks live in AboutWindow, which
+    /// calls UpdateService directly for its own inline feedback instead of going
+    /// through this method. See docs/superpowers/specs/2026-07-24-tray-menu-about-redesign.md §5.
+    public async Task CheckForUpdatesAsync()
     {
+        if (!_config.Load().Settings.AutoUpdateCheckEnabled) return;
+
         var current = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version
             ?? new Version(0, 0);
 
@@ -138,19 +126,10 @@ public class TrayIconManager : IDisposable
         }
         catch
         {
-            if (manual)
-                Application.Current.Dispatcher.Invoke(() =>
-                    _icon.ShowNotification("AuraTxt", "Could not check for updates.", NotificationIcon.Error));
             return;
         }
 
-        if (info is null)
-        {
-            if (manual)
-                Application.Current.Dispatcher.Invoke(() =>
-                    _icon.ShowNotification("AuraTxt", $"You're up to date (v{current.ToString(2)}).", NotificationIcon.Info));
-            return;
-        }
+        if (info is null) return;
 
         Application.Current.Dispatcher.Invoke(() =>
         {
@@ -165,6 +144,11 @@ public class TrayIconManager : IDisposable
             }
         });
     }
+
+    /// Lets AboutWindow's own independent update check update the tray's shared
+    /// pending-update state without going through the balloon-showing path above —
+    /// About shows its result inline, a balloon on top would be redundant.
+    public void NotePendingUpdate(UpdateInfo? info) => _pendingUpdate = info;
 
     public void Dispose() => _icon.Dispose();
 }

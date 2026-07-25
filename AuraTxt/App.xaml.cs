@@ -69,7 +69,7 @@ public partial class App : Application
             _hook.Start();
             Microsoft.Win32.SystemEvents.PowerModeChanged += OnPowerModeChanged;
 
-            _ = _tray.CheckForUpdatesAsync(manual: false);
+            _ = _tray.CheckForUpdatesAsync();
         }
         catch (Exception ex)
         {
