@@ -120,6 +120,7 @@ class ActionItem {
 | PromptEditor | "" | 打开 .md 的编辑器；空=notepad.exe |
 | TerminalUseConsoleWindow | false | Terminal 输出模式：false=重定向缓冲到 ResultWindow（默认），true=启动可见交互式 cmd.exe 窗口，ResultWindow 被跳过（见 §5.6、§9.3） |
 | ConfigEditor | "" | 托盘 Settings 用的编辑器；空=启动 auracfg.exe |
+| UiLanguage | "auto" | AuraTxt 窗口/托盘菜单显示语言；"auto"（跟随系统，见 §5.9）或 LocalizationService.SupportedLanguages 中的显式代码 |
 
 ### 3.6 首次运行默认配置
 
@@ -276,6 +277,20 @@ ActionProcessed LastProcessedText=T   SelectionActioned=true
 - 结果直接更新窗口内的文字（"✓ You're up to date" / "⬆ Update available: v{X}"，可点击打开该 release 的具体页面 / "Could not check for updates"），**不弹气泡**（用户已经在看这个窗口了）；同时调用 `_tray.NotePendingUpdate(info)` 把结果同步回托盘共享状态，供菜单标题下次打开时用。
 
 **不做的事**：不下载、不自动安装、不重启。开关放在 About 窗口里，不放进 auracfg 的 General Settings。
+
+### 5.9 UI 多语言（LocalizationService）[关键]
+
+**范围**：仅 AuraTxt 本体（托盘菜单 + 5 个窗口）。`auracfg` 自身 TUI 保持英文；日志、异常弹窗、AI prompt 不在范围内。
+
+**语言**：`en`（英语，默认/neutral resx）、`zh-Hans`（简体中文）、`ja`（日语）、`ko`（韩语）、`es`（西班牙语）、`fr`（法语）、`de`（德语），共 7 种，由 `LocalizationService.SupportedLanguages` 枚举（含 `"auto"` 共 8 项）。
+
+**设置**：`AppSettings.UiLanguage`（string，默认 `"auto"`）。auracfg General Settings 页面的 "UI Language" 项（`U` 键）可切换；改动只在下次 AuraTxt 的 Reload Settings 后生效，不是实时的。
+
+**`LocalizationService`**（`AuraTxt.Core/Services/LocalizationService.cs`，纯 BCL 逻辑，无 WPF 依赖，可单元测试）：`Resolve(uiLanguage, osTwoLetterIso=null)`——`"auto"` 按 `CultureInfo.InstalledUICulture`（而非 `CurrentUICulture`——后者会被 `Apply` 改写，重复 `Resolve("auto")` 必须每次都读真实系统语言，不能读到自己上次的输出）的 `TwoLetterISOLanguageName` 映射到 7 种之一，不认识的语言落回 `en`；显式代码直接透传，非法代码同样落回 `en`。`Apply(uiLanguage)`——设置 `CultureInfo.CurrentUICulture` + `DefaultThreadCurrentUICulture`。
+
+**字符串存储 [关键]**：`AuraTxt/Resources/Strings.resx`（英语/neutral）+ 6 个 `Strings.<culture>.resx`，MSBuild 对纯 resx 文件的隐式 glob 自动生成卫星程序集（`<culture>\AuraTxt.resources.dll`），**不需要任何 csproj 显式配置**。C# 访问类 `AuraTxt/Resources/Strings.cs` 是**手写的**（不是 resx designer 生成的）——resx 自带的 `Generator=MSBuild:Compile` 生成器产出的类是 `internal`，WPF 的 XAML 编译器无法对 `internal` 类型解析 `{x:Static}`（`MC3050`），哪怕同一程序集内 C# 代码本身能正常访问；手写一个 `public static class Strings`，每个 key 一个 `public static string Key => ResourceManager.GetString(nameof(Key))!` 属性，规避这个限制。
+
+**生效时机**：`App.OnStartup` 里 `LocalizationService.Apply(...)` 在构造 `TrayIconManager`/任何窗口之前执行一次；`ReloadConfig()` 里同样调用一次，然后 `TrayIconManager.RefreshMenuText()` 刷新托盘几个静态文案项（`_settingsItem`/`_aboutItem` 因为已经在 `menu.Opened` 里每次重算，不需要额外处理）。`x:Static` 在窗口构造时求值一次——reload 之后**新建**的窗口（ActionMenuWindow/ResultWindow/InteractiveWindow/AboutWindow/PromptEditDialog 本来就是每次用时新建）自动用新语言，reload 时**已经开着**的窗口保留旧语言直到关闭重开，与 Theme 热重载的既有局限一致，不是新问题。
 
 ## 6. AiClient + Profile + Adapter 层（位于 Core）
 
@@ -609,6 +624,7 @@ gh release upload vX.Y AuraTXT_X.Y.zip AuraTXT_X.Y_self_contained.zip --clobber
 - PromptService.IsFileRef：单行路径 true、多行含 `/` 的内联 false（回归）、Resolve 文件/内联/空。
 - TerminalClient.BuildResolvedCommand（纯函数，不启动进程）：`{SelectedText}`/`{UserInput}` 替换、多次出现、无占位符时原样返回、命令模板为 .md 文件路径时经 PromptService 解析。进程启动/超时/取消路径不纳入常规 xunit 套件（避免 CI 抖动/耗时），改由手动验证覆盖。
 - UpdateService.IsNewer（internal，纯函数）：tag 比 current 新→true；相同/更旧→false；`v`/`V` 前缀两种大小写都能去掉；tag 格式解析不出来→false 且不抛异常。`CheckAsync` 的真实网络请求路径同样不纳入常规 xunit 套件，改由手动验证覆盖（见 §5.8）。
+- LocalizationService.Resolve（纯函数）：`"auto"` + 已知/未知 `osTwoLetterIso` → 对应 7 种语言之一 / 落回 `en`；显式合法/非法代码 → 透传 / 落回 `en`。`Apply` 实际设置 `CurrentUICulture` 及 `x:Static`/托盘菜单的联动效果不纳入常规 xunit 套件，改由手动验证覆盖（见 §5.9）。
 
 ## 14. 验收清单（端到端）
 

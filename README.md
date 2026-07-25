@@ -46,6 +46,7 @@ Inspired by Cherry Studio's selection assistant and Qtranslate, AuraTxt goes fur
 | **Portable** | Everything lives next to `AuraTxt.exe` — copy the folder to any PC, it just works |
 | **Single instance** | Only one copy runs at a time; duplicate launches show a friendly tray reminder |
 | **Auto-update check** | Checks GitHub for a newer release once at startup (toggle it off in **About**); a click takes you straight to the release |
+| **7 UI languages** | English, 简体中文, 日本語, 한국어, Español, Français, Deutsch — follows Windows' UI language by default, or pick one explicitly in `auracfg`'s General Settings |
 
 ---
 
