@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="Tray_ServicePause" xml:space="preserve"><value>Service: Pause</value></data>
+  <data name="Tray_ServiceResume" xml:space="preserve"><value>Service: Resume</value></data>
+  <data name="Tray_HideMenu" xml:space="preserve"><value>Hide Menu</value></data>
+  <data name="Tray_ShowMenu" xml:space="preserve"><value>Show Menu</value></data>
+  <data name="Tray_ReloadSettings" xml:space="preserve"><value>Reload Settings</value></data>
+  <data name="Tray_Settings" xml:space="preserve"><value>Settings</value></data>
+  <data name="Tray_About" xml:space="preserve"><value>About</value></data>
+  <data name="Tray_Exit" xml:space="preserve"><value>Exit</value></data>
+  <data name="About_WindowTitle" xml:space="preserve"><value>About AuraTxt</value></data>
+  <data name="About_RuntimeFormat" xml:space="preserve"><value>Running on {0}</value></data>
+  <data name="About_CheckingForUpdates" xml:space="preserve"><value>Checking for updates…</value></data>
+  <data name="About_UpToDate" xml:space="preserve"><value>✓ You're up to date</value></data>
+  <data name="About_UpdateAvailableFormat" xml:space="preserve"><value>⬆ Update available: v{0}</value></data>
+  <data name="About_CheckFailed" xml:space="preserve"><value>Could not check for updates</value></data>
+  <data name="About_AutoUpdateLabel" xml:space="preserve"><value>Auto-check for update on startup</value></data>
+  <data name="About_GitHubTooltip" xml:space="preserve"><value>GitHub</value></data>
+  <data name="About_HomepageLabel" xml:space="preserve"><value>Homepage</value></data>
+  <data name="About_ReleasesLabel" xml:space="preserve"><value>Releases</value></data>
+  <data name="Common_Close" xml:space="preserve"><value>Close</value></data>
+  <data name="Common_Cancel" xml:space="preserve"><value>Cancel</value></data>
+  <data name="Common_EditPromptTooltip" xml:space="preserve"><value>Edit Prompt (P)</value></data>
+  <data name="Common_RegenerateTooltip" xml:space="preserve"><value>Regenerate (G)</value></data>
+  <data name="Common_ReplaceTooltip" xml:space="preserve"><value>Replace in Source (R)</value></data>
+  <data name="Common_CopyTooltip" xml:space="preserve"><value>Copy All (C)</value></data>
+  <data name="Common_PinTooltip" xml:space="preserve"><value>Pin Window (T)</value></data>
+  <data name="Interactive_InputLabel" xml:space="preserve"><value>Input</value></data>
+  <data name="Interactive_ResultLabel" xml:space="preserve"><value>Result</value></data>
+  <data name="PromptEdit_Title" xml:space="preserve"><value>Edit Prompt</value></data>
+  <data name="PromptEdit_BuiltinTitle" xml:space="preserve"><value>Built-in Model</value></data>
+  <data name="PromptEdit_GenerateButton" xml:space="preserve"><value>Generate</value></data>
+</root>
