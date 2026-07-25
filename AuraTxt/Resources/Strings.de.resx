@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <data name="Tray_ServicePause" xml:space="preserve"><value>Dienst: Pausieren</value></data>
+  <data name="Tray_ServiceResume" xml:space="preserve"><value>Dienst: Fortsetzen</value></data>
+  <data name="Tray_HideMenu" xml:space="preserve"><value>Menü ausblenden</value></data>
+  <data name="Tray_ShowMenu" xml:space="preserve"><value>Menü einblenden</value></data>
+  <data name="Tray_ReloadSettings" xml:space="preserve"><value>Einstellungen neu laden</value></data>
+  <data name="Tray_Settings" xml:space="preserve"><value>Einstellungen</value></data>
+  <data name="Tray_About" xml:space="preserve"><value>Über</value></data>
+  <data name="Tray_Exit" xml:space="preserve"><value>Beenden</value></data>
+  <data name="About_WindowTitle" xml:space="preserve"><value>Über AuraTxt</value></data>
+  <data name="About_RuntimeFormat" xml:space="preserve"><value>Läuft unter {0}</value></data>
+  <data name="About_CheckingForUpdates" xml:space="preserve"><value>Suche nach Updates…</value></data>
+  <data name="About_UpToDate" xml:space="preserve"><value>✓ Du bist auf dem neuesten Stand</value></data>
+  <data name="About_UpdateAvailableFormat" xml:space="preserve"><value>⬆ Update verfügbar: v{0}</value></data>
+  <data name="About_CheckFailed" xml:space="preserve"><value>Update-Prüfung fehlgeschlagen</value></data>
+  <data name="About_AutoUpdateLabel" xml:space="preserve"><value>Beim Start automatisch nach Updates suchen</value></data>
+  <data name="About_GitHubTooltip" xml:space="preserve"><value>GitHub</value></data>
+  <data name="About_HomepageLabel" xml:space="preserve"><value>Startseite</value></data>
+  <data name="About_ReleasesLabel" xml:space="preserve"><value>Releases</value></data>
+  <data name="Common_Close" xml:space="preserve"><value>Schließen</value></data>
+  <data name="Common_Cancel" xml:space="preserve"><value>Abbrechen</value></data>
+  <data name="Common_EditPromptTooltip" xml:space="preserve"><value>Prompt bearbeiten (P)</value></data>
+  <data name="Common_RegenerateTooltip" xml:space="preserve"><value>Neu generieren (G)</value></data>
+  <data name="Common_ReplaceTooltip" xml:space="preserve"><value>In Quelle ersetzen (R)</value></data>
+  <data name="Common_CopyTooltip" xml:space="preserve"><value>Alles kopieren (C)</value></data>
+  <data name="Common_PinTooltip" xml:space="preserve"><value>Fenster anheften (T)</value></data>
+  <data name="Interactive_InputLabel" xml:space="preserve"><value>Eingabe</value></data>
+  <data name="Interactive_ResultLabel" xml:space="preserve"><value>Ergebnis</value></data>
+  <data name="PromptEdit_Title" xml:space="preserve"><value>Prompt bearbeiten</value></data>
+  <data name="PromptEdit_BuiltinTitle" xml:space="preserve"><value>Integriertes Modell</value></data>
+  <data name="PromptEdit_GenerateButton" xml:space="preserve"><value>Generieren</value></data>
+</root>

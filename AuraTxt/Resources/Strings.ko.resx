@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <data name="Tray_ServicePause" xml:space="preserve"><value>서비스: 일시정지</value></data>
+  <data name="Tray_ServiceResume" xml:space="preserve"><value>서비스: 재개</value></data>
+  <data name="Tray_HideMenu" xml:space="preserve"><value>메뉴 숨기기</value></data>
+  <data name="Tray_ShowMenu" xml:space="preserve"><value>메뉴 표시</value></data>
+  <data name="Tray_ReloadSettings" xml:space="preserve"><value>설정 다시 불러오기</value></data>
+  <data name="Tray_Settings" xml:space="preserve"><value>설정</value></data>
+  <data name="Tray_About" xml:space="preserve"><value>정보</value></data>
+  <data name="Tray_Exit" xml:space="preserve"><value>종료</value></data>
+  <data name="About_WindowTitle" xml:space="preserve"><value>AuraTxt 정보</value></data>
+  <data name="About_RuntimeFormat" xml:space="preserve"><value>실행 환경: {0}</value></data>
+  <data name="About_CheckingForUpdates" xml:space="preserve"><value>업데이트 확인 중…</value></data>
+  <data name="About_UpToDate" xml:space="preserve"><value>✓ 최신 버전입니다</value></data>
+  <data name="About_UpdateAvailableFormat" xml:space="preserve"><value>⬆ 새 버전 사용 가능: v{0}</value></data>
+  <data name="About_CheckFailed" xml:space="preserve"><value>업데이트 확인 실패</value></data>
+  <data name="About_AutoUpdateLabel" xml:space="preserve"><value>시작할 때 자동으로 업데이트 확인</value></data>
+  <data name="About_GitHubTooltip" xml:space="preserve"><value>GitHub</value></data>
+  <data name="About_HomepageLabel" xml:space="preserve"><value>홈페이지</value></data>
+  <data name="About_ReleasesLabel" xml:space="preserve"><value>릴리스</value></data>
+  <data name="Common_Close" xml:space="preserve"><value>닫기</value></data>
+  <data name="Common_Cancel" xml:space="preserve"><value>취소</value></data>
+  <data name="Common_EditPromptTooltip" xml:space="preserve"><value>프롬프트 편집 (P)</value></data>
+  <data name="Common_RegenerateTooltip" xml:space="preserve"><value>다시 생성 (G)</value></data>
+  <data name="Common_ReplaceTooltip" xml:space="preserve"><value>원본에 바꾸기 (R)</value></data>
+  <data name="Common_CopyTooltip" xml:space="preserve"><value>전체 복사 (C)</value></data>
+  <data name="Common_PinTooltip" xml:space="preserve"><value>창 고정 (T)</value></data>
+  <data name="Interactive_InputLabel" xml:space="preserve"><value>입력</value></data>
+  <data name="Interactive_ResultLabel" xml:space="preserve"><value>결과</value></data>
+  <data name="PromptEdit_Title" xml:space="preserve"><value>프롬프트 편집</value></data>
+  <data name="PromptEdit_BuiltinTitle" xml:space="preserve"><value>내장 모델</value></data>
+  <data name="PromptEdit_GenerateButton" xml:space="preserve"><value>생성</value></data>
+</root>

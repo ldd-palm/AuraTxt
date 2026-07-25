@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <data name="Tray_ServicePause" xml:space="preserve"><value>服务：暂停</value></data>
+  <data name="Tray_ServiceResume" xml:space="preserve"><value>服务：恢复</value></data>
+  <data name="Tray_HideMenu" xml:space="preserve"><value>隐藏菜单</value></data>
+  <data name="Tray_ShowMenu" xml:space="preserve"><value>显示菜单</value></data>
+  <data name="Tray_ReloadSettings" xml:space="preserve"><value>重新加载设置</value></data>
+  <data name="Tray_Settings" xml:space="preserve"><value>设置</value></data>
+  <data name="Tray_About" xml:space="preserve"><value>关于</value></data>
+  <data name="Tray_Exit" xml:space="preserve"><value>退出</value></data>
+  <data name="About_WindowTitle" xml:space="preserve"><value>关于 AuraTxt</value></data>
+  <data name="About_RuntimeFormat" xml:space="preserve"><value>运行环境：{0}</value></data>
+  <data name="About_CheckingForUpdates" xml:space="preserve"><value>正在检查更新…</value></data>
+  <data name="About_UpToDate" xml:space="preserve"><value>✓ 已是最新版本</value></data>
+  <data name="About_UpdateAvailableFormat" xml:space="preserve"><value>⬆ 发现新版本：v{0}</value></data>
+  <data name="About_CheckFailed" xml:space="preserve"><value>检查更新失败</value></data>
+  <data name="About_AutoUpdateLabel" xml:space="preserve"><value>启动时自动检查更新</value></data>
+  <data name="About_GitHubTooltip" xml:space="preserve"><value>GitHub</value></data>
+  <data name="About_HomepageLabel" xml:space="preserve"><value>项目主页</value></data>
+  <data name="About_ReleasesLabel" xml:space="preserve"><value>发布页</value></data>
+  <data name="Common_Close" xml:space="preserve"><value>关闭</value></data>
+  <data name="Common_Cancel" xml:space="preserve"><value>取消</value></data>
+  <data name="Common_EditPromptTooltip" xml:space="preserve"><value>编辑提示词 (P)</value></data>
+  <data name="Common_RegenerateTooltip" xml:space="preserve"><value>重新生成 (G)</value></data>
+  <data name="Common_ReplaceTooltip" xml:space="preserve"><value>替换原文 (R)</value></data>
+  <data name="Common_CopyTooltip" xml:space="preserve"><value>复制全部 (C)</value></data>
+  <data name="Common_PinTooltip" xml:space="preserve"><value>固定窗口 (T)</value></data>
+  <data name="Interactive_InputLabel" xml:space="preserve"><value>输入</value></data>
+  <data name="Interactive_ResultLabel" xml:space="preserve"><value>结果</value></data>
+  <data name="PromptEdit_Title" xml:space="preserve"><value>编辑提示词</value></data>
+  <data name="PromptEdit_BuiltinTitle" xml:space="preserve"><value>内置模型</value></data>
+  <data name="PromptEdit_GenerateButton" xml:space="preserve"><value>生成</value></data>
+</root>
