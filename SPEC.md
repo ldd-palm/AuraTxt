@@ -121,6 +121,7 @@ class ActionItem {
 | TerminalUseConsoleWindow | false | Terminal 输出模式：false=重定向缓冲到 ResultWindow（默认），true=启动可见交互式 cmd.exe 窗口，ResultWindow 被跳过（见 §5.6、§9.3） |
 | ConfigEditor | "" | 托盘 Settings 用的编辑器；空=启动 auracfg.exe |
 | UiLanguage | "auto" | AuraTxt 窗口/托盘菜单显示语言；"auto"（跟随系统，见 §5.9）或 LocalizationService.SupportedLanguages 中的显式代码 |
+| StartOnBoot | true | 开机自启动（HKCU Run 键，见 §5.10） |
 
 ### 3.6 首次运行默认配置
 
@@ -294,6 +295,16 @@ ActionProcessed LastProcessedText=T   SelectionActioned=true
 **产物形态 [关键]**：`dotnet build`（无 `-p:PublishSingleFile`）产出松散的 `bin/.../<culture>/AuraTxt.resources.dll`；但 §12.2 实际发布用的 `dotnet publish -p:PublishSingleFile=true` 会把这些卫星程序集**打包进单文件 `AuraTxt.exe` 内部**，发布目录/zip 里不会出现独立的 `<culture>/` 子目录（用 `grep -c "zh-Hans" AuraTxt.exe` 之类的方式能在发布出的单文件 exe 里验证到编号字符串存在，证明确实打包进去了，不是丢失）。运行时靠 .NET 单文件宿主的程序集解析透明加载，功能不受影响——只是"语言包在哪个目录"这个问题在单文件发布场景下的答案是"在 exe 内部，没有独立目录"。
 
 **生效时机**：`App.OnStartup` 里 `LocalizationService.Apply(...)` 在构造 `TrayIconManager`/任何窗口之前执行一次；`ReloadConfig()` 里同样调用一次，然后 `TrayIconManager.RefreshMenuText()` 刷新托盘几个静态文案项（`_settingsItem`/`_aboutItem` 因为已经在 `menu.Opened` 里每次重算，不需要额外处理）。`x:Static` 在窗口构造时求值一次——reload 之后**新建**的窗口（ActionMenuWindow/ResultWindow/InteractiveWindow/AboutWindow/PromptEditDialog 本来就是每次用时新建）自动用新语言，reload 时**已经开着**的窗口保留旧语言直到关闭重开，与 Theme 热重载的既有局限一致，不是新问题。
+
+### 5.10 开机自启动（StartupService）[关键]
+
+**设置**：`AppSettings.StartOnBoot`（bool，默认 `true`）。auracfg General Settings 页面 "Start on Boot" 项（`B` 键）切换 Enabled/Disabled；同 UiLanguage，改动只在下次 AuraTxt 的 Reload Settings 后生效。
+
+**`StartupService`**（`AuraTxt.Core/Services/StartupService.cs`）：`Apply(enabled, exePath)` 操作 `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run` 下名为 `AuraTxt` 的值——`enabled=true` 写入 `"{exePath}"`（带引号，路径可能含空格）；`enabled=false` 删除该值（`throwOnMissingValue:false`，值本来就不存在也不报错）。用 HKCU 而非 HKLM，不需要管理员权限；用注册表 Run 键而非启动文件夹快捷方式，不用额外走 COM interop 生成 `.lnk`。
+
+**[关键]** 这是 AuraTxt 唯一一处写到自身便携目录之外的持久化状态（README 的"no hidden AppData folders, no registry entries"这条描述因此不再 100% 成立，需要同步说明）。如果用户把整个程序文件夹搬到别的路径/改名，注册表里记录的还是旧路径，直到下次 `Apply` 被调用（AuraTxt 启动，或 Reload Settings）才会用当前 `AppContext.BaseDirectory` 算出的新路径覆盖修正——不会自动跟着文件夹移动实时更新。
+
+**生效时机**：`App.OnStartup`（`ExePath` 用 `Path.Combine(AppContext.BaseDirectory, "AuraTxt.exe")` 算出，不是 `auracfg.exe`）和 `ReloadConfig()` 里各调用一次，和 `LocalizationService.Apply`/`ApplyTheme` 同一批"用配置同步实际系统状态"的调用。`OpenSubKey` 找不到 Run 键本身（HKCU 下该键理论上恒存在，但防御性处理）时直接 return，不让开机自启动的注册表操作阻断正常启动流程。
 
 ## 6. AiClient + Profile + Adapter 层（位于 Core）
 
@@ -649,6 +660,7 @@ gh release create vX.Y AuraTXT_X.Y.zip AuraTXT_X.Y_self_contained.zip --title "A
 - TerminalClient.BuildResolvedCommand（纯函数，不启动进程）：`{SelectedText}`/`{UserInput}` 替换、多次出现、无占位符时原样返回、命令模板为 .md 文件路径时经 PromptService 解析。进程启动/超时/取消路径不纳入常规 xunit 套件（避免 CI 抖动/耗时），改由手动验证覆盖。
 - UpdateService.IsNewer（internal，纯函数）：tag 比 current 新→true；相同/更旧→false；`v`/`V` 前缀两种大小写都能去掉；tag 格式解析不出来→false 且不抛异常。`CheckAsync` 的真实网络请求路径同样不纳入常规 xunit 套件，改由手动验证覆盖（见 §5.8）。
 - LocalizationService.Resolve（纯函数）：`"auto"` + 已知/未知 `osCultureName`（完整 culture 名或裸两字母码）→ 对应 8 种语言之一 / 落回 `en`；中文按 `hant`/`TW`/`HK`/`MO` 区分简繁；显式合法/非法代码 → 透传 / 落回 `en`。`Apply` 实际设置 `CurrentUICulture` 及 `x:Static`/托盘菜单的联动效果不纳入常规 xunit 套件，改由手动验证覆盖（见 §5.9）。
+- StartupService.Apply 不纳入常规 xunit 套件——直接读写真实 HKCU 注册表，跟 TerminalClient 的进程启动路径、UpdateService.CheckAsync 的真实网络请求属于同一类"碰外部系统"的东西，改由手动验证覆盖（见 §5.10）：`auracfg` 里切换 Start on Boot → AuraTxt Reload Settings → `regedit` 或 `Get-ItemProperty HKCU:\Software\Microsoft\Windows\CurrentVersion\Run` 确认 `AuraTxt` 值出现/消失且路径正确。
 
 ## 14. 验收清单（端到端）
 

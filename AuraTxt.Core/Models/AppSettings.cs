@@ -55,4 +55,10 @@ public class AppSettings
     /// LocalizationService.SupportedLanguages ("en", "zh-Hans", "ja", "ko", "es",
     /// "fr", "de"). Does not affect auracfg's own TUI, which stays English-only.
     public string UiLanguage { get; set; } = "auto";
+
+    /// Whether AuraTxt registers itself to launch at Windows logon (HKCU Run key).
+    /// Default true — most users expect a tray-resident tool like this to just be
+    /// running after they log in. StartupService.Apply syncs the actual registry
+    /// state to this flag on every startup/reload.
+    public bool StartOnBoot { get; set; } = true;
 }

@@ -15,6 +15,9 @@ public partial class App : Application
     private ConfigService? _config;
     private System.Threading.Mutex? _instanceMutex;
 
+    private static string ExePath =>
+        System.IO.Path.Combine(AppContext.BaseDirectory, "AuraTxt.exe");
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
@@ -57,6 +60,7 @@ public partial class App : Application
             ProfileService.EnsureScaffold();  // seed profiles/ dir + embedded JSONs
             _config  = new ConfigService();
             LocalizationService.Apply(_config.Load().Settings.UiLanguage);
+            StartupService.Apply(_config.Load().Settings.StartOnBoot, ExePath);
             ApplyTheme(_config.Load().Settings.Theme);
             _hotkeys = new HotkeyService(_config);
             _tray    = new TrayIconManager(_config, ReloadConfig, () => Shutdown(), () =>
@@ -132,6 +136,7 @@ public partial class App : Application
             ProfileService.Reload();
             var cfg = _config!.Load();
             LocalizationService.Apply(cfg.Settings.UiLanguage);
+            StartupService.Apply(cfg.Settings.StartOnBoot, ExePath);
             ApplyTheme(cfg.Settings.Theme);
             _hotkeys!.RegisterAll(cfg);
             _tray!.RefreshIcon();

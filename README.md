@@ -47,6 +47,7 @@ Inspired by Cherry Studio's selection assistant and Qtranslate, AuraTxt goes fur
 | **Single instance** | Only one copy runs at a time; duplicate launches show a friendly tray reminder |
 | **Auto-update check** | Checks GitHub for a newer release once at startup (toggle it off in **About**); a click takes you straight to the release |
 | **8 UI languages** | English, 简体中文, 繁體中文, 日本語, 한국어, Español, Français, Deutsch — follows Windows' UI language by default, or pick one explicitly in `auracfg`'s General Settings |
+| **Start on Boot** | Launches automatically at Windows logon (on by default); toggle it in `auracfg`'s General Settings |
 
 ---
 
@@ -71,7 +72,7 @@ Inspired by Cherry Studio's selection assistant and Qtranslate, AuraTxt goes fur
 
 ## Directory Structure
 
-Everything lives next to the executables — no hidden AppData folders, no registry entries.
+Everything lives next to the executables, no hidden AppData folders. The one exception is the "Start on Boot" setting (on by default) — enabling it adds a single `HKEY_CURRENT_USER\...\Run` registry value pointing at `AuraTxt.exe`; turning it off removes it.
 
 ```
 AuraTxt\

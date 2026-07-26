@@ -60,6 +60,7 @@ public class GeneralSettingsPage : PageBase
         new MenuItem("9", "Config Editor",   string.IsNullOrEmpty(s.ConfigEditor) ? "auracfg (default)"    : s.ConfigEditor),
         new MenuItem("T", "Terminal Output", s.TerminalUseConsoleWindow ? "Console window" : "Result window (default)"),
         new MenuItem("U", "UI Language",     UiLanguageLabel(s.UiLanguage)),
+        new MenuItem("B", "Start on Boot",   s.StartOnBoot ? "Enabled" : "Disabled"),
     ];
 
     private bool HandleKey(string key, AppSettings s, TuiApp app)
@@ -107,6 +108,10 @@ public class GeneralSettingsPage : PageBase
                 break;
             case "U":
                 SelectUiLanguage(s, app);
+                break;
+            case "B":
+                s.StartOnBoot = !s.StartOnBoot; app.MarkDirty();
+                app.Renderer.SetNotice($"Start on Boot → {(s.StartOnBoot ? "Enabled" : "Disabled")} (use Reload Settings in AuraTxt's tray menu to apply)");
                 break;
         }
         return false;
