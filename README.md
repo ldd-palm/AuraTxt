@@ -273,14 +273,6 @@ Base URL: `https://generativelanguage.googleapis.com` · Adapter: `gemini_native
 | `gemini-3.1-flash-lite` | `gemini-flash` *(set explicitly)* | No bundled `name_patterns` match this name yet — auto-resolution falls back to the generic `default-gemini` profile (no thinking control) unless you set the Profile field yourself in auracfg |
 | `gemma-4-31b-it` | `gemma-4` *(auto)* | Uses `thinking_level` (`NONE`/`HIGH`), not `thinkingBudget` — a different request shape from Gemini Flash/Pro |
 
-#### [DeepSeek](https://platform.deepseek.com)
-
-Base URL: `https://api.deepseek.com/v1` · Adapter: `openai_compatible`
-
-| Model | Profile | Notes |
-|-------|---------|-------|
-| `deepseek-v4-flash` | `deepseek-v4` *(auto)* | Thinking toggled via `chat_template_kwargs.thinking`; very affordable, strong Chinese/English |
-
 #### [NVIDIA NIM](https://build.nvidia.com)
 
 Base URL: `https://integrate.api.nvidia.com/v1` · Adapter: `openai_compatible`
@@ -291,6 +283,14 @@ Base URL: `https://integrate.api.nvidia.com/v1` · Adapter: `openai_compatible`
 | `z-ai/glm-5.2` | `glm-5` *(auto)* | Dual-key disable (`thinking` + `enable_thinking` both false) for safety |
 | `minimaxai/minimax-m3` | `minimax` *(auto)* | Thinking is intrinsic via `<think>` tags — can't be disabled, stripped from the output automatically |
 | `moonshotai/kimi-k2.6` | `kimi-k2` *(auto)* | Thinking toggled via `chat_template_kwargs.thinking` |
+
+#### [DeepSeek](https://platform.deepseek.com)
+
+Base URL: `https://api.deepseek.com/v1` · Adapter: `openai_compatible`
+
+| Model | Profile | Notes |
+|-------|---------|-------|
+| `deepseek-v4-flash` | `deepseek-v4` *(auto)* | Thinking toggled via `chat_template_kwargs.thinking`; very affordable, strong Chinese/English |
 
 ### Local Models via Ollama
 
