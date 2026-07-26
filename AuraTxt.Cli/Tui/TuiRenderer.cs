@@ -121,23 +121,32 @@ public class TuiRenderer
         };
     }
 
-    // ── Text input (delegates to Spectre prompts) ──────────────────────────
+    // ── Text input ───────────────────────────────────────────────────────
+    // Ask/AskSecret used to delegate to Spectre.Console's TextPrompt on the
+    // (wrong) assumption that it supported Left/Right/Home/End cursor editing
+    // — it doesn't, any better than the original hand-rolled AskOrCancel loop
+    // did. All four methods now share the same ReadEditableLine engine so
+    // editing behaves identically everywhere in the TUI.
     public string Ask(string prompt, string? defaultValue = null)
     {
         Console.WriteLine();
-        var tp = new TextPrompt<string>($"[yellow]  {Markup.Escape(prompt)}:[/]").AllowEmpty();
-        if (defaultValue is not null)
-            tp.DefaultValue(defaultValue).DefaultValueStyle(Style.Parse("grey"));
-        return AnsiConsole.Prompt(tp);
+        var hint = defaultValue is not null ? $" [grey]({Markup.Escape(defaultValue)})[/]" : "";
+        AnsiConsole.Markup($"[yellow]  {Markup.Escape(prompt)}:[/]{hint} ");
+        var result = ReadEditableLine(secret: false);
+        Console.WriteLine();
+        // Ask() has no cancel concept (non-nullable return) — Esc keeps the
+        // current/default value unchanged, same as pressing Enter with no input.
+        if (result is null) return defaultValue ?? "";
+        return result.Length > 0 ? result : defaultValue ?? "";
     }
 
     public string AskSecret(string prompt)
     {
         Console.WriteLine();
-        return AnsiConsole.Prompt(
-            new TextPrompt<string>($"[yellow]  {Markup.Escape(prompt)}:[/]")
-                .Secret('•')
-                .AllowEmpty());
+        AnsiConsole.Markup($"[yellow]  {Markup.Escape(prompt)}:[/] ");
+        var result = ReadEditableLine(secret: true);
+        Console.WriteLine();
+        return result ?? "";
     }
 
     public string? AskOrCancel(string prompt, string? defaultValue = null)
@@ -160,21 +169,22 @@ public class TuiRenderer
         return result;
     }
 
-    /// Line editor for AskOrCancel/AskSecretOrCancel supporting Left/Right/Home/
-    /// End/Delete in addition to Backspace, with proper in-place redraw — unlike
-    /// a naive append-only loop, edits don't have to happen at the end of the
-    /// string. Returns null on Escape (cancel). Caller must already have written
-    /// the prompt label so the console cursor sits at the start of the (empty)
-    /// input field; wraps the cursor math across console rows so long values
-    /// (API keys, base URLs) that overflow the window width don't crash.
+    /// Shared line editor for Ask/AskSecret/AskOrCancel/AskSecretOrCancel,
+    /// supporting Left/Right/Home/End/Delete in addition to Backspace, with
+    /// proper in-place redraw — unlike a naive append-only loop, edits don't
+    /// have to happen at the end of the string. Returns null on Escape
+    /// (cancel — callers that can't cancel treat it as "keep default"). Caller
+    /// must already have written the prompt label so the console cursor sits
+    /// at the start of the (empty) input field; wraps the cursor math across
+    /// console rows so long values (API keys, base URLs) that overflow the
+    /// window width don't crash.
     private static string? ReadEditableLine(bool secret)
     {
         // DrawFrame's AnsiConsole.Clear() hides the console cursor as a side
-        // effect and nothing re-shows it for this hand-rolled loop (Ask/AskSecret
-        // don't have this problem — Spectre's own TextPrompt re-shows it
-        // internally). Without this, cursor tracking below is logically correct
-        // but the blinking caret itself is invisible, so Left/Right/Home/End
-        // look like they do nothing even though they work.
+        // effect and nothing re-shows it here otherwise. Without this, cursor
+        // tracking below is logically correct but the blinking caret itself is
+        // invisible, so Left/Right/Home/End look like they do nothing even
+        // though they work.
         try { Console.CursorVisible = true; } catch { /* not all terminals support it */ }
 
         var startLeft = Console.CursorLeft;
