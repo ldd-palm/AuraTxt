@@ -524,7 +524,9 @@ LogService：静态类，`Enabled`+`LogPath` 控制；`Info/Error/Raw` 三个方
 
 ### 11.1 TUI（Spectre.Console）
 
-页面栈导航（NavStack push/pop），每页循环渲染：面包屑 Panel + 编号菜单项（`[键] 标签  值`，值可着色：Success 绿/Danger 红/Warning 黄/Muted 灰；MenuItem 支持第二段值 Value2/ValueStyle2 用于不同颜色混排）+ 通知行 + 底部快捷键提示。按键模型：↑↓ 导航、Enter 确认、数字/字母跳转、Esc/Backspace 返回、Q 退出。文本输入支持 Esc 取消（AskOrCancel）。退出/保存时把脏配置 `SaveWithBackup` 写回。
+页面栈导航（NavStack push/pop），每页循环渲染：面包屑 Panel + 编号菜单项（`[键] 标签  值`，值可着色：Success 绿/Danger 红/Warning 黄/Muted 灰；MenuItem 支持第二段值 Value2/ValueStyle2 用于不同颜色混排）+ 通知行 + 底部快捷键提示。按键模型：↑↓ 导航、Enter 确认、数字/字母跳转、Esc/Backspace 返回、Q 退出。退出/保存时把脏配置 `SaveWithBackup` 写回。
+
+**文本输入 [关键]**：`TuiRenderer` 有两套输入机制，行为不同——`Ask`/`AskSecret`（编辑已有值，如改名、改 Base URL）直接走 Spectre.Console 的 `TextPrompt`，自带 Left/Right/Home/End 光标编辑；`AskOrCancel`/`AskSecretOrCancel`（新建流程用，Provider ID/Base URL/API Key/Action ID/模型名/命令模板等）支持 Esc 取消，是手写的按键循环，底层共用私有 `ReadEditableLine`：维护独立的 `cursor` 位置（非只能在末尾增删），Left/Right/Home/End/Delete/Backspace 都在光标处生效，输入字符插入到光标位置而非总是追加到末尾；重绘时用 `Console.SetCursorPosition` 把光标移回输入起始列、整行重写、旧内容更长时补空格擦除残留，再定位回光标逻辑位置；光标横向坐标按 `Console.WindowWidth` 取模换行，避免长输入（API Key/Base URL）超出屏幕宽度时 `SetCursorPosition` 抛出异常。
 
 页面结构：
 - **主菜单**：1 General Settings / 2 Model Platform / 3 Prompt Library / 4 Action Features / 5 Profiles / D Doctor / S Save。

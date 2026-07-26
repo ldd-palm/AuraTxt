@@ -145,29 +145,99 @@ public class TuiRenderer
         Console.WriteLine();
         var hint = defaultValue is not null ? $" [grey]({Markup.Escape(defaultValue)})[/]" : "";
         AnsiConsole.Markup($"[yellow]  {Markup.Escape(prompt)}:[/]{hint} ");
-        var sb = new StringBuilder();
-        while (true)
-        {
-            var ki = Console.ReadKey(intercept: true);
-            if (ki.Key == ConsoleKey.Escape) { Console.WriteLine(); return null; }
-            if (ki.Key == ConsoleKey.Enter)  { Console.WriteLine(); return sb.Length > 0 ? sb.ToString() : defaultValue ?? ""; }
-            if (ki.Key == ConsoleKey.Backspace && sb.Length > 0) { sb.Remove(sb.Length - 1, 1); Console.Write("\b \b"); }
-            else if (!char.IsControl(ki.KeyChar) && ki.KeyChar != '\0') { sb.Append(ki.KeyChar); Console.Write(ki.KeyChar); }
-        }
+        var result = ReadEditableLine(secret: false);
+        Console.WriteLine();
+        if (result is null) return null;
+        return result.Length > 0 ? result : defaultValue ?? "";
     }
 
     public string? AskSecretOrCancel(string prompt)
     {
         Console.WriteLine();
         AnsiConsole.Markup($"[yellow]  {Markup.Escape(prompt)}:[/] ");
-        var sb = new StringBuilder();
+        var result = ReadEditableLine(secret: true);
+        Console.WriteLine();
+        return result;
+    }
+
+    /// Line editor for AskOrCancel/AskSecretOrCancel supporting Left/Right/Home/
+    /// End/Delete in addition to Backspace, with proper in-place redraw — unlike
+    /// a naive append-only loop, edits don't have to happen at the end of the
+    /// string. Returns null on Escape (cancel). Caller must already have written
+    /// the prompt label so the console cursor sits at the start of the (empty)
+    /// input field; wraps the cursor math across console rows so long values
+    /// (API keys, base URLs) that overflow the window width don't crash.
+    private static string? ReadEditableLine(bool secret)
+    {
+        var startLeft = Console.CursorLeft;
+        var startTop  = Console.CursorTop;
+        var width     = Math.Max(1, Console.WindowWidth);
+        var sb        = new StringBuilder();
+        var cursor    = 0;
+
+        void MoveCursorTo(int pos)
+        {
+            var flat = startLeft + pos;
+            Console.SetCursorPosition(flat % width, startTop + flat / width);
+        }
+
+        void Redraw(int previousLength)
+        {
+            MoveCursorTo(0);
+            Console.Write(secret ? new string('•', sb.Length) : sb.ToString());
+            if (previousLength > sb.Length)
+                Console.Write(new string(' ', previousLength - sb.Length));
+            MoveCursorTo(cursor);
+        }
+
         while (true)
         {
             var ki = Console.ReadKey(intercept: true);
-            if (ki.Key == ConsoleKey.Escape) { Console.WriteLine(); return null; }
-            if (ki.Key == ConsoleKey.Enter)  { Console.WriteLine(); return sb.ToString(); }
-            if (ki.Key == ConsoleKey.Backspace && sb.Length > 0) { sb.Remove(sb.Length - 1, 1); Console.Write("\b \b"); }
-            else if (!char.IsControl(ki.KeyChar) && ki.KeyChar != '\0') { sb.Append(ki.KeyChar); Console.Write('•'); }
+            switch (ki.Key)
+            {
+                case ConsoleKey.Escape:
+                    return null;
+                case ConsoleKey.Enter:
+                    return sb.ToString();
+                case ConsoleKey.LeftArrow:
+                    if (cursor > 0) { cursor--; MoveCursorTo(cursor); }
+                    break;
+                case ConsoleKey.RightArrow:
+                    if (cursor < sb.Length) { cursor++; MoveCursorTo(cursor); }
+                    break;
+                case ConsoleKey.Home:
+                    cursor = 0; MoveCursorTo(cursor);
+                    break;
+                case ConsoleKey.End:
+                    cursor = sb.Length; MoveCursorTo(cursor);
+                    break;
+                case ConsoleKey.Delete:
+                    if (cursor < sb.Length)
+                    {
+                        var prevLen = sb.Length;
+                        sb.Remove(cursor, 1);
+                        Redraw(prevLen);
+                    }
+                    break;
+                case ConsoleKey.Backspace:
+                    if (cursor > 0)
+                    {
+                        var prevLen = sb.Length;
+                        sb.Remove(cursor - 1, 1);
+                        cursor--;
+                        Redraw(prevLen);
+                    }
+                    break;
+                default:
+                    if (!char.IsControl(ki.KeyChar) && ki.KeyChar != '\0')
+                    {
+                        var prevLen = sb.Length;
+                        sb.Insert(cursor, ki.KeyChar);
+                        cursor++;
+                        Redraw(prevLen);
+                    }
+                    break;
+            }
         }
     }
 
