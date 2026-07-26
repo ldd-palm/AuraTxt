@@ -169,6 +169,14 @@ public class TuiRenderer
     /// (API keys, base URLs) that overflow the window width don't crash.
     private static string? ReadEditableLine(bool secret)
     {
+        // DrawFrame's AnsiConsole.Clear() hides the console cursor as a side
+        // effect and nothing re-shows it for this hand-rolled loop (Ask/AskSecret
+        // don't have this problem — Spectre's own TextPrompt re-shows it
+        // internally). Without this, cursor tracking below is logically correct
+        // but the blinking caret itself is invisible, so Left/Right/Home/End
+        // look like they do nothing even though they work.
+        try { Console.CursorVisible = true; } catch { /* not all terminals support it */ }
+
         var startLeft = Console.CursorLeft;
         var startTop  = Console.CursorTop;
         var width     = Math.Max(1, Console.WindowWidth);
