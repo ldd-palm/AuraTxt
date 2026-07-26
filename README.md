@@ -264,21 +264,25 @@ Open `profiles\AI_PROMPT.md`, paste its content into any AI chat along with your
 
 ### Cloud APIs
 
-| Provider | Model | Adapter | Notes |
-|----------|-------|---------|-------|
-| [Google AI Studio](https://aistudio.google.com) | `gemini-2.5-flash-preview-05-20` | `gemini_native` | Free tier, fast, thinking support |
-| [DeepSeek](https://platform.deepseek.com) | `deepseek-chat` | `openai_compatible` | Very affordable, excellent Chinese/English |
-| [OpenAI](https://platform.openai.com) | `gpt-4o-mini` | `openai_compatible` | Reliable all-rounder |
-| [NVIDIA NIM](https://build.nvidia.com) | `meta/llama-3.3-70b-instruct` | `openai_compatible` | Free credits on sign-up |
-| [Groq](https://console.groq.com) | `llama-3.3-70b-versatile` | `openai_compatible` | Extremely fast, generous free tier |
+#### [Google AI Studio](https://aistudio.google.com)
 
-**Common base URLs:**
-```
-OpenAI              https://api.openai.com/v1
-Google AI Studio    https://generativelanguage.googleapis.com
-NVIDIA NIM          https://integrate.api.nvidia.com/v1
-Groq                https://api.groq.com/openai/v1
-```
+Base URL: `https://generativelanguage.googleapis.com` · Adapter: `gemini_native`
+
+| Model | Profile | Notes |
+|-------|---------|-------|
+| `gemini-3.1-flash-lite` | `gemini-flash` *(set explicitly)* | No bundled `name_patterns` match this name yet — auto-resolution falls back to the generic `default-gemini` profile (no thinking control) unless you set the Profile field yourself in auracfg |
+| `gemma-4-31b-it` | `gemma-4` *(auto)* | Uses `thinking_level` (`NONE`/`HIGH`), not `thinkingBudget` — a different request shape from Gemini Flash/Pro |
+
+#### [NVIDIA NIM](https://build.nvidia.com)
+
+Base URL: `https://integrate.api.nvidia.com/v1` · Adapter: `openai_compatible`
+
+| Model | Profile | Notes |
+|-------|---------|-------|
+| `qwen/qwen3-next-80b-a3b-instruct` | `qwen3-next-instruct` *(auto)* | Natively non-thinking — no `chat_template_kwargs` sent |
+| `z-ai/glm-5.2` | `glm-5` *(auto)* | Dual-key disable (`thinking` + `enable_thinking` both false) for safety |
+| `minimaxai/minimax-m3` | `minimax` *(auto)* | Thinking is intrinsic via `<think>` tags — can't be disabled, stripped from the output automatically |
+| `moonshotai/kimi-k2.6` | `kimi-k2` *(auto)* | Thinking toggled via `chat_template_kwargs.thinking` |
 
 ### Local Models via Ollama
 
