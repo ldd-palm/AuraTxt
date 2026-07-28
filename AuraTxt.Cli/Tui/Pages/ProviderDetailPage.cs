@@ -104,7 +104,7 @@ public class ProviderDetailPage(string providerId) : PageBase
         switch (key)
         {
             case "A":
-                var tm = app.Renderer.AskOrCancel("Model full name (e.g. gpt-4o)");
+                var tm = app.Renderer.AskOrCancel("Model ID (e.g. gpt-4o)");
                 if (string.IsNullOrWhiteSpace(tm)) break;
                 var al = app.Renderer.AskOrCancel("Alias", tm);
                 if (al is null) break;

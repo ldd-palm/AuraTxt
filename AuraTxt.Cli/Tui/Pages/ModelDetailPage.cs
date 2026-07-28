@@ -45,7 +45,7 @@ public class ModelDetailPage(string providerId, int modelIndex) : PageBase
 
     private static IReadOnlyList<MenuItem> BuildItems(AuraTxt.Core.Models.ModelEntry m) =>
     [
-        new MenuItem("1", "Full Name", m.TargetModel),
+        new MenuItem("1", "Model ID",  m.TargetModel),
         new MenuItem("2", "Alias",     m.Alias),
         new MenuItem("3", "Profile",   string.IsNullOrEmpty(m.ProfileId) ? "(auto)" : m.ProfileId,
                      string.IsNullOrEmpty(m.ProfileId) ? ItemValueStyle.Muted : ItemValueStyle.Success),
@@ -58,8 +58,8 @@ public class ModelDetailPage(string providerId, int modelIndex) : PageBase
         switch (key)
         {
             case "1":
-                var nm = app.Renderer.Ask("New full name", m.TargetModel);
-                if (!string.IsNullOrWhiteSpace(nm)) { m.TargetModel = nm; app.MarkDirty(); app.Renderer.SetNotice($"Name → {nm}"); }
+                var nm = app.Renderer.Ask("New model ID", m.TargetModel);
+                if (!string.IsNullOrWhiteSpace(nm)) { m.TargetModel = nm; app.MarkDirty(); app.Renderer.SetNotice($"Model ID → {nm}"); }
                 break;
             case "2":
                 var na = app.Renderer.Ask("New alias", m.Alias);

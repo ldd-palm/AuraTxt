@@ -106,7 +106,7 @@ public class ModelPlatformPage : PageBase
         if (url is null) return;
         var secret = app.Renderer.AskSecretOrCancel("API Key");
         if (secret is null) return;
-        var tm = app.Renderer.AskOrCancel("First model full name (e.g. gpt-4o)");
+        var tm = app.Renderer.AskOrCancel("First model ID (e.g. gpt-4o)");
         if (tm is null) return;
         var al = app.Renderer.AskOrCancel("Alias/short name", tm);
         if (al is null) return;
@@ -120,7 +120,7 @@ public class ModelPlatformPage : PageBase
 
         while (app.Renderer.Confirm("Add another model?", defaultYes: false))
         {
-            var tm2 = app.Renderer.AskOrCancel("Model full name");
+            var tm2 = app.Renderer.AskOrCancel("Model ID");
             if (tm2 is null) break;
             var al2 = app.Renderer.AskOrCancel("Alias", tm2);
             if (al2 is null) break;
