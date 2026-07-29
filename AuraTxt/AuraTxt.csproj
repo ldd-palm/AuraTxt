@@ -8,7 +8,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>AuraTxt</AssemblyName>
     <ApplicationIcon>Resources\aruatxt_active.ico</ApplicationIcon>
-    <Version>1.5</Version>
+    <Version>1.6</Version>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\AuraTxt.Core\AuraTxt.Core.csproj" />
