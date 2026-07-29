@@ -55,8 +55,8 @@ Inspired by Cherry Studio's selection assistant and Qtranslate, AuraTxt goes fur
 
 | Package | Size | Requires |
 |---------|------|---------|
-| [AuraTXT_1.5.zip](https://github.com/ldd-palm/AuraTxt/releases/download/v1.5/AuraTXT_1.5.zip) | ~3 MB | Windows 10/11 + [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) |
-| [AuraTXT_1.5_self_contained.zip](https://github.com/ldd-palm/AuraTxt/releases/download/v1.5/AuraTXT_1.5_self_contained.zip) | ~125 MB | Windows 10/11 only (no .NET install needed) |
+| [AuraTXT_1.6.zip](https://github.com/ldd-palm/AuraTxt/releases/download/v1.6/AuraTXT_1.6.zip) | ~3 MB | Windows 10/11 + [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) |
+| [AuraTXT_1.6_self_contained.zip](https://github.com/ldd-palm/AuraTxt/releases/download/v1.6/AuraTXT_1.6_self_contained.zip) | ~125 MB | Windows 10/11 only (no .NET install needed) |
 
 ## Quick Start
 
