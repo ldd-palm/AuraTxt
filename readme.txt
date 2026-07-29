@@ -1,5 +1,5 @@
 ====================================================================
- AuraTxt v1.5
+ AuraTxt v1.6
  A portable, highly customizable AI text assistant for Windows
 ====================================================================
 
@@ -11,7 +11,8 @@ it up, drafts a reply, or sends it to any AI model you configure.
 WHAT YOU GET
 --------------------------------------------------------------------
 - Instant trigger: drag-select or double-click text in any app
-- Built-in free Google Translate + Youdao Dictionary, no API key needed
+- 5 built-in free models, no API key needed: Google Translate, DeepL,
+  Youdao Dictionary, WordReference, and Oxford Learner's Dictionary
 - Connect any OpenAI-compatible or Gemini API for custom AI actions
 - Interactive window: type an instruction, get AI output (email
   replies, grading, drafting, etc.)
@@ -31,8 +32,9 @@ QUICK START
 4. To configure providers, models, and actions: right-click the
    tray icon -> Settings (opens auracfg.exe)
 
-No API key is required to start -- Google Translate and Youdao
-Dictionary work out of the box.
+No API key is required to start -- Google Translate, DeepL, Youdao
+Dictionary, WordReference, and Oxford Learner's Dictionary all work
+out of the box.
 
 --------------------------------------------------------------------
 UPGRADING -- PLEASE READ
