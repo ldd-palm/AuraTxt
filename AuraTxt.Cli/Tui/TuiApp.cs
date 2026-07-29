@@ -93,7 +93,7 @@ public class TuiApp(ConfigService configService)
         if (string.IsNullOrEmpty(a) || !PromptService.IsFileRef(a)) return false;
         try
         {
-            var fullA = Path.IsPathRooted(a) ? a : Path.Combine(AppContext.BaseDirectory, a);
+            var fullA = PromptService.ResolveFullPath(a);
             return string.Equals(Path.GetFullPath(fullA), Path.GetFullPath(b), StringComparison.OrdinalIgnoreCase);
         }
         catch { return false; }

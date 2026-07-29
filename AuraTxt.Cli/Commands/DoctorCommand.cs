@@ -77,13 +77,13 @@ public class DoctorCommand(ConfigService config)
         foreach (var a in cfg.Actions)
         {
             if (a.ModelId.Equals("default/Terminal", StringComparison.OrdinalIgnoreCase)) continue;
-            if (PromptService.IsFileRef(a.Prompt) && !File.Exists(a.Prompt))
+            if (PromptService.IsFileRef(a.Prompt) && !File.Exists(PromptService.ResolveFullPath(a.Prompt)))
             {
                 Error($"Action \"{a.Id}\": prompt file not found — {a.Prompt}");
                 badPrompts++;
             }
         }
-        if (PromptService.IsFileRef(cfg.Settings.SystemPrompt) && !File.Exists(cfg.Settings.SystemPrompt))
+        if (PromptService.IsFileRef(cfg.Settings.SystemPrompt) && !File.Exists(PromptService.ResolveFullPath(cfg.Settings.SystemPrompt)))
         {
             Error($"System prompt file not found — {cfg.Settings.SystemPrompt}");
             badPrompts++;

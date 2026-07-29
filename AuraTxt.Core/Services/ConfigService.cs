@@ -59,6 +59,10 @@ public class ConfigService
                 EnsureSystemAction(cfg, "speech", "Speech", "speech",         "Ctrl+E");
                 EnsureSystemAction(cfg, "google", "Google", "search",         "");
                 EnsureBuiltinModel(cfg, "Terminal", "Terminal");
+                EnsureBuiltinModel(cfg, "Deepl_Translate", "DeepL");
+                EnsureBuiltinModel(cfg, "WordReference_Dict", "WordRef");
+                EnsureBuiltinModel(cfg, "Oxford_Dict", "Oxford");
+                NormalisePromptPaths(cfg);
                 DefaultSettings = cfg.Settings;
                 return cfg;
             }
@@ -119,6 +123,17 @@ public class ConfigService
         def.Models.Add(new ModelEntry { TargetModel = targetModel, Alias = alias, Enabled = true });
     }
 
+    /// Migration guard: rewrites absolute prompt-file paths that live inside the portable
+    /// folder to paths relative to AppContext.BaseDirectory, in-memory only (not persisted
+    /// until the next explicit Save) — mirrors EnsureBuiltinModel's non-destructive contract.
+    /// Lets configs carried over from before relative-path support self-heal on load.
+    private static void NormalisePromptPaths(ConfigRoot cfg)
+    {
+        foreach (var action in cfg.Actions)
+            action.Prompt = PromptService.ToRelativeIfInsideBase(action.Prompt);
+        cfg.Settings.SystemPrompt = PromptService.ToRelativeIfInsideBase(cfg.Settings.SystemPrompt);
+    }
+
     private static void NormaliseThinkingModes(ConfigRoot cfg)
     {
         foreach (var action in cfg.Actions)
@@ -139,7 +154,7 @@ public class ConfigService
         // AppSettings' inline-text fallback — otherwise Prompt Library shows the
         // freshly-seeded system.md as "(unused)" even though it's the live default.
         PromptService.EnsureScaffold();
-        cfg.Settings.SystemPrompt = PromptService.SystemFile;
+        cfg.Settings.SystemPrompt = PromptService.ToRelativeIfInsideBase(PromptService.SystemFile);
 
         cfg.Models["default"] = new ProviderConfig
         {
@@ -149,9 +164,12 @@ public class ConfigService
             AdapterType = "openai_compatible",
             Models      = new()
             {
-                new ModelEntry { TargetModel = "Google_Translate", Alias = "GTrans",   Enabled = true },
-                new ModelEntry { TargetModel = "Youdao_Dict",      Alias = "Youdao",   Enabled = true },
-                new ModelEntry { TargetModel = "Terminal",         Alias = "Terminal", Enabled = true }
+                new ModelEntry { TargetModel = "Google_Translate",   Alias = "GTrans",   Enabled = true },
+                new ModelEntry { TargetModel = "Deepl_Translate",    Alias = "DeepL",    Enabled = true },
+                new ModelEntry { TargetModel = "Youdao_Dict",        Alias = "Youdao",   Enabled = true },
+                new ModelEntry { TargetModel = "WordReference_Dict", Alias = "WordRef",  Enabled = true },
+                new ModelEntry { TargetModel = "Oxford_Dict",        Alias = "Oxford",   Enabled = true },
+                new ModelEntry { TargetModel = "Terminal",           Alias = "Terminal", Enabled = true }
             }
         };
 

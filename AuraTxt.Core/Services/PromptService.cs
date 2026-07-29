@@ -22,11 +22,34 @@ public static class PromptService
         if (string.IsNullOrWhiteSpace(promptRef)) return "";
         try
         {
-            if (IsFileRef(promptRef) && File.Exists(promptRef))
-                return File.ReadAllText(promptRef);
+            if (IsFileRef(promptRef))
+            {
+                var full = ResolveFullPath(promptRef);
+                if (File.Exists(full)) return File.ReadAllText(full);
+            }
         }
         catch { /* fall through to inline */ }
         return promptRef;
+    }
+
+    /// Resolves a (possibly relative) prompt file reference to an absolute path, anchored
+    /// at AppContext.BaseDirectory — the same portable-folder convention config.json,
+    /// profiles/, and prompts/ already resolve against, not the process's current
+    /// working directory (which is not guaranteed to match BaseDirectory).
+    public static string ResolveFullPath(string promptRef) =>
+        Path.IsPathRooted(promptRef) ? promptRef : Path.Combine(AppContext.BaseDirectory, promptRef);
+
+    /// Rewrites an absolute path that lives inside AppContext.BaseDirectory (the portable
+    /// folder) to a path relative to it, for storage in config.json — so the folder can be
+    /// copied/renamed/moved without breaking prompt references. Leaves already-relative
+    /// paths, paths outside the portable folder, inline text, and non-existent paths
+    /// (can't tell whether they're still meaningful) untouched.
+    public static string ToRelativeIfInsideBase(string promptRef)
+    {
+        if (!IsFileRef(promptRef) || !Path.IsPathRooted(promptRef) || !File.Exists(promptRef))
+            return promptRef;
+        var rel = Path.GetRelativePath(AppContext.BaseDirectory, promptRef);
+        return Path.IsPathRooted(rel) || rel.StartsWith("..") ? promptRef : rel;
     }
 
     /// True when the value is a single-line path reference (not multi-line inline text).

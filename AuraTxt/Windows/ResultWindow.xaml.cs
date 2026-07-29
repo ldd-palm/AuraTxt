@@ -49,9 +49,20 @@ public partial class ResultWindow : Window
         ResultText.FontSize = cfg.Settings.FontSize;
         Opacity             = cfg.Settings.ResultWindowOpacity;
 
-        // Populate model picker with enabled user models + all built-in models
+        // Populate model picker with enabled user models + built-in models (Terminal excluded —
+        // it runs a shell command template, not a fit for "switch model and rerun this text").
+        // Built-ins display in config.json's Models["default"].Models order (user-editable there).
         var items = cfg.AllEnabledModelRefs()
-            .Select(r => new ModelPickerItem(r.Ref, r.Label, r.Ref.StartsWith("default/")))
+            .Where(r => r.Ref != "default/Terminal")
+            .Select(r =>
+            {
+                var isBuiltIn = r.Ref.StartsWith("default/");
+                // Built-in labels come back as "Built-in / {Alias}" — drop the prefix so the
+                // picker shows the bare alias; the Accent-color trigger already marks it as
+                // built-in without needing the text label to repeat that.
+                var label = isBuiltIn ? r.Label["Built-in / ".Length..] : r.Label;
+                return new ModelPickerItem(r.Ref, label, isBuiltIn);
+            })
             .ToList();
         ModelPicker.ItemsSource       = items;
         ModelPicker.SelectedValuePath = "Id";
@@ -155,7 +166,7 @@ public partial class ResultWindow : Window
     private void EditBtn_Click(object sender, RoutedEventArgs e)
     {
         // Built-in models don't use custom prompts — show read-only notice instead.
-        if (_activeModel?.model.TargetModel is "Google_Translate" or "Youdao_Dict")
+        if (_activeModel?.model.TargetModel is "Google_Translate" or "Deepl_Translate" or "Youdao_Dict" or "WordReference_Dict" or "Oxford_Dict")
         {
             _editing = true;
             try

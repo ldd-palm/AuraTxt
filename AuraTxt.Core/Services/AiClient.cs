@@ -119,10 +119,13 @@ public class AiClient
         var lang = ConfigService.DefaultSettings?.TargetLanguage ?? "zh-CN";
         return model.TargetModel switch
         {
-            "Google_Translate" => await new GoogleTranslateClient().TranslateAsync(selectedText, "auto", lang, ct),
-            "Youdao_Dict"      => await new YoudaoClient().DictionaryAsync(selectedText, ct),
-            "Terminal"         => await TerminalClient.RunAsync(action.Prompt, selectedText, userInput, ct),
-            _                  => $"[Error] Unknown built-in model: {model.TargetModel}"
+            "Google_Translate"   => await new GoogleTranslateClient().TranslateAsync(selectedText, "auto", lang, ct),
+            "Deepl_Translate"    => await new DeeplClient().TranslateAsync(selectedText, "auto", lang, ct),
+            "Youdao_Dict"        => await new YoudaoClient().DictionaryAsync(selectedText, ct),
+            "WordReference_Dict" => await new WordReferenceClient().DictionaryAsync(selectedText, lang, ct),
+            "Oxford_Dict"        => await new OxfordDictionaryClient().DictionaryAsync(selectedText, ct),
+            "Terminal"           => await TerminalClient.RunAsync(action.Prompt, selectedText, userInput, ct),
+            _                    => $"[Error] Unknown built-in model: {model.TargetModel}"
         };
     }
 }

@@ -126,7 +126,7 @@ class ActionItem {
 ### 3.6 首次运行默认配置
 
 `ConfigService.Load()` 在文件不存在时生成并保存默认配置：
-- `Models["default"]`：DisplayName="Built-in"，含 3 个模型：`Google_Translate`（Alias=GTrans）、`Youdao_Dict`（Alias=Youdao）、`Terminal`（Alias=Terminal，见 §9.3），均 `Enabled=true`。
+- `Models["default"]`：DisplayName="Built-in"，含 6 个模型：`Google_Translate`（Alias=GTrans）、`Deepl_Translate`（Alias=DeepL，见 §9.2）、`Youdao_Dict`（Alias=Youdao）、`WordReference_Dict`（Alias=WordRef，见 §9.4）、`Oxford_Dict`（Alias=Oxford，见 §9.5）、`Terminal`（Alias=Terminal，见 §9.6），均 `Enabled=true`。
 - 3 个系统 action：`copy`（Icon=clipboard-copy，Hotkey 恒为空且锁定）、`speech`（Icon=speech，Hotkey=Ctrl+E）、`google`（Icon=search，Hotkey 默认空）。均 `IsSystem=true`、无 ModelId。
 
 ## 4. ConfigService（配置读写）
@@ -330,7 +330,7 @@ AdapterRegistry.Get(adapterType) → IAdapter
 IAdapter.CompleteAsync / StreamAsync(AdapterRequest, ct)
 ```
 
-内置模型（`providerId == "default"`）在 `AiClient.CompleteAsync/StreamAsync` 中最先拦截，交给 `BuiltinDispatch(model, action, selectedText, userInput, ct)` 按 `model.TargetModel` 路由到 `GoogleTranslateClient`、`YoudaoClient` 或 `TerminalClient`（见 §9.3），不走 adapter/profile 路径。`action`/`userInput` 仅 `Terminal` 需要（命令模板 = `action.Prompt`），GTrans/Youdao 不使用。
+内置模型（`providerId == "default"`）在 `AiClient.CompleteAsync/StreamAsync` 中最先拦截，交给 `BuiltinDispatch(model, action, selectedText, userInput, ct)` 按 `model.TargetModel` 路由到 `GoogleTranslateClient`、`DeeplClient`、`YoudaoClient`、`WordReferenceClient`、`OxfordDictionaryClient` 或 `TerminalClient`（见 §9.6），不走 adapter/profile 路径。`action`/`userInput` 仅 `Terminal` 需要（命令模板 = `action.Prompt`），其余内置模型不使用；WordReference 与 GTrans/DeepL 一样跟随 `Settings.TargetLanguage`（词典对固定为 `en{TargetLanguage}`）；Youdao 与 Oxford 不跟随——Youdao 是纯"外语→中文"单向词典（`/w/{lang}/` 路径段选的是查询词的**源**语言，不是释义语言，无法输出中文以外的语言），Oxford 是纯英英词典（该域名下不存在任何双语版本，实测 `/definition/english-chinese/...` 等 URL 均 404），两者架构上都不支持目标语言参数。
 
 ### 6.2 ProfileService
 
@@ -438,10 +438,10 @@ LogService：静态类，`Enabled`+`LogPath` 控制；`Info/Error/Raw` 三个方
 - `WindowChrome`：`ResizeBorderThickness=6, CaptionHeight=0, GlassFrameThickness=0`（**[关键]** GlassFrame 必须为 0，否则与 AllowsTransparency 渲染冲突）。MinWidth=320, MinHeight=200。
 - **会话宽度记忆**：构造时若 `AppState.SessionResultWindowWidth` 非 null 则覆盖 `Width`；`SizeChanged` 事件同步写回该字段。重启后归零、恢复 XAML 默认宽度。
 - 标题栏：关闭圆钮、action 图标+名称（DockPanel 保证 TextTrimming）、**模型选择 ComboBox**、按钮组（Edit Prompt ✏️(P) / Regenerate 🔄(G) / Replace ↩️(R) / Copy 📋(C) / Pin 📌(T)）。标题栏可拖动（DragMove）。
-- 模型 ComboBox：`AllEnabledModelRefs()` 全量（含内置）；label 格式为 `"DisplayName / Alias"`（内置为 `"Built-in / Alias"`）；初选 `action.ModelId`。**SelectionChanged 持久化 [关键]**：重新 `Load()` 最新配置 → 找到同 Id 的 action → 只改其 `ModelId` → `Save()`（read-modify-write，不得把窗口持有的旧快照整体写回，否则覆盖 auracfg 并发修改）。
+- 模型 ComboBox：`AllEnabledModelRefs()` 过滤掉 `default/Terminal`（不适合"切换模型重跑同一段文本"这个场景）；label 格式为 `"DisplayName / Alias"`，**内置模型例外**——本地剥掉 `AllEnabledModelRefs()` 返回的 `"Built-in / "` 前缀，只显示裸 Alias（如 `GTrans` 而非 `Built-in / GTrans`），配合下面的颜色区分已经足够识别，不需要文字前缀重复一遍。**[关键] 内置/自定义颜色区分**：`ComboBox.ItemTemplate` 里对 `IsBuiltIn` 做 `DataTrigger`——`True` 时 `Foreground={DynamicResource Accent}` + `FontWeight=Bold`，`False` 走默认 `TextPrimary`；该模板同时套用到下拉列表项和收起后的选中框显示（WPF `ItemTemplate` 默认行为），不需要额外的 `SelectionBoxItemTemplate`。初选 `action.ModelId`（若为 `default/Terminal`，即 action 本身绑定 Terminal 但 `TerminalUseConsoleWindow=false` 走到了这里，ComboBox 不选中任何项——不影响本次结果已用 Terminal 正常渲染，只是那次打开时选择器显示为空，可正常切到其他条目）。**内置模型显示顺序 = `Models["default"].Models` 的实际数组顺序**（跟 `AllEnabledModelRefs()` 保持一致，不额外排序）——升级用户的配置文件里新内置模型是通过 `EnsureBuiltinModel` 迁移守卫追加在数组末尾的，顺序取决于升级历史；想要别的顺序需要用户自己在 config.json（或未来的 auracfg 编辑功能）里调整 `Models["default"].Models` 数组顺序，WPF 层不再维护一份独立的固定显示顺序表。**SelectionChanged 持久化 [关键]**：重新 `Load()` 最新配置 → 找到同 Id 的 action → 只改其 `ModelId` → `Save()`（read-modify-write，不得把窗口持有的旧快照整体写回，否则覆盖 auracfg 并发修改）。
 - 打开即执行 `RunAsync()`：
   - `PromptService.Resolve(action.Prompt)` 得到 prompt 文本；占位符替换：`{SelectedText}`→选中文本，`{UserInput}`→空串。system prompt 同样 Resolve+替换。
-  - 显示 "Processing…"，调用 `AiClient.StreamAsync(providerId, provider, model, action, selectedText, "", ct)`。内置模型（Google_Translate/Youdao_Dict）在 AiClient 内部拦截路由，不需要 ResultWindow 特殊处理。
+  - 显示 "Processing…"，调用 `AiClient.StreamAsync(providerId, provider, model, action, selectedText, "", ct)`。内置模型（Google_Translate/Deepl_Translate/Youdao_Dict/WordReference_Dict/Oxford_Dict）在 AiClient 内部拦截路由，不需要 ResultWindow 特殊处理。
   - `await foreach` 流式 delta，**首个 chunk 到达时先清空再 AppendText**；持 `CancellationTokenSource`，重跑/关窗时 Cancel；`OperationCanceledException` 静默；其他异常追加 `[Error] {message}`（含 inner）。
 - 关闭行为：`Closed` → `IsResultWindowOpen=false`、`MenuSuppressUntil=+2s`、取消流。`Deactivated` → `SafeClose()`；`SafeClose` 受 `_closing/_editing/_pinned` 三守卫（Pin 按钮切换 `_pinned`，未 pin 时点击外部即关）。
 - **键盘 [关键]**：`PreviewKeyDown`（隧道事件，必须用 Preview——TextBox 会吞 KeyDown）：Esc 关闭；其余单字母快捷键 P(Edit)/G(Regen)/R(Replace)/C(CopyAll)/T(Pin) **仅在无修饰键且焦点不在可编辑 TextBox 时生效**——保证 Ctrl+C 隧道到 TextBox 复制选区、输入框打字不被劫持。
@@ -471,6 +471,8 @@ LogService：静态类，`Enabled`+`LogPath` 控制；`Info/Error/Raw` 三个方
 - config 中 Action.Prompt 与 Settings.SystemPrompt **首选存 .md 文件路径**，运行时 `Resolve()` 实时读文件（改 prompt 无需重启）；值不是有效文件路径时按内联文本原样返回（向后兼容）。
 - `IsFileRef(s)` **[关键]**：非空 && **单行** && （`.md` 结尾 || 含路径分隔符）。单行判断必不可少——内联 prompt 含 `</source_text>` 的 `/` 曾被误判成路径。
 - `ListPrompts()`：目录下 *.md 按文件名排序，排除 template.md。`CreateFromTemplate(name)`：复制 template 为 `{name}.md`。
+- **[关键] 相对路径锚定 BaseDirectory，不是 CWD**：`prompts/` 目录内的文件存进 config.json 时用**相对**路径（如 `prompts\translate.md`），不用绝对路径——便携文件夹被移动/改名/复制到别处时相对路径依然有效，绝对路径会失效（此前的真实故障：一份 config.json 从旧安装目录拷到新目录后，某条 action 的 `Prompt` 还指着旧目录，运行时 `File.Exists` 失败、静默把这个绝对路径字符串当成内联 prompt 发给 AI）。`ResolveFullPath(promptRef)`：`Path.IsPathRooted(promptRef) ? promptRef : Path.Combine(AppContext.BaseDirectory, promptRef)`——**必须**锚定 `AppContext.BaseDirectory`，不能用 `Path.GetFullPath` 或直接 `File.Exists(相对路径)`，那两者都是相对于进程当前工作目录（不保证等于 exe 所在目录）解析的。`Resolve()`、`DoctorCommand` 的文件存在性检查、`SystemPromptFlow` 的 `[E] Edit` 分支、`TuiApp.SamePath`/`ActionFeaturesPage.PromptFileName` 的"谁在用这个文件"比对，全部经这一个函数解析，不各自重复 `Path.IsPathRooted` 三元表达式。`prompts/` 目录**之外**的文件（"Type an absolute path..." 选项选的）刻意保持绝对路径，不做转换。
+- `ToRelativeIfInsideBase(promptRef)`：把落在 `AppContext.BaseDirectory` 内的绝对路径转成相对路径，用于写入 config 前的规范化；已是相对路径 / 目录外的绝对路径 / 内联文本 / 文件已不存在，一律原样返回不碰。`SelectPromptFileFlow.Run()` 选完文件后经它转换再返回，所以新建/重新指向的 prompt 引用天然就是相对路径。`ConfigService.Load()` 的 `NormalisePromptPaths` 迁移守卫（同 `EnsureBuiltinModel` 的非破坏性写法，只在内存里改，下次 `Save()` 才落盘）会对已有的 `Actions[].Prompt`/`Settings.SystemPrompt` 做同样的规范化，让升级前就存在的绝对路径引用自动愈合。
 
 ### 8.2 默认 System Prompt（DATA BOUNDARY 防注入）[关键]
 
@@ -494,12 +496,37 @@ LogService：静态类，`Enabled`+`LogPath` 控制；`Info/Error/Raw` 三个方
 - `GenerateTk(text, tkk="0.0")`：移植自网页版 tk 算法——文本转 UTF-8 字节序列（含代理对处理），逐字节经变换 `"+-a^+6"`，收尾 `"+-3^+b+-f"`，异或 tkk 小数部分，负数修正，mod 1e6，返回 `"{a}.{a^h}"`。位运算用 long + `0xFFFFFFFFL` 掩码模拟 JS 32 位溢出。需单元测试锁定该算法。
 - 共享 static HttpClient（30s 超时）。
 
-### 9.2 YoudaoClient
+### 9.2 DeeplClient
+
+- `POST https://www2.deepl.com/jsonrpc`，方法 `LMT_handle_jobs`；请求体：单个 job（整段文本不切句，与 GoogleTranslateClient 一样一次性发送），`lang.source_lang_user_selected`（`from=="auto"` 时传 `"auto"`，否则传目标两字母码）、`lang.user_preferred_langs=[from=="auto"?"EN":sourceCode, targetCode]`、`lang.target_lang`、`priority=1`、`timestamp`。
+- **[关键] 反爬签名校验**：直接照搬网页版请求体会稳定收到 `429 Too many requests`（错误码 1042911）——这不是真限流，是 DeepL 服务端校验序列化后的 `"method"` 键前后空格是否与浏览器版 JS 对给定 `id` 计算出的一致。移植自开源 DeepL 逆向工具（deeplx 等）已知公式：`(id+5)%29==0 || (id+3)%13==0` 为真时用 `"method" : "LMT_handle_jobs"`（冒号前后各一空格），否则用 `"method": "LMT_handle_jobs"`（冒号后一空格，`System.Text.Json` 默认输出）。`id` 每次请求用 `Random.Shared.Next(1, 1_000_000)` 现取，不固定。`NeedsMethodSpace(id)`/`ToDeeplCode(code)` 为 public static 纯函数，单元测试锁定。
+- `timestamp` 公式与网页版一致：`iCount` = 文本中 `'i'` 字符个数，`c = 1 + iCount`，`timestamp = now + (c - now % c)`（`now` = Unix 毫秒）。
+- 响应 JSON 顶层若含 `error` 字段（如反爬校验失败）→ 抛 `InvalidOperationException`；否则取 `result.translations[0].beams[0].postprocessed_sentence`。
+- 语言码转换 `ToDeeplCode`：复用应用内 Google 风格代码（如 `"zh-CN"`、`"ja"`），取 `-` 前部分转大写（`"zh-CN"→"ZH"`）；不做支持语言白名单校验，交给 DeepL 服务端判定。
+- 共享 static HttpClient（30s 超时，UA + Referer/Origin=`https://www.deepl.com/`）。
+- 内部私有 API，未来可能被 DeepL 无预警调整或加强反爬，稳定性弱于 GoogleTranslateClient/YoudaoClient；坏了属预期风险，非代码 bug。
+
+### 9.3 YoudaoClient
 
 - 只有 `DictionaryAsync(word)`：`GET https://dict.youdao.com/w/{urlencode(word)}/`，需 UA/Referer/Cookie(`OUTFOX_SEARCH_USER_ID`) 头。**[关键]** 旧的 fanyi.youdao.com 签名接口已被封（errorCode 50），不要实现/恢复。
 - HTML→文本提取：取 `results-content">` 到 `<div id="ads"` 之间；剔除 `webTrans` 块（到 `wordArticle` 兄弟节点）；去 `<style>`；`\s+` 归一化；`baav` div、块级闭标签（div/p/li/h1-6/tr/ul/ol/table）、`<br>` 转换行；剥所有标签；HtmlDecode；压缩空白与连续空行；去噪声行（"相关文章"、"更多权威例句"）。
 
-### 9.3 TerminalClient（第三个内置模型）[关键]
+### 9.4 WordReferenceClient
+
+- 只有 `DictionaryAsync(word, to="zh-CN")`：`GET https://www.wordreference.com/en{ToWordReferenceCode(to)}/{urlencode(word)}`，浏览器 UA，无需签名/Referer/Cookie。词典对固定以英语为源语言（`en` + 目标语言码），跟随 `Settings.TargetLanguage`——与 GTrans/DeepL 一致，与 Youdao 写死 EN↔ZH 不同。
+- `ToWordReferenceCode(code)`：app 内 Google 风格代码（`"zh-CN"`、`"ja"`）取 `-` 前部分转小写（`"zh-CN"→"zh"`）；public static 纯函数，单元测试锁定。
+- **[关键] `TargetLanguage=="en"` 边界情况**：词典对退化为 `enen`，WordReference 自身会 302 到其英英释义页 `/definition/{word}`（服务端行为，非本地特判），提取逻辑同样适用，返回英英释义而非双语对照——不是错误，已实测验证。
+- HTML→文本提取：正则匹配 `<div id="(articleWRD|article)">` 到 `<div id="postArticle">` 之间；**[关键]** 必须先去 `<style>...</style>`（英英 `/definition/` 页面的该 div 内嵌了页面级 CSS，若不剥离会把整段样式表泄漏进输出——双语 `/en{code}/` 页面没有这个问题，但两种页面共用同一提取函数，须按最坏情况处理）；块级闭标签（div/p/li/h1-6/tr/ul/ol/table）、`<br>` 转换行；剥所有标签；HtmlDecode；压缩空白与连续空行。未找到匹配 div 时返回空串（与 YoudaoClient 同一"找不到就静默返回空"约定）。
+- 共享 static HttpClient（30s 超时，仅 UA 头）。
+
+### 9.5 OxfordDictionaryClient
+
+- 只有 `DictionaryAsync(word)`：`GET https://www.oxfordlearnersdictionaries.com/search/english/?q={urlencode(word)}`，浏览器 UA，服务端自动 302 到具体释义页（如 `hello_1`），`HttpClient` 默认跟随重定向，无需特殊处理。
+- **[关键] 纯英英词典，不支持目标语言**：该域名下不存在任何双语版本——实测 `/definition/english-chinese/...`、`/definition/english-spanish/...`、`/us/definition/english-chinese/...`、`/search/english-chinese/?q=...` 均 404。`DictionaryAsync` 无 `to` 参数，与 GTrans/DeepL/WordReference 不同、与 Youdao 相同（但原因不同：Youdao 是"只会输出中文"，Oxford 是"压根没有双语版本可选"）。
+- HTML→文本提取：取 `<div id="ox-wrapper"` 到 `<div id="rightcolumn"` 之间；**[关键]** 必须先去 `<script>...</script>`（该区间真实含 script 标签，不像 WordReference 那样只需担心 `<style>`）与 `<div class="sound...">...</div>`（音频播放器块）；其余步骤（块级闭标签/`<br>` 转行、剥标签、HtmlDecode、压缩空白）与 WordReferenceClient 一致。未找到 `ox-wrapper` 时返回空串。
+- 共享 static HttpClient（30s 超时，仅 UA 头）。
+
+### 9.6 TerminalClient（第六个内置模型）[关键]
 
 不调用任何 AI，而是把 `ActionItem.Prompt` 当作 **cmd.exe 命令模板**运行，输出显示在与 AI action 相同的 ResultWindow 中。复用 `Prompt` 字段本身即命令模板，未新增 `ActionItem` 字段。
 
@@ -510,7 +537,7 @@ LogService：静态类，`Enabled`+`LogPath` 控制；`Info/Error/Raw` 三个方
 - **透明而非拦截**：不设确认对话框——像其他 action 一样立即执行；但返回字符串以 `"> {resolved}\n\n"` 开头回显实际执行的命令，`--log` 开启时额外 `LogService.Raw` 记录一份，用于事后审计。退出码非 0 时追加尾行 `"[exit code: N]"`（非 0 退出如 ping 失败是正常输出，不视为异常抛出）。
 - **[关键] 安全边界**：`{SelectedText}` 是外部不可信数据（见 §8.2 DATA BOUNDARY 的同一前提），被直接拼进一条真实执行的 shell 命令——这是有意接受的高级用户/本地自动化权衡（用户自己配置命令模板、自己划选文本、在自己机器上执行），不做转义/沙箱化。缓解手段仅限于回显+日志（可审计）与超时+强制杀进程（不留孤儿），不做输入消毒。
 
-### 9.3.1 Console-window 输出模式（`Settings.TerminalUseConsoleWindow`）[关键]
+### 9.6.1 Console-window 输出模式（`Settings.TerminalUseConsoleWindow`）[关键]
 
 `RunAsync` 开头读取 `ConfigService.DefaultSettings?.TerminalUseConsoleWindow`；为 `true` 时不走上述重定向路径，改走 `RunInConsoleWindow(resolved)`：
 
@@ -547,7 +574,7 @@ LogService：静态类，`Enabled`+`LogPath` 控制；`Info/Error/Raw` 三个方
 - **Provider 详情**：BaseUrl（显示 `[adapterType]` 后缀）、API Key（掩码）、模型列表（值=别名 + `profile:(auto)` 或 `profile:{id}` + active/inactive 徽章）；[A] 加模型、[D] 删模型（有引用拒绝）。
 - **Model 详情**：1 Model ID / 2 Alias / 3 Profile（空=`(auto)` 按 glob 自动匹配；输入 profile id 强制绑定）/ 4 Status（启用↔禁用；禁用前检查 action 引用）。
 - **Profiles 页**：表格显示所有 profile（Priority / Id / Adapter / Thinking / Strip / Source）；[O] 在 ConfigEditor 打开（嵌入 profile 先提取到 `profiles/` 目录）；[R] Reload；[N] 新建向导（6 步：adapter→id→base→patterns→priority→保存）。
-- **Prompt Library**：列出 prompts 目录 .md 文件及使用方（action Name 或 "(General Settings)"；路径比较须先 IsFileRef 判断且相对路径以 BaseDirectory 解析 [关键]，否则全显示 unused）；新建（从模板）、用 PromptEditor 打开、删除（被引用拒绝）。
+- **Prompt Library**：列出 prompts 目录 .md 文件及使用方（action Name 或 "(General Settings)"；路径比较须先 IsFileRef 判断，再经 `PromptService.ResolveFullPath` 以 BaseDirectory 解析 [关键]，否则相对路径全显示 unused）；新建（从模板）、用 PromptEditor 打开、删除（被引用拒绝）。
 - **Action Features**：action 列表，每项格式 `[n] Name  (●/○) active/inactive  {Order}  {model}  {Hotkey}`；列表渲染规则：Model 列——`IsSystem=true` 的 action 显示 `"(system)"`（不需要模型），普通 action 无 ModelId 时显示 `"—"`；Hotkey 列——`Id=="copy"` 显示 `"Ctrl+C"`（仅显示用，不注册热键），其他无热键显示 `"—"`；Detail 页 Hotkey 字段遵循相同规则（copy 显示 `"Ctrl+C"`，按 Enter 弹出 "Copy action hotkey is fixed (empty)." 提示，不允许编辑）。增删改：Name/Icon（可联网验证 lucide 名）/Model（SelectModelFlow 只列 enabled）/Prompt（选 .md 文件或内联）/Interactive/Hotkey（**手动输入字符串**+HotkeyValidator 校验 [关键]，不用 ReadKey 捕获；copy action 锁定为空）/Enabled/Position（内部字段仍为 `Order`，TUI 标签显示为 "Position"）/ThinkingMode（9 键在 `disable` ↔ `enable_high` 之间切换）。
 - **General Settings**：AppSettings 各字段编辑；Theme 从 ListThemes 选择；SpeechVoice 从 GetInstalledVoices 选择；SystemPrompt 选 .md 或查看内容预览。
 - **Doctor**：校验 config——action 的 ModelId 可解析、prompt 文件存在、hotkey 合法且不冲突、provider 字段完整等，输出问题清单或 clean。
@@ -650,6 +677,9 @@ gh release create vX.Y AuraTXT_X.Y.zip AuraTXT_X.Y_self_contained.zip --title "A
 - ConfigService：默认生成（含 3 内置模型/3 系统 action）、Save/Load 往返、原子保存无 .tmp 残留、备份/恢复、`EnsureBuiltinModel` 迁移守卫（老 config.json 缺 Terminal 时 Load() 后内存中补全，磁盘文件不变）。
 - HotkeyValidator：格式/保留键/冲突。
 - GoogleTranslateClient.GenerateTk：已知输入输出锁定算法。
+- DeeplClient.ToDeeplCode/NeedsMethodSpace（public static 纯函数）：语言码转换、反爬空格公式。实际 HTTP 请求（`www2.deepl.com/jsonrpc`）不纳入常规 xunit 套件，改由手动验证覆盖。
+- WordReferenceClient.ToWordReferenceCode（public static 纯函数）：语言码转换。实际 HTTP 请求（`wordreference.com`）与 HTML 提取（含 `enen` 边界情况的 style 剥离）不纳入常规 xunit 套件，改由手动验证覆盖。
+- OxfordDictionaryClient：无语言码转换（纯英英，无 `to` 参数），没有可单测的纯函数，与 YoudaoClient 同一处理方式——不纳入常规 xunit 套件，改由手动验证覆盖。
 - ProfileService：EnsureScaffold 播种嵌入 profile；Resolve 自动 glob 匹配（DeepSeek/Llama/Qwen3）；优先级（qwen3-next-instruct > qwen3-thinking）；Gemini 模型路由到 gemini_native profile；显式 ProfileId；不匹配时 fallback；adapter 不兼容时异常；openai profile 不返回给 gemini adapter。
 - AiClient.BuildRequest（internal）：DeepSeek disable 带 chat_template_kwargs；Llama/QwenNextInstruct disable 不带；GeminiFlash disable 带 thinkingBudget=0；Gemma4 disable 带 thinkingLevel=NONE（**[关键]** 必须大写——Gemini REST API 拒绝小写枚举值，`gemma-4.json` profile 曾被后续大改动误改回小写+空 payload，回归过一次）；GeminiLegacy disable 无 thinkingConfig；MiniMax 有 strip_patterns；GLM5 两个 thinking key 都设。
 - TagStripFilter（internal）：无标签直通、单 chunk 剥除、标签跨 chunk 切断、多块、未闭合丢弃。
@@ -657,6 +687,7 @@ gh release create vX.Y AuraTXT_X.Y.zip AuraTXT_X.Y_self_contained.zip --title "A
 - JsonPathSetter：顶层注入、点路径深层注入、多次调用不覆盖。
 - ConfigRoot：AllEnabledModel* 过滤 disabled、内置恒在（含第三个内置模型，验证不再依赖硬编码的 Google_Translate/Youdao_Dict 查找）、ResolveModel 边界。
 - PromptService.IsFileRef：单行路径 true、多行含 `/` 的内联 false（回归）、Resolve 文件/内联/空。
+- PromptService.ResolveFullPath/ToRelativeIfInsideBase：相对路径锚定 BaseDirectory 解析、绝对路径原样透传；BaseDirectory 内绝对路径转相对、目录外/已相对/内联文本/文件不存在均不变；`Resolve()` 经相对路径读取真实文件内容（回归——曾经相对路径会被错误地当作相对于进程当前工作目录解析）。
 - TerminalClient.BuildResolvedCommand（纯函数，不启动进程）：`{SelectedText}`/`{UserInput}` 替换、多次出现、无占位符时原样返回、命令模板为 .md 文件路径时经 PromptService 解析。进程启动/超时/取消路径不纳入常规 xunit 套件（避免 CI 抖动/耗时），改由手动验证覆盖。
 - UpdateService.IsNewer（internal，纯函数）：tag 比 current 新→true；相同/更旧→false；`v`/`V` 前缀两种大小写都能去掉；tag 格式解析不出来→false 且不抛异常。`CheckAsync` 的真实网络请求路径同样不纳入常规 xunit 套件，改由手动验证覆盖（见 §5.8）。
 - LocalizationService.Resolve（纯函数）：`"auto"` + 已知/未知 `osCultureName`（完整 culture 名或裸两字母码）→ 对应 8 种语言之一 / 落回 `en`；中文按 `hant`/`TW`/`HK`/`MO` 区分简繁；显式合法/非法代码 → 透传 / 落回 `en`。`Apply` 实际设置 `CurrentUICulture` 及 `x:Static`/托盘菜单的联动效果不纳入常规 xunit 套件，改由手动验证覆盖（见 §5.9）。
@@ -669,7 +700,7 @@ gh release create vX.Y AuraTXT_X.Y.zip AuraTXT_X.Y_self_contained.zip --title "A
 3. 双击选词 → 菜单弹出；菜单已开时双击其他词 → 原地更新不闪烁。
 4. 纯点击不弹菜单、不污染剪贴板；点掉菜单后立刻重选同词可再弹。
 5. 点击 AI action → 结果窗流式输出；切模型立即生效并写回 config；R 重跑、P 改 prompt 重跑、C 复制全部、T 置顶、Esc 关闭；选中部分文本 Ctrl+C 只复制选区；交互窗输入框可正常输入含 p/r/c/t 的单词。
-6. GTrans/Youdao 无 key 可用；speech 朗读；copy 复制；google 打开默认浏览器搜索选中文本。
+6. GTrans/DeepL/Youdao/WordReference/Oxford 无 key 可用；speech 朗读；copy 复制；google 打开默认浏览器搜索选中文本。
 7. 热键在任意应用触发对应 action；Pause 后划词与热键全部失效，Resume 恢复。
 8. auracfg：增删 provider/model/action、测试连接（NIM/Gemini/generic 各自正确报错与成功）、doctor、批量命令；禁用的模型不出现在 WPF 模型选择中，auracfg 列表中灰显。
 9. 改 themes/*.json 或切主题 + Reload Settings → 颜色热更新。

@@ -35,7 +35,7 @@ Inspired by Cherry Studio's selection assistant and Qtranslate, AuraTxt goes fur
 | Category | What you get |
 |----------|-------------|
 | **Instant trigger** | Drag-select or double-click any text in any app → action bar appears without stealing keyboard focus |
-| **Built-in free models** | Google Translate and Youdao Dictionary, no API key needed |
+| **Built-in free models** | Google Translate, DeepL, Youdao Dictionary, WordReference, and Oxford Learner's Dictionary, no API key needed |
 | **AI actions** | Connect any OpenAI-compatible or Gemini API; stream results in a lightweight floating window |
 | **Interactive window** | Two-pane layout: type your instruction, get AI output — ideal for email replies, grading, and drafting |
 | **Global hotkeys** | Assign a keyboard shortcut to any action; trigger without touching the mouse |
@@ -66,7 +66,7 @@ Inspired by Cherry Studio's selection assistant and Qtranslate, AuraTxt goes fur
 4. The action bar pops up → click an action or press its hotkey
 5. To configure: right-click the tray icon → **Settings** (opens `auracfg.exe`)
 
-> **No API key needed to start.** Google Translate and Youdao Dictionary work out of the box.
+> **No API key needed to start.** Google Translate, DeepL, Youdao Dictionary, WordReference, and Oxford Learner's Dictionary work out of the box.
 
 ---
 
@@ -183,7 +183,7 @@ Your new action is now live in the action bar.
 
 ## Terminal Actions
 
-Alongside GTrans and Youdao, AuraTxt ships a third built-in model: **Terminal**. Instead of calling an AI provider, a Terminal action runs a `cmd.exe` command template against the highlighted text and shows its output in the same result window used for AI responses — no API key needed.
+Alongside GTrans, DeepL, Youdao, WordReference, and Oxford, AuraTxt ships a sixth built-in model: **Terminal**. Instead of calling an AI provider, a Terminal action runs a `cmd.exe` command template against the highlighted text and shows its output in the same result window used for AI responses — no API key needed.
 
 Set an action's **Model** to `Built-in / Terminal` and its **Prompt** to a command template using the same `{SelectedText}` placeholder as any other action:
 

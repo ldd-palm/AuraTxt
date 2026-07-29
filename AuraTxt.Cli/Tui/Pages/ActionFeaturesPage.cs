@@ -103,7 +103,7 @@ public class ActionFeaturesPage : PageBase
     private static string PromptFileName(ActionItem a)
     {
         if (string.IsNullOrEmpty(a.Prompt) || !PromptService.IsFileRef(a.Prompt)) return "-";
-        var full = Path.IsPathRooted(a.Prompt) ? a.Prompt : Path.Combine(AppContext.BaseDirectory, a.Prompt);
+        var full = PromptService.ResolveFullPath(a.Prompt);
         return File.Exists(full) ? Path.GetFileName(a.Prompt) : "-";
     }
 

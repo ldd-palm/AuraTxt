@@ -52,7 +52,8 @@ public static class SystemPromptFlow
 
         if (char.ToUpper(ki.KeyChar) == 'E')
         {
-            var target = File.Exists(s.SystemPrompt) ? s.SystemPrompt : PromptService.SystemFile;
+            var full   = PromptService.ResolveFullPath(s.SystemPrompt);
+            var target = File.Exists(full) ? full : PromptService.SystemFile;
             app.OpenInEditor(target);
         }
         else if (char.ToUpper(ki.KeyChar) == 'P')

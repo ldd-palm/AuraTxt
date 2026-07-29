@@ -5,7 +5,9 @@ namespace AuraTxt.Cli.Tui.Flows;
 
 public static class SelectPromptFileFlow
 {
-    /// Shows library + external paths + accepts typed path. Returns absolute path or null if cancelled.
+    /// Shows library + external paths + accepts typed path. Returns a path relative to
+    /// AppContext.BaseDirectory when the file lives inside the portable folder (so it
+    /// survives the folder being moved/renamed), absolute otherwise. Null if cancelled.
     public static string? Run(TuiApp app)
     {
         var inDir  = PromptService.ListPrompts();
@@ -16,7 +18,7 @@ public static class SelectPromptFileFlow
             .Select(a => a.Prompt)
             .Append(app.Cfg.Settings?.SystemPrompt)
             .Where(p => PromptService.IsFileRef(p))
-            .Select(p => Path.GetFullPath(p!))
+            .Select(p => PromptService.ResolveFullPath(p!))
             .Where(p => !dirSet.Contains(p.ToLowerInvariant()) && File.Exists(p))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
@@ -54,6 +56,6 @@ public static class SelectPromptFileFlow
         Console.WriteLine();
         SystemPromptFlow.ShowPanel(path);
 
-        return Path.GetFullPath(path);
+        return PromptService.ToRelativeIfInsideBase(Path.GetFullPath(path));
     }
 }

@@ -18,10 +18,13 @@ public class ConfigServiceTests : IDisposable
         var cfg = _svc.Load();
         Assert.True(cfg.Models.ContainsKey("default"));
         var def = cfg.Models["default"];
-        Assert.Equal(3, def.Models.Count);
-        Assert.Equal("Google_Translate", def.Models[0].TargetModel);
-        Assert.Equal("Youdao_Dict",      def.Models[1].TargetModel);
-        Assert.Equal("Terminal",         def.Models[2].TargetModel);
+        Assert.Equal(6, def.Models.Count);
+        Assert.Equal("Google_Translate",   def.Models[0].TargetModel);
+        Assert.Equal("Deepl_Translate",    def.Models[1].TargetModel);
+        Assert.Equal("Youdao_Dict",        def.Models[2].TargetModel);
+        Assert.Equal("WordReference_Dict", def.Models[3].TargetModel);
+        Assert.Equal("Oxford_Dict",        def.Models[4].TargetModel);
+        Assert.Equal("Terminal",           def.Models[5].TargetModel);
     }
 
     [Fact]
@@ -37,6 +40,73 @@ public class ConfigServiceTests : IDisposable
 
         Assert.Contains(reloaded.Models["default"].Models, m => m.TargetModel == "Terminal");
         Assert.Equal(onDiskBefore, File.ReadAllText(_tmpPath)); // in-memory only, not persisted
+    }
+
+    [Fact]
+    public void Load_InjectsDeeplBuiltin_ForExistingConfigMissingIt()
+    {
+        // Simulate an old config.json saved before the DeepL built-in existed.
+        var cfg = _svc.Load();
+        cfg.Models["default"].Models.RemoveAll(m => m.TargetModel == "Deepl_Translate");
+        _svc.Save(cfg);
+        var onDiskBefore = File.ReadAllText(_tmpPath);
+
+        var reloaded = _svc.Load();
+
+        Assert.Contains(reloaded.Models["default"].Models, m => m.TargetModel == "Deepl_Translate");
+        Assert.Equal(onDiskBefore, File.ReadAllText(_tmpPath)); // in-memory only, not persisted
+    }
+
+    [Fact]
+    public void Load_InjectsWordReferenceBuiltin_ForExistingConfigMissingIt()
+    {
+        // Simulate an old config.json saved before the WordReference built-in existed.
+        var cfg = _svc.Load();
+        cfg.Models["default"].Models.RemoveAll(m => m.TargetModel == "WordReference_Dict");
+        _svc.Save(cfg);
+        var onDiskBefore = File.ReadAllText(_tmpPath);
+
+        var reloaded = _svc.Load();
+
+        Assert.Contains(reloaded.Models["default"].Models, m => m.TargetModel == "WordReference_Dict");
+        Assert.Equal(onDiskBefore, File.ReadAllText(_tmpPath)); // in-memory only, not persisted
+    }
+
+    [Fact]
+    public void Load_InjectsOxfordBuiltin_ForExistingConfigMissingIt()
+    {
+        // Simulate an old config.json saved before the Oxford built-in existed.
+        var cfg = _svc.Load();
+        cfg.Models["default"].Models.RemoveAll(m => m.TargetModel == "Oxford_Dict");
+        _svc.Save(cfg);
+        var onDiskBefore = File.ReadAllText(_tmpPath);
+
+        var reloaded = _svc.Load();
+
+        Assert.Contains(reloaded.Models["default"].Models, m => m.TargetModel == "Oxford_Dict");
+        Assert.Equal(onDiskBefore, File.ReadAllText(_tmpPath)); // in-memory only, not persisted
+    }
+
+    [Fact]
+    public void Load_NormalisesPromptPaths_ForActionsAndSystemPrompt_InsideBaseDirectory()
+    {
+        // Simulate a config carried over from before relative prompt paths were supported.
+        var fileName = $"auratxt_prompt_{Guid.NewGuid()}.md";
+        var full = Path.Combine(AppContext.BaseDirectory, fileName);
+        File.WriteAllText(full, "content");
+        try
+        {
+            var cfg = _svc.Load();
+            cfg.Actions.Add(new ActionItem { Id = "t", Name = "T", Prompt = full });
+            cfg.Settings.SystemPrompt = full;
+            _svc.Save(cfg);
+
+            var reloaded = _svc.Load();
+
+            Assert.Equal(fileName, reloaded.Actions.First(a => a.Id == "t").Prompt);
+            Assert.Equal(fileName, reloaded.Settings.SystemPrompt);
+        }
+        finally { File.Delete(full); }
     }
 
     [Fact]
