@@ -1,5 +1,5 @@
 ====================================================================
- AuraTxt v1.6
+ AuraTxt v1.7
  A portable, highly customizable AI text assistant for Windows
 ====================================================================
 
@@ -19,6 +19,9 @@ WHAT YOU GET
 - Global hotkeys for any action, no mouse needed
 - Text-to-speech, Google search, 6 built-in color themes
 - Fully portable: everything lives next to AuraTxt.exe
+- Game-safe: automatically skips selection-capture in fullscreen
+  apps, so it won't inject Ctrl+C into a game (configurable in
+  auracfg's General Settings)
 - Auto-update check on startup (toggle it off from the tray's
   About window)
 
