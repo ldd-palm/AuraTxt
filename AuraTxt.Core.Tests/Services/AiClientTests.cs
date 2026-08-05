@@ -131,4 +131,24 @@ public class AiClientTests
         Assert.Equal(false, ctk["thinking"]!.GetValue<bool>());
         Assert.Equal(false, ctk["enable_thinking"]!.GetValue<bool>());
     }
+
+    [Fact]
+    public void TargetLanguage_Placeholder_SubstitutedFromSettings()
+    {
+        var tmpPath = Path.Combine(Path.GetTempPath(), $"auratxt_test_{Guid.NewGuid()}.json");
+        try
+        {
+            var svc = new ConfigService(tmpPath);
+            var cfg = svc.Load();
+            cfg.Settings.TargetLanguage = "de"; // same reference as ConfigService.DefaultSettings
+
+            var client = MakeClient(out _, out _);
+            var model  = new ModelEntry { TargetModel = "gpt-4o" };
+            var action = new ActionItem { ThinkingMode = "disable", Prompt = "{TargetLanguage}" };
+            var (req, _) = client.BuildRequest(OaiProvider(), model, action, "hi", "");
+
+            Assert.Equal("de", req.UserPrompt);
+        }
+        finally { File.Delete(tmpPath); }
+    }
 }

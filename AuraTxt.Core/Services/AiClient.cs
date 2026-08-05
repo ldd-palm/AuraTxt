@@ -67,8 +67,9 @@ public class AiClient
 
         var systemPrompt = PromptService.Resolve(ConfigService.DefaultSettings?.SystemPrompt ?? "");
         var userPrompt   = PromptService.Resolve(action.Prompt)
-            .Replace("{SelectedText}", selectedText)
-            .Replace("{UserInput}",   userInput);
+            .Replace("{SelectedText}",   selectedText)
+            .Replace("{UserInput}",      userInput)
+            .Replace("{TargetLanguage}", ConfigService.DefaultSettings?.TargetLanguage ?? "zh-CN");
 
         var @params = new Dictionary<string, JsonNode?>();
         foreach (var (k, v) in profile.RecommendedParams)

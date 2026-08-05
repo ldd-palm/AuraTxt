@@ -120,6 +120,7 @@ AuraTxt ships with ready-to-use prompts for common tasks. All prompts are plain 
 | `translate.md` | Detects language and translates: Non-Chinese → Chinese, Chinese → English, Mixed → English |
 | `proofread.md` | Transforms text into a polished, professional English presentation script |
 | `mail.md` | Refines rough notes into a complete professional email, then suggests a subject line |
+| `dictionary.md` | Dictionary-style word lookup (UK/US IPA, senses by part of speech with examples, common phrases) for use with a custom AI model instead of the built-in Youdao/WordReference/Oxford dictionaries — explanations follow your configured target language via the `{TargetLanguage}` placeholder |
 
 **Example — Draft Email:**
 Select your bullet-point notes → click Draft Email
