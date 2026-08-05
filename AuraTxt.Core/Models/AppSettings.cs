@@ -61,4 +61,17 @@ public class AppSettings
     /// running after they log in. StartupService.Apply syncs the actual registry
     /// state to this flag on every startup/reload.
     public bool StartOnBoot { get; set; } = true;
+
+    /// Semicolon-separated process names (with or without ".exe") whose foreground
+    /// window suppresses selection-capture — e.g. "csgo;VALORANT-Win64-Shipping".
+    /// Prevents the double-click/drag-select hook from injecting a synthetic Ctrl+C
+    /// into a game where it's bound to something else. Empty = no exclusions.
+    public string IgnoredProcesses { get; set; } = "";
+
+    /// When true, selection-capture also auto-skips whenever the foreground window
+    /// covers its entire monitor with no title bar (exclusive-fullscreen heuristic) —
+    /// catches games not explicitly listed in IgnoredProcesses. Does not catch
+    /// borderless-windowed games (geometrically identical to a maximized normal
+    /// window). Default true.
+    public bool PauseOnFullscreenApp { get; set; } = true;
 }

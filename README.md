@@ -48,6 +48,7 @@ Inspired by Cherry Studio's selection assistant and Qtranslate, AuraTxt goes fur
 | **Auto-update check** | Checks GitHub for a newer release once at startup (toggle it off in **About**); a click takes you straight to the release |
 | **8 UI languages** | English, 简体中文, 繁體中文, 日本語, 한국어, Español, Français, Deutsch — follows Windows' UI language by default, or pick one explicitly in `auracfg`'s General Settings |
 | **Start on Boot** | Launches automatically at Windows logon (on by default); toggle it in `auracfg`'s General Settings |
+| **Game-safe** | Automatically skips selection-capture in exclusive-fullscreen apps (on by default), plus an optional process-name ignore list — so it won't inject Ctrl+C into a game where that's bound to something else. Configure both in `auracfg`'s General Settings |
 
 ---
 

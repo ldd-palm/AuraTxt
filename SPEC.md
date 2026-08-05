@@ -122,6 +122,8 @@ class ActionItem {
 | ConfigEditor | "" | 托盘 Settings 用的编辑器；空=启动 auracfg.exe |
 | UiLanguage | "auto" | AuraTxt 窗口/托盘菜单显示语言；"auto"（跟随系统，见 §5.9）或 LocalizationService.SupportedLanguages 中的显式代码 |
 | StartOnBoot | true | 开机自启动（HKCU Run 键，见 §5.10） |
+| IgnoredProcesses | "" | 分号分隔的进程名（带不带 `.exe` 都行），前台窗口命中则划词捕获整体跳过（见 §5.2.1） |
+| PauseOnFullscreenApp | true | 前台窗口是否"独占全屏"（铺满整块屏幕 + 无标题栏）时自动跳过划词捕获（见 §5.2.1） |
 
 ### 3.6 首次运行默认配置
 
@@ -176,7 +178,18 @@ class ActionItem {
 3. 同样的 Paused/Hidden/冷却/ResultWindow 检查。
 4. Dispatcher.BeginInvoke 异步调用 `CaptureAndShowMenuAsync(pos, allowInPlaceUpdate: true)`。
 
-**`CaptureAndShowMenuAsync(pos, allowInPlaceUpdate)`**（MouseUp 拖拽与 MouseDoubleClick 共用的取词/弹菜单逻辑，避免两份实现分叉）：取文本（§5.5）→ 空文本则 `AppState.MarkDeselected()` 并返回 → 若文本与 `LastProcessedText` 相同且（`allowInPlaceUpdate=false` 或菜单仍可见）→ 直接返回（去重）→ 否则 `AppState.MarkNewSelection(text)`（重置 `SelectionActioned=false`）→ `allowInPlaceUpdate=true` 且已有可见菜单时 `UpdateMenu(text,pos)` 原地更新，否则新建 ActionMenuWindow。**[关键]** 两条路径共用同一份实现，保证"新选区重置 SelectionActioned"这一步不会像早期分叉实现那样只在拖拽路径生效、双击路径遗漏（曾是真实 bug）。
+**`CaptureAndShowMenuAsync(pos, allowInPlaceUpdate)`**（MouseUp 拖拽与 MouseDoubleClick 共用的取词/弹菜单逻辑，避免两份实现分叉）：`IsResultWindowOpen` 检查后，**先经 `GameDetectionService.ShouldSkip(cfg.Settings)`**（见 §5.2.1）过滤，命中则直接返回、完全不碰剪贴板 → 取文本（§5.5）→ 空文本则 `AppState.MarkDeselected()` 并返回 → 若文本与 `LastProcessedText` 相同且（`allowInPlaceUpdate=false` 或菜单仍可见）→ 直接返回（去重）→ 否则 `AppState.MarkNewSelection(text)`（重置 `SelectionActioned=false`）→ `allowInPlaceUpdate=true` 且已有可见菜单时 `UpdateMenu(text,pos)` 原地更新，否则新建 ActionMenuWindow。**[关键]** 两条路径共用同一份实现，保证"新选区重置 SelectionActioned"这一步不会像早期分叉实现那样只在拖拽路径生效、双击路径遗漏（曾是真实 bug）。
+
+### 5.2.1 游戏/全屏应用豁免（GameDetectionService）[关键]
+
+**动机**：`ClipboardService.GetSelectedTextAsync`（见 §5.5）在 UI Automation 取不到选区时会退回模拟 `Ctrl+C`（`keybd_event`）。游戏通常不实现 UI Automation 的 `TextPattern`，所以每次在游戏内双击/拖拽都会退回这条路径，把 `Ctrl+C` 真实注入到游戏窗口——若游戏把 `Ctrl+C` 绑定成别的功能键，会造成误触发。`GameDetectionService.ShouldSkip(settings)` 在真正触碰剪贴板前拦截，两种判定独立生效、任一命中即跳过：
+
+1. **进程名黑名单**（`Settings.IgnoredProcesses`，分号分隔）：`GetForegroundWindow` → `GetWindowThreadProcessId` → `Process.GetProcessById(pid).ProcessName` 取当前前台窗口所属进程名，与黑名单逐项比较（大小写不敏感，黑名单项可带可不带 `.exe` 后缀，统一去掉后缀再比）。精确可靠，但需要用户手动为每个游戏添加一条。
+2. **独占全屏启发式**（`Settings.PauseOnFullscreenApp`，默认开）：`GetWindowRect` 拿窗口矩形、`GetWindowLong(GWL_STYLE)` 检查 `WS_CAPTION` 位、`MonitorFromWindow`+`GetMonitorInfo` 拿窗口所在显示器边界——**窗口矩形完全覆盖（≥）显示器矩形 且 无标题栏** 才判定为独占全屏。**[关键] 覆盖不到无边框窗口化（borderless windowed）游戏**：这类窗口在几何上与普通最大化窗口无法区分（同样铺满屏幕，但仍可能带标题栏或干脆没有明确区分特征），这是该启发式已知的、接受的局限，未列入黑名单的无边框窗口化游戏仍需手动加进程名。
+
+两个检查都发生在 `GlobalHookService.CaptureAndShowMenuAsync` 的最前面（覆盖双击与拖拽划词两条路径），以及 `OnMouseUp` 里"平点击后检查选区是否已消失"的静默护盾分支（同样调用 `ClipboardService.GetSelectedTextAsync`，同一风险面）。命中跳过时**不**调用 `AppState.MarkDeselected()`——选区状态机保持原样，等下次在非游戏窗口的操作里自然收敛，不需要特殊处理。
+
+**设置**：auracfg General Settings 页面 "Ignored Processes" 项（`I` 键，逗号/分号分隔的进程名，逐条 Ask 输入整个列表）与 "Pause on Fullscreen App" 项（`F` 键，Enabled/Disabled 切换）。两者都实时生效——不像 UiLanguage/StartOnBoot 那样需要等 AuraTxt Reload Settings，因为 `GameDetectionService.ShouldSkip` 每次划词都重新 `_config.Load()` 读取最新配置，不缓存。
 
 **键盘关闭菜单**：
 - `KeyPress`（可打印字符）：**[关键]** 先 `if (char.IsControl(e.KeyChar)) return;`（否则内部模拟 Ctrl+C 产生的 `\x03` 会误关菜单），然后关闭当前菜单。
@@ -692,6 +705,7 @@ gh release create vX.Y AuraTXT_X.Y.zip AuraTXT_X.Y_self_contained.zip --title "A
 - UpdateService.IsNewer（internal，纯函数）：tag 比 current 新→true；相同/更旧→false；`v`/`V` 前缀两种大小写都能去掉；tag 格式解析不出来→false 且不抛异常。`CheckAsync` 的真实网络请求路径同样不纳入常规 xunit 套件，改由手动验证覆盖（见 §5.8）。
 - LocalizationService.Resolve（纯函数）：`"auto"` + 已知/未知 `osCultureName`（完整 culture 名或裸两字母码）→ 对应 8 种语言之一 / 落回 `en`；中文按 `hant`/`TW`/`HK`/`MO` 区分简繁；显式合法/非法代码 → 透传 / 落回 `en`。`Apply` 实际设置 `CurrentUICulture` 及 `x:Static`/托盘菜单的联动效果不纳入常规 xunit 套件，改由手动验证覆盖（见 §5.9）。
 - StartupService.Apply 不纳入常规 xunit 套件——直接读写真实 HKCU 注册表，跟 TerminalClient 的进程启动路径、UpdateService.CheckAsync 的真实网络请求属于同一类"碰外部系统"的东西，改由手动验证覆盖（见 §5.10）：`auracfg` 里切换 Start on Boot → AuraTxt Reload Settings → `regedit` 或 `Get-ItemProperty HKCU:\Software\Microsoft\Windows\CurrentVersion\Run` 确认 `AuraTxt` 值出现/消失且路径正确。
+- GameDetectionService（`AuraTxt` WPF 项目，非 Core）不纳入常规 xunit 套件——纯 Win32 P/Invoke（前台窗口/进程名/显示器边界），同一类"碰外部系统"的东西；已用独立的临时 harness 手动验证过：进程名匹配（大小写不敏感、`.exe` 后缀容忍）对真实前台进程命中正确，全屏启发式对一个普通带标题栏窗口正确判定为非全屏（负例）。真实独占全屏游戏的正例、以及 `IgnoredProcesses`/`PauseOnFullscreenApp` 在真实游戏里生效与否，需要用户手动验证（见 §5.2.1）。
 
 ## 14. 验收清单（端到端）
 

@@ -61,6 +61,8 @@ public class GeneralSettingsPage : PageBase
         new MenuItem("T", "Terminal Output", s.TerminalUseConsoleWindow ? "Console window" : "Result window (default)"),
         new MenuItem("U", "UI Language",     UiLanguageLabel(s.UiLanguage)),
         new MenuItem("B", "Start on Boot",   s.StartOnBoot ? "Enabled" : "Disabled"),
+        new MenuItem("I", "Ignored Processes", string.IsNullOrEmpty(s.IgnoredProcesses) ? "(none)" : s.IgnoredProcesses),
+        new MenuItem("F", "Pause on Fullscreen App", s.PauseOnFullscreenApp ? "Enabled" : "Disabled"),
     ];
 
     private bool HandleKey(string key, AppSettings s, TuiApp app)
@@ -112,6 +114,15 @@ public class GeneralSettingsPage : PageBase
             case "B":
                 s.StartOnBoot = !s.StartOnBoot; app.MarkDirty();
                 app.Renderer.SetNotice($"Start on Boot → {(s.StartOnBoot ? "Enabled" : "Disabled")} (use Reload Settings in AuraTxt's tray menu to apply)");
+                break;
+            case "I":
+                var ip = app.Renderer.Ask("Ignored processes, semicolon-separated (e.g. csgo;VALORANT-Win64-Shipping)", s.IgnoredProcesses);
+                s.IgnoredProcesses = ip; app.MarkDirty();
+                app.Renderer.SetNotice($"Ignored Processes → {(string.IsNullOrEmpty(ip) ? "(none)" : ip)}");
+                break;
+            case "F":
+                s.PauseOnFullscreenApp = !s.PauseOnFullscreenApp; app.MarkDirty();
+                app.Renderer.SetNotice($"Pause on Fullscreen App → {(s.PauseOnFullscreenApp ? "Enabled" : "Disabled")}");
                 break;
         }
         return false;

@@ -165,7 +165,11 @@ public class GlobalHookService
     {
         if (AppState.IsResultWindowOpen) return;
 
-        var cfg  = _config.Load();
+        var cfg = _config.Load();
+        // A game may be in the foreground — don't inject a synthetic Ctrl+C into it
+        // (see ClipboardService, GameDetectionService).
+        if (GameDetectionService.ShouldSkip(cfg.Settings)) return;
+
         var text = await ClipboardService.GetSelectedTextAsync(cfg.Settings.MenuTriggerDelayMs);
 
         // Empty selection → re-arm dedup cache.
@@ -218,7 +222,7 @@ public class GlobalHookService
                     // Plain click likely cleared the selection → re-arm immediately (Scenario B).
                     AppState.MarkDeselected();
                 }
-                else
+                else if (!GameDetectionService.ShouldSkip(_config.Load().Settings))
                 {
                     // Action was taken — selection might still be highlighted (silence shield).
                     // Check async: if selection gone → Idle; if still there → keep shield.
