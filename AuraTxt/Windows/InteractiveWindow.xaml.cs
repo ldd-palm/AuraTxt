@@ -3,7 +3,6 @@ using System.Windows.Input;
 using AuraTxt.Core.Models;
 using AuraTxt.Core.Services;
 using AuraTxt.Services;
-using Clipboard = System.Windows.Clipboard;
 using KeyEventArgs = System.Windows.Input.KeyEventArgs;
 
 namespace AuraTxt.Windows;
@@ -143,10 +142,18 @@ public partial class InteractiveWindow : Window
         }
     }
 
-    private void CopyBtn_Click(object sender, RoutedEventArgs e)
+    private async void CopyBtn_Click(object sender, RoutedEventArgs e)
     {
-        try { Clipboard.SetText(ResultText.Text); }
-        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Copy failed: {ex.Message}"); }
+        if (await ClipboardService.TrySetTextAsync(ResultText.Text))
+            await FlashCopyFeedback();
+    }
+
+    private async Task FlashCopyFeedback()
+    {
+        var original = CopyBtn.Content;
+        CopyBtn.Content = "✅";
+        await Task.Delay(700);
+        CopyBtn.Content = original;
     }
     private async void ReplaceBtn_Click(object sender, RoutedEventArgs e)
     {

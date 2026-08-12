@@ -251,6 +251,14 @@ ActionProcessed LastProcessedText=T   SelectionActioned=true
    - 读取剪贴板文本，记录 `seqAfterRead`。
    - **[关键] finally 恢复策略**：只在 `seqAfterRead==0`（读取前异常）或当前序号 == `seqAfterRead`（无人后续写入）时恢复 `prev`；序号已变说明用户/他人写了剪贴板，**不得覆盖**。
 
+### 5.5.1 写入剪贴板，带重试（`ClipboardService.TrySetTextAsync`）[关键]
+
+`System.Windows.Clipboard.SetText` 底层走 OLE 剪贴板 API，Windows 自带的剪贴板历史（Win+V）、第三方剪贴板管理器、部分安全软件的剪贴板钩子都可能在那一瞬间持有剪贴板打开状态，导致抛 `COMException`（`CLIPBRD_E_CANT_OPEN`）——这个锁通常几毫秒内就会释放。旧代码直接 `catch` 吞掉异常、不重试、UI 上也没有任何失败提示，用户看不出这次点击是成功了还是被吞掉了，只能"多点几次" repro 靠运气触发到锁已释放的窗口——这正是 Copy 按钮"需要点好几次"的根因。
+
+`TrySetTextAsync(text, maxAttempts=8, delayMs=30)`：失败时 `await Task.Delay(delayMs)` 后重试，最多 8 次（约 240ms 硬上限），成功则立即返回 `true`；全部失败返回 `false`。两个调用方：
+- **ResultWindow/InteractiveWindow 的 Copy 按钮**（`CopyBtn_Click`）：成功后调用 `FlashCopyFeedback()`——按钮 `Content` 从 📋 短暂换成 ✅、`Task.Delay(700)` 后换回，给用户一个看得见的成功确认，不再靠"沉默=可能失败"去猜。
+- **`ReplaceInSourceWindowAsync`**（Replace 按钮/热键共用）：`TrySetTextAsync` 返回 `false` 时直接 `return`，不再往下执行 `SetForegroundWindow`+模拟 Ctrl+V——避免把剪贴板里的旧内容粘贴进源窗口（写入都没成功，粘贴的就是错的/过期的数据）。
+
 ### 5.6 全局热键（HotkeyService）
 
 - `RegisterAll(cfg)`：遍历 Hotkey 非空的 action，解析为 `Key`+`ModifierKeys` 后 `HotkeyManager.Current.AddOrReplace(action.Id, ...)`；被其他程序占用时静默跳过。先 `UnregisterAll()` 再注册（幂等）。

@@ -128,6 +128,23 @@ public static class ClipboardService
         }
     }
 
+    // ── Writing to the clipboard, with retry ───────────────────────────────────
+    // Clipboard.SetText can throw (usually COMException / CLIPBRD_E_CANT_OPEN) when
+    // another process — Windows' own Clipboard History (Win+V), a third-party
+    // clipboard manager, antivirus hooking clipboard events — has the clipboard
+    // open at that exact instant. The lock is virtually always released within a
+    // few ms, so a short retry loop turns an occasional silent failure (previously:
+    // the Copy button doing nothing, requiring 2-3 clicks) into a reliable one.
+    public static async Task<bool> TrySetTextAsync(string text, int maxAttempts = 8, int delayMs = 30)
+    {
+        for (int attempt = 0; attempt < maxAttempts; attempt++)
+        {
+            try { System.Windows.Clipboard.SetText(text); return true; }
+            catch { await Task.Delay(delayMs); }
+        }
+        return false;
+    }
+
     // ── Replace in source window ──────────────────────────────────────────────
     public static IntPtr CaptureSourceWindow() => GetForegroundWindow();
 
@@ -136,7 +153,7 @@ public static class ClipboardService
         if (string.IsNullOrWhiteSpace(text) || hwnd == IntPtr.Zero) return;
         try
         {
-            System.Windows.Clipboard.SetText(text);
+            if (!await TrySetTextAsync(text)) return; // couldn't set clipboard — don't paste stale content
             SetForegroundWindow(hwnd);
             await Task.Delay(150);
             keybd_event(VK_CONTROL, 0, 0,              UIntPtr.Zero);

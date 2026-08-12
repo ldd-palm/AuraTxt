@@ -62,7 +62,7 @@
                     ToolTip="{x:Static res:Strings.Common_RegenerateTooltip}" Click="RegenBtn_Click" Content="🔄" Margin="4,0,0,0"/>
             <Button Width="26" Height="26" Style="{StaticResource IconBtnStyle}"
                     ToolTip="{x:Static res:Strings.Common_ReplaceTooltip}" Click="ReplaceBtn_Click" Content="↩️" Margin="4,0,0,0"/>
-            <Button Width="26" Height="26" Background="{DynamicResource CopyBtn}"
+            <Button x:Name="CopyBtn" Width="26" Height="26" Background="{DynamicResource CopyBtn}"
                     BorderBrush="Transparent"
                     Foreground="White" ToolTip="{x:Static res:Strings.Common_CopyTooltip}" Click="CopyBtn_Click"
                     Content="📋" Margin="4,0,0,0"/>
