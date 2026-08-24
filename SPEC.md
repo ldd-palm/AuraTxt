@@ -124,11 +124,12 @@ class ActionItem {
 | StartOnBoot | true | 开机自启动（HKCU Run 键，见 §5.10） |
 | IgnoredProcesses | "" | 分号分隔的进程名（带不带 `.exe` 都行），前台窗口命中则划词捕获整体跳过（见 §5.2.1） |
 | PauseOnFullscreenApp | true | 前台窗口是否"独占全屏"（铺满整块屏幕 + 无标题栏）时自动跳过划词捕获（见 §5.2.1） |
+| PasteUseClipboardHistory | true | Paste 内置模型是否弹出 Windows 剪贴板历史面板（Win+V）；关闭则直接粘贴当前剪贴板内容，跳过历史面板（见 §9.7） |
 
 ### 3.6 首次运行默认配置
 
 `ConfigService.Load()` 在文件不存在时生成并保存默认配置：
-- `Models["default"]`：DisplayName="Built-in"，含 6 个模型：`Google_Translate`（Alias=GTrans）、`Deepl_Translate`（Alias=DeepL，见 §9.2）、`Youdao_Dict`（Alias=Youdao）、`WordReference_Dict`（Alias=WordRef，见 §9.4）、`Oxford_Dict`（Alias=Oxford，见 §9.5）、`Terminal`（Alias=Terminal，见 §9.6），均 `Enabled=true`。
+- `Models["default"]`：DisplayName="Built-in"，含 7 个模型：`Google_Translate`（Alias=GTrans）、`Deepl_Translate`（Alias=DeepL，见 §9.2）、`Youdao_Dict`（Alias=Youdao）、`WordReference_Dict`（Alias=WordRef，见 §9.4）、`Oxford_Dict`（Alias=Oxford，见 §9.5）、`Terminal`（Alias=Terminal，见 §9.6）、`Clipboard_Paste`（Alias=Paste，见 §9.7），均 `Enabled=true`。
 - 3 个系统 action：`copy`（Icon=clipboard-copy，Hotkey 恒为空且锁定）、`speech`（Icon=speech，Hotkey=Ctrl+E）、`google`（Icon=search，Hotkey 默认空）。均 `IsSystem=true`、无 ModelId。
 
 ## 4. ConfigService（配置读写）
@@ -264,7 +265,7 @@ ActionProcessed LastProcessedText=T   SelectionActioned=true
 - `RegisterAll(cfg)`：遍历 Hotkey 非空的 action，解析为 `Key`+`ModifierKeys` 后 `HotkeyManager.Current.AddOrReplace(action.Id, ...)`；被其他程序占用时静默跳过。先 `UnregisterAll()` 再注册（幂等）。
 - 解析规则 [关键]：`"Ctrl+Alt+T"` 按 `+` 切分，至少 2 段；修饰符限 ctrl/alt/shift/win（大小写不敏感）；**未知修饰符必须整体拒绝**（否则 `"Foo+T"` 会注册裸 T 为系统级热键）；尾段用 `Enum.TryParse<Key>`。
 - 热键回调 `FireActionAsync`：**[关键]** 第一行立即 `AppState.SourceWindowHandle = ClipboardService.CaptureSourceWindow()`（在任何 await 之前捕获 HWND；热键路径不经过 GlobalHookService，若不在此捕获则 Replace 时 hwnd=Zero，`ReplaceInSourceWindowAsync` early return，无任何反应）→ 取文本（delay 50ms）→ 空则返回 → 置 `SelectionActioned=true` → 系统 action 内联处理（speech/copy/google），AI action 经 Dispatcher 调 `ShowResultFor`。
-- `ShowResultFor(action, text, cfg)`（static）：`IsInteractive` ? InteractiveWindow : ResultWindow，`.Show()`。**[关键]** 鼠标路径（ActionMenuWindow 按钮点击）与热键路径（`FireActionAsync`）都调用这同一个静态方法——这是唯一的分支点。当 `action.ModelId=="default/Terminal"` 且 `Settings.TerminalUseConsoleWindow=true` 时短路：**不**打开 ResultWindow/InteractiveWindow 中的任何一个，而是 `cfg.ResolveModel` 解析出 `(provider, model)` 后以 `Task.Run` 方式不等待地调用 `AiClient.CompleteAsync("default", provider, model, action, selectedText, "", CancellationToken.None)`（异常经 try/catch 走 `LogService.Error`，避免 unobserved task exception），随后直接返回。
+- `ShowResultFor(action, text, cfg)`（static）：`IsInteractive` ? InteractiveWindow : ResultWindow，`.Show()`。**[关键]** 鼠标路径（ActionMenuWindow 按钮点击）与热键路径（`FireActionAsync`）都调用这同一个静态方法——这是唯一的分支点。当 `action.ModelId=="default/Terminal"` 且 `Settings.TerminalUseConsoleWindow=true` 时短路：**不**打开 ResultWindow/InteractiveWindow 中的任何一个，而是 `cfg.ResolveModel` 解析出 `(provider, model)` 后以 `Task.Run` 方式不等待地调用 `AiClient.CompleteAsync("default", provider, model, action, selectedText, "", CancellationToken.None)`（异常经 try/catch 走 `LogService.Error`，避免 unobserved task exception），随后直接返回。同理，`action.ModelId=="default/Clipboard_Paste"` 时也短路：不开任何窗口，`Task.Run` 调用 `ClipboardPasteService.RunAsync(AppState.SourceWindowHandle, cfg.Settings.PasteUseClipboardHistory)`（同样 try/catch → `LogService.Error`，避免 unobserved task exception），随后直接返回——见 §9.7。
 
 ### 5.7 托盘（TrayIconManager）
 
@@ -459,7 +460,7 @@ LogService：静态类，`Enabled`+`LogPath` 控制；`Info/Error/Raw` 三个方
 - `WindowChrome`：`ResizeBorderThickness=6, CaptionHeight=0, GlassFrameThickness=0`（**[关键]** GlassFrame 必须为 0，否则与 AllowsTransparency 渲染冲突）。MinWidth=320, MinHeight=200。
 - **会话宽度记忆**：构造时若 `AppState.SessionResultWindowWidth` 非 null 则覆盖 `Width`；`SizeChanged` 事件同步写回该字段。重启后归零、恢复 XAML 默认宽度。
 - 标题栏：关闭圆钮、action 图标+名称（DockPanel 保证 TextTrimming）、**模型选择 ComboBox**、按钮组（Edit Prompt ✏️(P) / Regenerate 🔄(G) / Replace ↩️(R) / Copy 📋(C) / Pin 📌(T)）。标题栏可拖动（DragMove）。
-- 模型 ComboBox：`AllEnabledModelRefs()` 过滤掉 `default/Terminal`（不适合"切换模型重跑同一段文本"这个场景）；label 格式为 `"DisplayName / Alias"`，**内置模型例外**——本地剥掉 `AllEnabledModelRefs()` 返回的 `"Built-in / "` 前缀，只显示裸 Alias（如 `GTrans` 而非 `Built-in / GTrans`），配合下面的颜色区分已经足够识别，不需要文字前缀重复一遍。**[关键] 内置/自定义颜色区分**：`ComboBox.ItemTemplate` 里对 `IsBuiltIn` 做 `DataTrigger`——`True` 时 `Foreground={DynamicResource Accent}` + `FontWeight=Bold`，`False` 走默认 `TextPrimary`；该模板同时套用到下拉列表项和收起后的选中框显示（WPF `ItemTemplate` 默认行为），不需要额外的 `SelectionBoxItemTemplate`。初选 `action.ModelId`（若为 `default/Terminal`，即 action 本身绑定 Terminal 但 `TerminalUseConsoleWindow=false` 走到了这里，ComboBox 不选中任何项——不影响本次结果已用 Terminal 正常渲染，只是那次打开时选择器显示为空，可正常切到其他条目）。**内置模型显示顺序 = `Models["default"].Models` 的实际数组顺序**（跟 `AllEnabledModelRefs()` 保持一致，不额外排序）——升级用户的配置文件里新内置模型是通过 `EnsureBuiltinModel` 迁移守卫追加在数组末尾的，顺序取决于升级历史；想要别的顺序需要用户自己在 config.json（或未来的 auracfg 编辑功能）里调整 `Models["default"].Models` 数组顺序，WPF 层不再维护一份独立的固定显示顺序表。**SelectionChanged 持久化 [关键]**：重新 `Load()` 最新配置 → 找到同 Id 的 action → 只改其 `ModelId` → `Save()`（read-modify-write，不得把窗口持有的旧快照整体写回，否则覆盖 auracfg 并发修改）。
+- 模型 ComboBox：`AllEnabledModelRefs()` 过滤掉 `default/Terminal` 与 `default/Clipboard_Paste`（均不适合"切换模型重跑同一段文本"这个场景，后者甚至不会打开本窗口，见 §9.7）；label 格式为 `"DisplayName / Alias"`，**内置模型例外**——本地剥掉 `AllEnabledModelRefs()` 返回的 `"Built-in / "` 前缀，只显示裸 Alias（如 `GTrans` 而非 `Built-in / GTrans`），配合下面的颜色区分已经足够识别，不需要文字前缀重复一遍。**[关键] 内置/自定义颜色区分**：`ComboBox.ItemTemplate` 里对 `IsBuiltIn` 做 `DataTrigger`——`True` 时 `Foreground={DynamicResource Accent}` + `FontWeight=Bold`，`False` 走默认 `TextPrimary`；该模板同时套用到下拉列表项和收起后的选中框显示（WPF `ItemTemplate` 默认行为），不需要额外的 `SelectionBoxItemTemplate`。初选 `action.ModelId`（若为 `default/Terminal`，即 action 本身绑定 Terminal 但 `TerminalUseConsoleWindow=false` 走到了这里，ComboBox 不选中任何项——不影响本次结果已用 Terminal 正常渲染，只是那次打开时选择器显示为空，可正常切到其他条目）。**内置模型显示顺序 = `Models["default"].Models` 的实际数组顺序**（跟 `AllEnabledModelRefs()` 保持一致，不额外排序）——升级用户的配置文件里新内置模型是通过 `EnsureBuiltinModel` 迁移守卫追加在数组末尾的，顺序取决于升级历史；想要别的顺序需要用户自己在 config.json（或未来的 auracfg 编辑功能）里调整 `Models["default"].Models` 数组顺序，WPF 层不再维护一份独立的固定显示顺序表。**SelectionChanged 持久化 [关键]**：重新 `Load()` 最新配置 → 找到同 Id 的 action → 只改其 `ModelId` → `Save()`（read-modify-write，不得把窗口持有的旧快照整体写回，否则覆盖 auracfg 并发修改）。
 - 打开即执行 `RunAsync()`：
   - `PromptService.Resolve(action.Prompt)` 得到 prompt 文本；占位符替换：`{SelectedText}`→选中文本，`{UserInput}`→空串，`{TargetLanguage}`→`Settings.TargetLanguage`（原始代码如 `"zh-CN"`/`"de"`，不转换成语言名称，缺省回落 `"zh-CN"`）。**[关键]** system prompt 只经 `PromptService.Resolve`，不做任何占位符替换——`{SelectedText}`/`{UserInput}`/`{TargetLanguage}` 写在 system prompt 里不会被替换，会原样输出。
   - 显示 "Processing…"，调用 `AiClient.StreamAsync(providerId, provider, model, action, selectedText, "", ct)`。内置模型（Google_Translate/Deepl_Translate/Youdao_Dict/WordReference_Dict/Oxford_Dict）在 AiClient 内部拦截路由，不需要 ResultWindow 特殊处理。
@@ -566,6 +567,21 @@ LogService：静态类，`Enabled`+`LogPath` 控制；`Info/Error/Raw` 三个方
 - 只调用 `Process.Start(psi)`，不 `WaitForExitAsync`、不 `ReadToEndAsync`、不设置 30s 超时或 `CancellationTokenSource`/kill-on-cancel——这些机制均不适用于一个设计上应长期存活、由用户自行操作的窗口。方法立即返回确认字符串 `"> {resolved}\n\n[Launched in a separate console window.]"`。
 - **[关键] 这是有意的行为回退，不是缺陷**：该模式下没有捕获输出，因此 ResultWindow 的 Copy/Replace/Pin/Regenerate 均不适用；进程生命周期与触发它的窗口彻底解耦——关闭 AuraTxt 的任何窗口都不会杀死这个控制台或其运行的命令，没有"防孤儿进程"的保障。这与默认重定向模式的安全保障是互斥的两种取舍，不要试图两者兼得。
 - 配合 §5.6 的 `ShowResultFor` 短路：此模式下 ResultWindow 根本不会创建，上述确认字符串实际上不会被用户看到（仅作为一个安全的返回值兜底，供未来可能绕过 `ShowResultFor` 短路直接调用 `RunAsync` 的调用方使用）。
+
+### 9.7 ClipboardPasteService（第七个内置模型）[关键]
+
+不调用任何 AI，不读写剪贴板内容本身，只触发"把已有内容粘贴进源窗口"这个动作。`AuraTxt/Services/ClipboardPasteService.cs`（WPF 项目，非 Core——与它复用同一套 P/Invoke 模式的 `ClipboardService` 同目录）。
+
+- **`RunAsync(IntPtr sourceHwnd, bool useHistory)`**：`sourceHwnd==Zero` 直接返回；否则 `SetForegroundWindow(sourceHwnd)` → `Task.Delay(150ms)`（与 §5.5.1/§7.2 `ReplaceInSourceWindowAsync` 同一延迟值）→ 按 `useHistory` 分支模拟按键。
+- **`useHistory=true`**：模拟 Win+V（`keybd_event`: LWin↓ V↓ V↑ LWin↑）。Windows 在已切换到源窗口后自己弹出剪贴板历史面板，用户在里面选、系统直接帮忙粘贴——AuraTxt 之后不再介入，没有回调可等，方法直接返回。
+- **`useHistory=false`**：模拟 Ctrl+V（与 `ReplaceInSourceWindowAsync` 同一套 `keybd_event` 模式），粘贴当前剪贴板已有内容。
+- **[关键] 两个分支都不写剪贴板**（不调用 `TrySetTextAsync`）——与 Replace 不同，Paste 不是要把 AI 生成的文本塞进剪贴板，只是触发"粘贴已有内容"这个动作。
+- 无超时/取消机制——单次模拟按键，不是像 §9.6 Terminal 那样起子进程，不需要 kill-on-cancel。
+- **为何不用 WinRT `Clipboard.GetHistoryItemsAsync()`**：该 API 需要把 TFM 改成 `net8.0-windows10.0.19041.0` 之类的 Windows SDK 目标，与 §2 的 **[关键]** 约束（不带 SDK 版本号，避免 `Microsoft.Windows.SDK.NET.dll` 把单文件发布体积从 ~4MB/~125MB 撑到 ~28MB/~150MB）直接冲突，因此选择直接借用系统自带的 Win+V 面板。
+- **触发条件**：与其他内置模型一样，Paste 通过普通的 action 菜单/热键路径触发（§5.2/§5.6），因此**必须先有一段选中文本**才会出现在菜单里或被热键触发——不支持在完全空白光标处直接唤出面板。选中的文本本身不参与 Paste 的逻辑，只是触发条件；粘贴发生后是否覆盖该选区，是标准 OS 粘贴行为，AuraTxt 不额外处理。
+- **短路调度**：见 §5.6 `HotkeyService.ShowResultFor` 的 `default/Clipboard_Paste` 分支——不开 ResultWindow/InteractiveWindow。
+- **Test Connection 兜底**：`AiClient.BuiltinDispatch` 给 `Clipboard_Paste` 注册一个 stub，返回固定文本 `"Paste does not support connection testing."`——`auracfg` 的 `[T] Test Connection` 直接调 `AiClient.CompleteAsync`，不经过 §5.6 的短路，需要这个 stub 才不会落进"未知内置模型"的错误分支。
+- **设置**：`Settings.PasteUseClipboardHistory`（默认 `true`）控制上述 `useHistory` 参数；auracfg General Settings 页面 "Paste Clipboard History" 项（`P` 键，Enabled/Disabled 切换，实时生效——`ShowResultFor` 每次触发都重新读 `cfg.Settings`，不缓存）。
 
 ## 10. 其他服务
 
@@ -703,6 +719,7 @@ gh release create vX.Y AuraTXT_X.Y.zip AuraTXT_X.Y_self_contained.zip --title "A
 - OxfordDictionaryClient：无语言码转换（纯英英，无 `to` 参数），没有可单测的纯函数，与 YoudaoClient 同一处理方式——不纳入常规 xunit 套件，改由手动验证覆盖。
 - ProfileService：EnsureScaffold 播种嵌入 profile；Resolve 自动 glob 匹配（DeepSeek/Llama/Qwen3）；优先级（qwen3-next-instruct > qwen3-thinking）；Gemini 模型路由到 gemini_native profile；显式 ProfileId；不匹配时 fallback；adapter 不兼容时异常；openai profile 不返回给 gemini adapter。
 - AiClient.BuildRequest（internal）：DeepSeek disable 带 chat_template_kwargs；Llama/QwenNextInstruct disable 不带；GeminiFlash disable 带 thinkingBudget=0；Gemma4 disable 带 thinkingLevel=NONE（**[关键]** 必须大写——Gemini REST API 拒绝小写枚举值，`gemma-4.json` profile 曾被后续大改动误改回小写+空 payload，回归过一次）；GeminiLegacy disable 无 thinkingConfig；MiniMax 有 strip_patterns；GLM5 两个 thinking key 都设；`{TargetLanguage}` 占位符从临时 `ConfigService` 加载的 `Settings.TargetLanguage` 正确替换进 `UserPrompt`。**[关键] 测试并发**：`ConfigService.DefaultSettings` 是全进程共享的 static，任何调用 `Load()` 的测试都会覆写它；xunit 默认跨测试类并行，曾导致 `TargetLanguage_Placeholder_SubstitutedFromSettings` 被 `ConfigServiceTests` 的并发 `Load()` 顶掉断言值——已在 `AuraTxt.Core.Tests/AssemblyInfo.cs` 用 `[assembly: CollectionBehavior(DisableTestParallelization = true)]` 关闭整个测试程序集的并行，代价可忽略（套件仍在 300ms 内跑完）。
+- `AiClient.BuiltinDispatch`：`Clipboard_Paste` 返回固定的 "not supported" 文本（Test Connection 兜底，见 §9.7）。`ClipboardPasteService.RunAsync` 本身（真实的 `SetForegroundWindow`/`keybd_event` 调用）不纳入常规 xunit 套件——与 `ClipboardService.ReplaceInSourceWindowAsync`、`StartupService.Apply`、`GameDetectionService` 同一类"碰外部系统"的东西，改由手动验证覆盖（见 §14）。
 - TagStripFilter（internal）：无标签直通、单 chunk 剥除、标签跨 chunk 切断、多块、未闭合丢弃。
 - GlobMatcher：精确匹配、* 通配、区分大小写选项。
 - JsonPathSetter：顶层注入、点路径深层注入、多次调用不覆盖。
@@ -731,3 +748,4 @@ gh release create vX.Y AuraTXT_X.Y.zip AuraTXT_X.Y_self_contained.zip --title "A
 12. 划词后（菜单弹出前或弹出后）立即手动按真实 Ctrl+C：不出现字面 "c"、选区不受影响、剪贴板确为选中文本，随后菜单仍能正常弹出。
 13. 菜单弹出期间按 Ctrl+C/Ctrl+V/Ctrl+X/Ctrl+Z/Ctrl+B 等编辑快捷键或 Shift+Insert：菜单立即消失，对应的复制/粘贴/剪切/撤销/加粗等操作在源应用中正常生效；点击菜单里的 action 按钮不受此逻辑影响。
 14. 菜单已弹出时双击另一个词（原地更新路径，命中 Ctrl+C 模拟兜底的应用）：菜单不因内部模拟按键而闪烁关闭，正常原地更新为新词的菜单内容。
+15. 选中一段文本 → 点击 Paste（或热键）：`PasteUseClipboardHistory=true` 时源窗口获得焦点后弹出 Windows 剪贴板历史面板，选中一项后正确粘贴；设为 `false` 时选区被当前剪贴板内容直接替换，不弹面板。`auracfg` 对 Paste 执行 Test Connection 显示固定的"不支持"提示，不报错、不挂起。ResultWindow/InteractiveWindow 的模型下拉列表中不出现 Paste。
