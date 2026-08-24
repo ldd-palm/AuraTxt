@@ -82,6 +82,19 @@ public class HotkeyService
     {
         AppState.MarkActionTaken();
 
+        // Clipboard Paste: not an AI action and produces no text to show — it triggers a
+        // paste into the source window and returns immediately. Same short-circuit shape
+        // as the Terminal console-window branch below, just with nothing to resolve first.
+        if (action.ModelId.Equals("default/Clipboard_Paste", StringComparison.OrdinalIgnoreCase))
+        {
+            _ = Task.Run(async () =>
+            {
+                try { await ClipboardPasteService.RunAsync(AppState.SourceWindowHandle, cfg.Settings.PasteUseClipboardHistory); }
+                catch (Exception ex) { LogService.Error("Clipboard paste failed", ex); }
+            });
+            return;
+        }
+
         // Terminal console-window mode: the console window IS the output surface, so
         // skip ResultWindow/InteractiveWindow entirely and fire the command unawaited.
         var isTerminalConsole = action.ModelId.Equals("default/Terminal", StringComparison.OrdinalIgnoreCase)
