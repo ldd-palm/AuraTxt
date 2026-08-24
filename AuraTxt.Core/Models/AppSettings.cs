@@ -74,4 +74,9 @@ public class AppSettings
     /// borderless-windowed games (geometrically identical to a maximized normal
     /// window). Default true.
     public bool PauseOnFullscreenApp { get; set; } = true;
+
+    /// Whether the Paste built-in model opens the Windows clipboard-history flyout
+    /// (Win+V) or directly pastes the current clipboard content. Default true — most
+    /// Windows 10/11 users already have clipboard history enabled.
+    public bool PasteUseClipboardHistory { get; set; } = true;
 }
