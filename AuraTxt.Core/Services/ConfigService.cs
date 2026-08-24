@@ -62,6 +62,7 @@ public class ConfigService
                 EnsureBuiltinModel(cfg, "Deepl_Translate", "DeepL");
                 EnsureBuiltinModel(cfg, "WordReference_Dict", "WordRef");
                 EnsureBuiltinModel(cfg, "Oxford_Dict", "Oxford");
+                EnsureBuiltinModel(cfg, "Clipboard_Paste", "Paste");
                 NormalisePromptPaths(cfg);
                 DefaultSettings = cfg.Settings;
                 return cfg;
@@ -169,7 +170,8 @@ public class ConfigService
                 new ModelEntry { TargetModel = "Youdao_Dict",        Alias = "Youdao",   Enabled = true },
                 new ModelEntry { TargetModel = "WordReference_Dict", Alias = "WordRef",  Enabled = true },
                 new ModelEntry { TargetModel = "Oxford_Dict",        Alias = "Oxford",   Enabled = true },
-                new ModelEntry { TargetModel = "Terminal",           Alias = "Terminal", Enabled = true }
+                new ModelEntry { TargetModel = "Terminal",           Alias = "Terminal", Enabled = true },
+                new ModelEntry { TargetModel = "Clipboard_Paste",    Alias = "Paste",    Enabled = true }
             }
         };
 

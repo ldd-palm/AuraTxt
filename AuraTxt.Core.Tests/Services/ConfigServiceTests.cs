@@ -18,13 +18,14 @@ public class ConfigServiceTests : IDisposable
         var cfg = _svc.Load();
         Assert.True(cfg.Models.ContainsKey("default"));
         var def = cfg.Models["default"];
-        Assert.Equal(6, def.Models.Count);
+        Assert.Equal(7, def.Models.Count);
         Assert.Equal("Google_Translate",   def.Models[0].TargetModel);
         Assert.Equal("Deepl_Translate",    def.Models[1].TargetModel);
         Assert.Equal("Youdao_Dict",        def.Models[2].TargetModel);
         Assert.Equal("WordReference_Dict", def.Models[3].TargetModel);
         Assert.Equal("Oxford_Dict",        def.Models[4].TargetModel);
         Assert.Equal("Terminal",           def.Models[5].TargetModel);
+        Assert.Equal("Clipboard_Paste",    def.Models[6].TargetModel);
     }
 
     [Fact]
@@ -54,6 +55,21 @@ public class ConfigServiceTests : IDisposable
         var reloaded = _svc.Load();
 
         Assert.Contains(reloaded.Models["default"].Models, m => m.TargetModel == "Deepl_Translate");
+        Assert.Equal(onDiskBefore, File.ReadAllText(_tmpPath)); // in-memory only, not persisted
+    }
+
+    [Fact]
+    public void Load_InjectsClipboardPasteBuiltin_ForExistingConfigMissingIt()
+    {
+        // Simulate an old config.json saved before the Clipboard_Paste built-in existed.
+        var cfg = _svc.Load();
+        cfg.Models["default"].Models.RemoveAll(m => m.TargetModel == "Clipboard_Paste");
+        _svc.Save(cfg);
+        var onDiskBefore = File.ReadAllText(_tmpPath);
+
+        var reloaded = _svc.Load();
+
+        Assert.Contains(reloaded.Models["default"].Models, m => m.TargetModel == "Clipboard_Paste");
         Assert.Equal(onDiskBefore, File.ReadAllText(_tmpPath)); // in-memory only, not persisted
     }
 
