@@ -48,11 +48,13 @@ public partial class ResultWindow : Window
         ResultText.FontSize = cfg.Settings.FontSize;
         Opacity             = cfg.Settings.ResultWindowOpacity;
 
-        // Populate model picker with enabled user models + built-in models (Terminal excluded —
-        // it runs a shell command template, not a fit for "switch model and rerun this text").
+        // Populate model picker with enabled user models + built-in models (Terminal and
+        // Clipboard_Paste excluded — Terminal runs a shell command template, Paste doesn't
+        // open this window at all (see HotkeyService.ShowResultFor); neither fits "switch
+        // model and rerun this text").
         // Built-ins display in config.json's Models["default"].Models order (user-editable there).
         var items = cfg.AllEnabledModelRefs()
-            .Where(r => r.Ref != "default/Terminal")
+            .Where(r => r.Ref != "default/Terminal" && r.Ref != "default/Clipboard_Paste")
             .Select(r =>
             {
                 var isBuiltIn = r.Ref.StartsWith("default/");
