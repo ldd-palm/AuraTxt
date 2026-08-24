@@ -43,6 +43,15 @@ public class AiClientTests
         new() { ThinkingMode = "enable_high", Prompt = "{SelectedText}" };
 
     [Fact]
+    public async Task CompleteAsync_ClipboardPaste_ReturnsUnsupportedTestConnectionMessage()
+    {
+        var client = MakeClient(out _, out _);
+        var model  = new ModelEntry { TargetModel = "Clipboard_Paste" };
+        var result = await client.CompleteAsync("default", new ProviderConfig(), model, DisableAction(), "", "");
+        Assert.Equal("Paste does not support connection testing.", result);
+    }
+
+    [Fact]
     public void DeepSeekV4_Disable_HasChatTemplateKwargs()
     {
         var client = MakeClient(out _, out _);

@@ -126,6 +126,7 @@ public class AiClient
             "WordReference_Dict" => await new WordReferenceClient().DictionaryAsync(selectedText, lang, ct),
             "Oxford_Dict"        => await new OxfordDictionaryClient().DictionaryAsync(selectedText, ct),
             "Terminal"           => await TerminalClient.RunAsync(action.Prompt, selectedText, userInput, ct),
+            "Clipboard_Paste"    => "Paste does not support connection testing.",
             _                    => $"[Error] Unknown built-in model: {model.TargetModel}"
         };
     }
