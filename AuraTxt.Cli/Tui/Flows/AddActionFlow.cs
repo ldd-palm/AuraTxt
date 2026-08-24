@@ -46,9 +46,11 @@ public static class AddActionFlow
         if (hotkey is null) return;
         var enabled = app.Renderer.Confirm("Enable this action?");
 
-        var orderStr = app.Renderer.AskOrCancel("Display order (0-99, default 0)", "0");
-        if (orderStr is null) return;
-        int.TryParse(orderStr, out var order);
+        // Land at the end of the Enabled/disabled group instead of asking — Order only
+        // matters within that group (see ActionFeaturesPage.MoveAction), and U/I on the
+        // Action Features list already lets the user reposition it from there.
+        var group = app.Cfg.Actions.Where(a => a.Enabled == enabled).ToList();
+        var order = group.Count == 0 ? 0 : group.Max(a => a.Order) + 1;
 
         app.Cfg.Actions.Add(new ActionItem
         {
