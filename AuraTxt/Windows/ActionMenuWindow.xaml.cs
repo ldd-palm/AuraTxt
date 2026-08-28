@@ -1,6 +1,8 @@
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 using AuraTxt.Core.Models;
 using AuraTxt.Core.Services;
@@ -46,6 +48,7 @@ public partial class ActionMenuWindow : Window
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
+        MoveHwndToCursorMonitor();
         PositionNearCursor();
         BuildMenu();
         UpdateLayout();
@@ -53,15 +56,65 @@ public partial class ActionMenuWindow : Window
         _ready = true;
     }
 
+    [DllImport("user32.dll")]
+    private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter,
+        int x, int y, int cx, int cy, uint uFlags);
+
+    private const uint SWP_NOSIZE     = 0x0001;
+    private const uint SWP_NOZORDER   = 0x0004;
+    private const uint SWP_NOACTIVATE = 0x0010;
+
+    /// Per-monitor-V2 WPF interprets Window.Left/Top using the DPI context the HWND
+    /// currently has — established when the window was created at the (-9999,-9999)
+    /// placeholder, which lands on whatever monitor is nearest that point (usually the
+    /// primary one), not wherever the cursor actually is. On a multi-monitor setup with
+    /// different per-monitor scaling, doing the DIP math in PositionNearCursor/
+    /// GetWorkAreaDip against that stale DPI context produces a position offset roughly
+    /// proportional to the scale mismatch. Move the raw HWND to the cursor's physical
+    /// position first so Windows fires WM_DPICHANGED synchronously and the window's DPI
+    /// context (and TransformFromDevice used below) matches the cursor's real monitor
+    /// before any DIP conversion happens.
+    private void MoveHwndToCursorMonitor()
+    {
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd == IntPtr.Zero) return;
+        SetWindowPos(hwnd, IntPtr.Zero, _physicalCursor.X, _physicalCursor.Y, 0, 0,
+            SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+    }
+
     /// PositionNearCursor clamps with estimated bounds (actual size unknown before layout);
     /// with many actions the menu can exceed that estimate and stick out of the screen.
     private void ClampToWorkArea()
     {
-        var wa = SystemParameters.WorkArea;
+        var wa = GetWorkAreaDip();
         if (ActualWidth > 0)
             Left = Math.Max(wa.Left, Math.Min(Left, wa.Right - ActualWidth));
         if (ActualHeight > 0)
             Top = Math.Max(wa.Top, Math.Min(Top, wa.Bottom - ActualHeight));
+    }
+
+    /// SystemParameters.WorkArea always reports the *primary* monitor's work area in WPF,
+    /// so on a multi-monitor setup it clamps the menu back onto the main screen instead of
+    /// the one the cursor is actually on. Screen.FromPoint gives the correct monitor; its
+    /// WorkingArea is physical pixels, so run it through the same device→DIP transform used
+    /// for the cursor position to stay correct across monitors with different DPI scaling.
+    private Rect GetWorkAreaDip()
+    {
+        var wa = System.Windows.Forms.Screen.FromPoint(_physicalCursor).WorkingArea;
+
+        var src = PresentationSource.FromVisual(this);
+        if (src is not null)
+        {
+            var transform   = src.CompositionTarget.TransformFromDevice;
+            var topLeft     = transform.Transform(new System.Windows.Point(wa.Left, wa.Top));
+            var bottomRight = transform.Transform(new System.Windows.Point(wa.Right, wa.Bottom));
+            return new Rect(topLeft, bottomRight);
+        }
+
+        var dpi = VisualTreeHelper.GetDpi(this);
+        var sx = dpi.DpiScaleX > 0 ? dpi.DpiScaleX : 1;
+        var sy = dpi.DpiScaleY > 0 ? dpi.DpiScaleY : 1;
+        return new Rect(wa.Left / sx, wa.Top / sy, wa.Width / sx, wa.Height / sy);
     }
 
     private void PositionNearCursor()
@@ -85,7 +138,7 @@ public partial class ActionMenuWindow : Window
         }
 
         // Place menu above-right of cursor; clamp to work area so it's never off-screen.
-        var wa      = SystemParameters.WorkArea;
+        var wa      = GetWorkAreaDip();
         const double menuW = 220;   // generous upper bound for clamping (actual size unknown yet)
         const double menuH = 44;
 
@@ -135,6 +188,7 @@ public partial class ActionMenuWindow : Window
         AppState.IsMenuUpdating = true;
         try
         {
+            MoveHwndToCursorMonitor();
             PositionNearCursor();
             IconPanel.Children.Clear();
             BuildMenu();

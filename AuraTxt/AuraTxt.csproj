@@ -8,6 +8,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>AuraTxt</AssemblyName>
     <ApplicationIcon>Resources\aruatxt_active.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
     <Version>1.8</Version>
   </PropertyGroup>
   <ItemGroup>
