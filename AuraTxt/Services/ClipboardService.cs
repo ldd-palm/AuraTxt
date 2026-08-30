@@ -83,14 +83,18 @@ public static class ClipboardService
             return string.IsNullOrWhiteSpace(t) ? null : t;
         }
 
-        string prev = "";
+        // Snapshot whatever's on the clipboard now — any format (text, files, images,
+        // custom) — so a speculative Ctrl+C that doesn't pan out can be restored exactly,
+        // not just wiped. (Previously this only remembered plain text via ContainsText()/
+        // GetText(), so a non-text clipboard — e.g. files copied in Explorer — read as
+        // "nothing", and got Clear()'d instead of restored below.)
+        System.Windows.IDataObject? prevData = null;
+        try { prevData = System.Windows.Clipboard.GetDataObject(); } catch { }
+
         uint seqAfterRead = 0;
+        bool gotText = false;
         try
         {
-            if (System.Windows.Clipboard.ContainsText())
-                prev = System.Windows.Clipboard.GetText();
-
-            System.Windows.Clipboard.Clear();
             var seqBefore = GetClipboardSequenceNumber();
             _syntheticCtrlCUntil = DateTime.UtcNow.AddMilliseconds(200);
             PressCtrlC();
@@ -103,23 +107,35 @@ public static class ClipboardService
                 if (GetClipboardSequenceNumber() != seqBefore) break;
             }
 
+            if (GetClipboardSequenceNumber() == seqBefore)
+                return null; // nothing responded to the Ctrl+C — clipboard untouched, nothing to restore
+
             var text = System.Windows.Clipboard.ContainsText()
                 ? System.Windows.Clipboard.GetText() : "";
             seqAfterRead = GetClipboardSequenceNumber();
-            return string.IsNullOrWhiteSpace(text) ? null : text;
+
+            if (!string.IsNullOrWhiteSpace(text))
+            {
+                gotText = true; // restore prev below unless something else wrote since our read
+                return text;
+            }
+
+            // The Ctrl+C produced something, just not text — e.g. Explorer copying the
+            // files the user dragged over. That's a legitimate result of the keypress we
+            // injected; leave it on the clipboard instead of clobbering it in `finally`.
+            return null;
         }
         catch { return null; }
         finally
         {
             try
             {
-                // seqAfterRead == 0  → exception before read; restore prev (safe fallback)
-                // seq unchanged      → nobody wrote to clipboard after our read → restore prev
-                // seq changed        → user or another app wrote to clipboard → leave it alone
-                if (seqAfterRead == 0 || GetClipboardSequenceNumber() == seqAfterRead)
+                // Only restore if we actually returned text AND nobody else has written to
+                // the clipboard since (another app, or the user) — otherwise leave it alone.
+                if (gotText && GetClipboardSequenceNumber() == seqAfterRead)
                 {
-                    if (!string.IsNullOrEmpty(prev))
-                        System.Windows.Clipboard.SetText(prev);
+                    if (prevData is not null)
+                        System.Windows.Clipboard.SetDataObject(prevData, true);
                     else
                         System.Windows.Clipboard.Clear();
                 }
