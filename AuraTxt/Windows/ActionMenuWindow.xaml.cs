@@ -1,7 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows;
-using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using AuraTxt.Core.Models;
@@ -46,6 +45,21 @@ public partial class ActionMenuWindow : Window
         Closed      += (_, _) => { if (AppState.ActiveMenu == this) AppState.ActiveMenu = null; };
     }
 
+    /// XAML's ShowActivated="False" only skips WPF's own Activate() call on Show() — it
+    /// does not stop Windows from later giving this HWND keyboard focus (e.g. via mouse
+    /// interaction), which is what OnPreviewKeyDown's Ctrl+C special-case was working
+    /// around. WS_EX_NOACTIVATE set here, before the window is shown, is the actual
+    /// Win32-level "this window can never be activated/focused" contract — buttons still
+    /// receive mouse clicks normally, but keystrokes (and text being typed elsewhere) can
+    /// no longer be silently swallowed by this window stealing focus.
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        var hwnd = new WindowInteropHelper(this).Handle;
+        var exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
+        SetWindowLong(hwnd, GWL_EXSTYLE, exStyle | WS_EX_NOACTIVATE);
+    }
+
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
         MoveHwndToCursorMonitor();
@@ -60,9 +74,20 @@ public partial class ActionMenuWindow : Window
     private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter,
         int x, int y, int cx, int cy, uint uFlags);
 
-    private const uint SWP_NOSIZE     = 0x0001;
-    private const uint SWP_NOZORDER   = 0x0004;
-    private const uint SWP_NOACTIVATE = 0x0010;
+    [DllImport("user32.dll")]
+    private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
+
+    [DllImport("user32.dll")]
+    private static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
+
+    [DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    private const uint SWP_NOSIZE      = 0x0001;
+    private const uint SWP_NOZORDER    = 0x0004;
+    private const uint SWP_NOACTIVATE  = 0x0010;
+    private const int  GWL_EXSTYLE     = -20;
+    private const int  WS_EX_NOACTIVATE = 0x08000000;
 
     /// Per-monitor-V2 WPF interprets Window.Left/Top using the DPI context the HWND
     /// currently has — established when the window was created at the (-9999,-9999)
@@ -341,21 +366,17 @@ public partial class ActionMenuWindow : Window
         ToolTipService.SetInitialShowDelay(border, 600);
 
         // PreviewMouseLeftButtonDown (tunneling) fires before child elements can swallow it
-        border.PreviewMouseLeftButtonDown += (_, _) => DragMove();
+        border.PreviewMouseLeftButtonDown += (_, _) =>
+        {
+            DragMove();
+            // DragMove drives an OS-level move loop that can leave this window activated
+            // even with WS_EX_NOACTIVATE set; hand focus back so the next keystroke lands
+            // in the source app instead of nowhere.
+            if (AppState.SourceWindowHandle != IntPtr.Zero)
+                SetForegroundWindow(AppState.SourceWindowHandle);
+        };
 
         return border;
-    }
-
-    protected override void OnPreviewKeyDown(System.Windows.Input.KeyEventArgs e)
-    {
-        if (e.Key == Key.C && (Keyboard.Modifiers & ModifierKeys.Control) != 0)
-        {
-            try { Clipboard.SetText(_selectedText); }
-            catch (Exception ex) { LogService.Error("Ctrl+C copy failed", ex); }
-            e.Handled = true;
-            return;
-        }
-        base.OnPreviewKeyDown(e);
     }
 
     private Separator MakeSeparator() => new()

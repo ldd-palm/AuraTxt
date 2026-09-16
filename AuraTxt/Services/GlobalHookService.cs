@@ -222,12 +222,15 @@ public class GlobalHookService
                     // Plain click likely cleared the selection → re-arm immediately (Scenario B).
                     AppState.MarkDeselected();
                 }
-                else if (!GameDetectionService.ShouldSkip(_config.Load().Settings))
+                else
                 {
                     // Action was taken — selection might still be highlighted (silence shield).
-                    // Check async: if selection gone → Idle; if still there → keep shield.
+                    // config.Load()/ShouldSkip() must not run on the hook callback itself — this
+                    // branch fires on every plain click, and WH_MOUSE_LL expects to return almost
+                    // immediately or Windows can lag/drop input system-wide. Defer the whole check.
                     Application.Current?.Dispatcher.BeginInvoke(async () =>
                     {
+                        if (GameDetectionService.ShouldSkip(_config.Load().Settings)) return;
                         var t = await ClipboardService.GetSelectedTextAsync(50);
                         if (string.IsNullOrWhiteSpace(t))
                             AppState.MarkDeselected();
