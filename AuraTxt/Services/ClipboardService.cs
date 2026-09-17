@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Windows.Automation;
 using AuraTxt.Core.Services;
 
@@ -77,7 +78,28 @@ public static class ClipboardService
     private static DateTime _syntheticCtrlCUntil = DateTime.MinValue;
     public static bool IsSyntheticCtrlCInFlight() => DateTime.UtcNow < _syntheticCtrlCUntil;
 
+    // Serializes TryClipboardAsync so two overlapping calls (e.g. two selections captured
+    // in quick succession) can never have their PressCtrlC() keybd_event sequences
+    // interleave. An interleaved Ctrl-down/Ctrl-up pair from two overlapping calls can
+    // land out of order and leave Windows' key-state table thinking Ctrl is still held —
+    // which then makes the physically-down check below veto every future capture forever,
+    // since nothing else ever clears that stuck state.
+    private static readonly SemaphoreSlim _captureLock = new(1, 1);
+
     private static async Task<string?> TryClipboardAsync()
+    {
+        await _captureLock.WaitAsync();
+        try
+        {
+            return await TryClipboardCoreAsync();
+        }
+        finally
+        {
+            _captureLock.Release();
+        }
+    }
+
+    private static async Task<string?> TryClipboardCoreAsync()
     {
         // A real Ctrl+C landed moments ago (or is still in flight) — it already is/will be
         // putting the selection on the clipboard. Don't inject our own synthetic Ctrl+C on
