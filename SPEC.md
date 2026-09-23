@@ -19,6 +19,7 @@ AuraTxt 是一个 **Windows 纯托盘 WPF 划词助手**：
 
 - .NET 8，TFM 一律 `net8.0-windows`（**[关键]** 不带 Windows SDK 版本号——WinRT API 会引入 24MB 的 `Microsoft.Windows.SDK.NET.dll`，单文件发布体积从 4MB 涨到 28MB）
 - C# nullable enable + implicit usings
+- **[关键] `AuraTxt/app.manifest` + `<ApplicationManifest>app.manifest</ApplicationManifest>`**：声明 Per-Monitor V2 DPI 感知（`dpiAwareness=PerMonitorV2` + 旧版 `dpiAware=true/pm` 兼容回退）。没有这份清单时 .NET 8 WPF 应用默认落到 System DPI Aware（进程级单一 DPI），在混合缩放比例的多显示器环境下，Windows/DWM 会对非主显示器上的窗口坐标做静默的位图缩放/坐标重映射，`ActionMenuWindow` 在应用层做的物理像素→DIP 换算（见 §7.1）无法感知也无法补偿这层映射，表现为菜单出现在正确的显示器上但整体偏移一截。**[关键] 不要改用 SDK 的 `ApplicationHighDpiMode` 项目属性**——它只对纯 WinForms 生成的入口点生效，对本项目这种 WPF 入口点+WinForms 互操作（`UseWindowsForms=true`，见下）的组合完全不生效（用 `mt.exe` 抽取编译产物内嵌清单验证过，设了这个属性后清单里根本没有 DPI 相关节点），只会得到编译期 `WFAC010` 警告（"建议移除 app.manifest 里的高 DPI 设置，改用该属性"）——这条警告在本项目里是已知的误报，`app.manifest` 手写方案已验证有效，不要按警告的建议去掉。
 
 ```
 AuraTxt.sln
@@ -249,23 +250,28 @@ ActionProcessed LastProcessedText=T   SelectionActioned=true
 
 `GetSelectedTextAsync(delayMs)`：
 
+**[关键] 整个方法在 `ClipboardWorkerThread` 的专用 STA 线程上跑**，不是调用方（`GlobalHookService` 的鼠标钩子线程）自己的线程——`GetSelectedTextAsync` 公开入口把整个方法体 `Dispatcher.InvokeAsync` 派发到这个线程执行。UI Automation 是跨进程 COM 调用，慢的应用能卡到几百 ms；剪贴板操作也可能被第三方剪贴板管理器（如 Ditto）短暂占锁排队。这两类耗时操作若留在鼠标钩子线程上，会堵住 `WH_MOUSE_LL` 的消息泵，表现为系统级的鼠标卡顿（"果冻效应"）——挪到专用线程后钩子线程始终空闲，不管取词本身要多久，鼠标都不受影响。`ClipboardWorkerThread` 用 `Dispatcher.Run()` 给这个线程装一个 `DispatcherSynchronizationContext`，`await Task.Delay(...)` 之类的轮询循环因此会继续落在同一个 STA 线程上恢复，不需要改动下面描述的取词逻辑本身。
+
 1. **UI Automation 立即尝试一次**（无副作用）：`AutomationElement.FocusedElement` → `TextPattern.GetSelection()[0].GetText(-1)`。**[关键]** 不等待就先试——多数应用（浏览器/Office/VSCode 等）在 mouse-up 时已同步把选区提交到 accessibility tree，命中时直接省掉整个 `delayMs`（默认 100ms）延迟，直接返回。
 2. 未命中 → `Task.Delay(delayMs)` 后重试一次 UI Automation（给较慢的应用一点时间）。仍未命中 → 进入第 3 级。
 3. **模拟 Ctrl+C**（`TryClipboardAsync`）：
-   - **[关键] 与真实 Ctrl+C 冲突规避**：若最近 600ms 内 `ClipboardService.NotifyRealCtrlC()` 被调用过（由 `GlobalHookService.OnKeyDown` 在观测到真实 `Ctrl+C` 按键时触发），说明用户刚手动按过真实 Ctrl+C——此时完全跳过下面的 Clear/模拟按键/恢复流程，只轮询剪贴板序号变化（最多 300ms）后直接读取。**原因**：若仍自行注入一次合成 Ctrl+C，会与用户真实的物理按键在系统输入流里交叠，导致前台应用的修饰键状态被合成的 `Ctrl↑` 提前"释放"，随后真实的 `C` 键被当作无 Ctrl 修饰的裸字符交付，选区被替换成字面的 "c"（曾经的真实 bug，已修复）。
+   - **[关键] 全程串行化**：`TryClipboardAsync` 整体包一层 `SemaphoreSlim`（`_captureLock`，1 permit）。若两次取词请求前后脚重叠（例如极快的连续划词），各自的 `PressCtrlC()` 注入的 Ctrl-down/Ctrl-up 按键序列可能在系统输入队列里交错，导致 Windows 的按键状态表误以为 Ctrl 还按着——一旦卡死在"按住"状态，下面的修饰键否决检查会永久拒绝之后所有取词请求，没有任何东西能清掉这个状态。串行化后不会再有两组按键序列同时在途。
+   - **[关键] 与真实 Ctrl+C 冲突规避**：若最近 600ms 内 `ClipboardService.NotifyRealCtrlC()` 被调用过（由 `GlobalHookService.OnKeyDown` 在观测到真实 `Ctrl+C` 按键时触发），说明用户刚手动按过真实 Ctrl+C——此时完全跳过下面的模拟按键/恢复流程，只轮询剪贴板序号变化（最多 300ms）后直接读取。**原因**：若仍自行注入一次合成 Ctrl+C，会与用户真实的物理按键在系统输入流里交叠，导致前台应用的修饰键状态被合成的 `Ctrl↑` 提前"释放"，随后真实的 `C` 键被当作无 Ctrl 修饰的裸字符交付，选区被替换成字面的 "c"（曾经的真实 bug，已修复）。
+   - **[关键] 修饰键物理按住否决**：`GetAsyncKeyState` 检查 Ctrl/Shift/Alt 任一物理按下时直接返回 `null`，完全不碰剪贴板——用户很可能正在按一个真实的键盘快捷键（尤其是 Ctrl+V），此时注入合成 Ctrl+C 会在对方最需要剪贴板的瞬间把它短暂锁住，导致真实 Ctrl+V 偶发失效。放弃这次取词不会丢数据，同一选区下次触发还能再试。
+   - **[关键] 剪贴板快照改用 `IDataObject`**：注入按键前用 `Clipboard.GetDataObject()`（不再是 `Clipboard.Clear()`）整体备份当前剪贴板内容——覆盖文本、文件、图片等任意格式，而不只是文本。早期实现只备份文本、上来就 `Clear()`，导致在 Explorer 里拷贝文件时（非文本选区触发的兜底 Ctrl+C 撞上真实的文件复制）用户刚复制的文件被直接清空，粘贴不出来（曾经的真实 bug，已修复）。
    - **在调用 `PressCtrlC()` 前**设置 `_syntheticCtrlCUntil = now + 100ms`（对外暴露为 `IsSyntheticCtrlCInFlight()`），供 `GlobalHookService.OnKeyDown` 区分"这是自己刚模拟的按键"，避免误判成真实 Ctrl+C（见 §5.2 的菜单误关闭场景）；这个窗口只需要盖住"`keybd_event` 注入 → 本地低级钩子观测到"这段同机 OS 调度延迟（实测几毫秒量级），留太长反而会让紧跟着到达的一次真实 Ctrl+C 被误判成自己模拟的、进而被静默吞掉。
    - **[关键]** 用 `keybd_event`（P/Invoke：Ctrl down, C down, C up, Ctrl up）模拟按键，第四参数 `dwExtraInfo` 固定传 `AuraExtraInfo = 0x41555241`（'AURA'）——MouseKeyHook 的 `KeyEventArgs` 目前不暴露这个字段，所以匹配仍然靠上面的时间窗口，这个标记只是为将来自建低级键盘钩子（能直接读 `KBDLLHOOKSTRUCT.dwExtraInfo`）预留的精确匹配手段，`ClipboardPasteService`（§9.7）的按键注入用的是同一个常量。**禁止用 SendKeys**——`SendWait` 在无 WinForms 消息循环的 STA 线程必然失败且异常被吞。
-   - **序号轮询**：每 25ms 检查序号是否变化，最多 300ms。
-   - 读取剪贴板文本，记录 `seqAfterRead`。
-   - **[关键] finally 恢复策略**：只在 `seqAfterRead==0`（读取前异常）或当前序号 == `seqAfterRead`（无人后续写入）时恢复 `prev`；序号已变说明用户/他人写了剪贴板，**不得覆盖**。
+   - **序号轮询**：每 25ms 检查序号是否变化，最多 300ms；序号完全没变化（说明没有任何应用响应这次注入的按键）→ 直接返回 `null`，不触碰 `finally` 里的恢复逻辑（没有什么需要恢复的）。
+   - 只把 `Clipboard.ContainsText()` 命中的结果当作取词成功；**[关键] 注入的按键确实触发了写入、但写入的不是文本**（例如在 Explorer 里对文件触发的这次 Ctrl+C，复制的是文件而不是文字）时同样返回 `null`，但**不**在 `finally` 里恢复/清空——那是这次注入按键的正当结果（用户刚拖选的文件），不是意外，应该原样留在剪贴板上。
+   - **[关键] finally 恢复策略带重试**：只在确实取到文本、且当前序号仍等于取到文本那一刻的序号（没人在这之后又写过剪贴板）时才恢复——通过 `RetryClipboardOpAsync`（§5.5.1 同一个重试辅助方法）调用 `Clipboard.SetDataObject(prevData, true)`（有快照）或 `Clipboard.Clear()`（没有），失败时重试而不是像早期实现那样裸 `catch` 直接放弃——否则若这一刻剪贴板恰好被别的程序占用，用户原来的剪贴板内容会被静默永久丢弃，剪贴板上留的是 AuraTxt 刚抓取的选区文本。
 
 ### 5.5.1 写入剪贴板，带重试（`ClipboardService.TrySetTextAsync`）[关键]
 
 `System.Windows.Clipboard.SetText` 底层走 OLE 剪贴板 API，Windows 自带的剪贴板历史（Win+V）、第三方剪贴板管理器、部分安全软件的剪贴板钩子都可能在那一瞬间持有剪贴板打开状态，导致抛 `COMException`（`CLIPBRD_E_CANT_OPEN`）——这个锁通常几毫秒内就会释放。旧代码直接 `catch` 吞掉异常、不重试、UI 上也没有任何失败提示，用户看不出这次点击是成功了还是被吞掉了，只能"多点几次" repro 靠运气触发到锁已释放的窗口——这正是 Copy 按钮"需要点好几次"的根因。
 
-`TrySetTextAsync(text, maxAttempts=8, delayMs=30)`：失败时 `await Task.Delay(delayMs)` 后重试，最多 8 次（约 240ms 硬上限），成功则立即返回 `true`；全部失败返回 `false`。两个调用方：
+底层是一个共享的私有辅助方法 `RetryClipboardOpAsync(Action, maxAttempts=8, delayMs=30)`：失败时 `await Task.Delay(delayMs)` 后重试，最多 8 次（约 240ms 硬上限），成功则立即返回 `true`；全部失败返回 `false`。`TrySetTextAsync(text)` 就是 `RetryClipboardOpAsync(() => Clipboard.SetText(text))`；§5.5 `TryClipboardCoreAsync` 的 `finally` 恢复逻辑（`SetDataObject`/`Clear()`）复用同一个辅助方法——两处需要的都是"这次剪贴板操作可能因为锁被占用而抛 `CLIPBRD_E_CANT_OPEN`，重试几次基本都能过"，没必要各写一份轮询循环。`TrySetTextAsync` 的调用方：
 - **ResultWindow/InteractiveWindow 的 Copy 按钮**（`CopyBtn_Click`）：成功后调用 `FlashCopyFeedback()`——按钮 `Content` 从 📋 短暂换成 ✅、`Task.Delay(700)` 后换回，给用户一个看得见的成功确认，不再靠"沉默=可能失败"去猜。
-- **`ReplaceInSourceWindowAsync`**（Replace 按钮/热键共用）：`TrySetTextAsync` 返回 `false` 时直接 `return`，不再往下执行 `SetForegroundWindow`+模拟 Ctrl+V——避免把剪贴板里的旧内容粘贴进源窗口（写入都没成功，粘贴的就是错的/过期的数据）。
+- **`ReplaceInSourceWindowAsync`**（Replace 按钮/热键共用）：`TrySetTextAsync` 返回 `false` 时直接 `return`，不再往下执行 `SetForegroundWindow`+模拟 Ctrl+V——避免把剪贴板里的旧内容粘贴进源窗口（写入都没成功，粘贴的就是错的/过期的数据）。写入成功后 **[关键]** 先检查 `SetForegroundWindow(hwnd)` 的返回值——Windows 的前台窗口锁定规则有时会静默拒绝这次请求（例如源窗口属于提权进程），拒绝时直接记日志返回，不再往下发按键（否则会打到当前真正持有前台焦点的随便什么窗口）；`Task.Delay(150ms)` 之后**再复核一次** `GetForegroundWindow() == hwnd`，确认焦点真的还在目标窗口上才发送模拟 Ctrl+V。
 
 ### 5.6 全局热键（HotkeyService）
 
@@ -448,13 +454,15 @@ LogService：静态类，`Enabled`+`LogPath` 控制；`Info/Error/Raw` 三个方
 
 ### 7.1 ActionMenuWindow（浮动动作条）
 
-- XAML：`ShowActivated="False"` **[关键]**——菜单绝不抢焦点，源应用键盘焦点不断；否则用户选词后立即打字会丢第一个键。
-- 内容：水平 StackPanel（IconPanel）：App logo（34×34，可拖动窗口，`PreviewMouseLeftButtonDown → DragMove`）→ 分隔线 → 各 enabled action 的图标按钮（34×34，图标 17×17；图标未缓存时显示名称首字母并后台下载）。Tooltip 为 `Name (Hotkey)`。
+- XAML：`ShowActivated="False"` + **[关键]** `OnSourceInitialized` 里 `GetWindowLong`/`SetWindowLong` 显式打上 `WS_EX_NOACTIVATE`——菜单绝不抢焦点，源应用键盘焦点不断；否则用户选词后立即打字会丢第一个键。`ShowActivated="False"` 单独存在时只是跳过 WPF 自己的 `Activate()` 调用，**不能**阻止 Windows 之后仍把键盘焦点交给这个 HWND（例如鼠标交互触发的某些时序）；`WS_EX_NOACTIVATE` 才是 Win32 层面"这个窗口永远不可被激活"的真正保证，按钮点击等鼠标交互不受影响。此前用一段专门拦截 Ctrl+C 的 `OnPreviewKeyDown` 兜底这个抢焦点的缺口（怀疑菜单偶尔真的拿到过键盘焦点）；`WS_EX_NOACTIVATE` 生效后该兜底逻辑已确认不可达并移除。
+- 内容：水平 StackPanel（IconPanel）：App logo（34×34，可拖动窗口，`PreviewMouseLeftButtonDown → DragMove`；**[关键]** `DragMove()` 返回后若 `AppState.SourceWindowHandle` 非零则 `SetForegroundWindow` 一次——`DragMove` 驱动的是 OS 级别的移动循环，即使设了 `WS_EX_NOACTIVATE` 也可能在拖动过程中让这个窗口被激活，不补这一手，拖完菜单后源应用会短暂失去焦点，第一个按键落空）→ 分隔线 → 各 enabled action 的图标按钮（34×34，图标 17×17；图标未缓存时显示名称首字母并后台下载）。Tooltip 为 `Name (Hotkey)`。
 - 排序：`Order asc → Name`（忽略大小写）。
 - **定位 [关键]**：构造时 `Left=Top=-9999`（先藏屏外）；Loaded 后：
-  1. 物理像素 → DIP：优先 `PresentationSource.CompositionTarget.TransformFromDevice`，fallback `VisualTreeHelper.GetDpi`。
-  2. 放光标右上方（估算尺寸 220×44 先 clamp 到 WorkArea）。
-  3. BuildMenu + UpdateLayout 后用 `ActualWidth/ActualHeight` **二次 clamp**（动作多时估算不够宽）。
+  1. **[关键] `MoveHwndToCursorMonitor()`**：先用 `SetWindowPos` 把 HWND 本身移到光标的物理像素位置，再做后面的 DIP 换算。**动机**：Per-Monitor V2（见 §2 的 `app.manifest`）下 WPF 用 HWND *当前* 所处的 DPI 上下文解读 `Window.Left/Top`；HWND 在构造时的占位坐标 `(-9999,-9999)` 上创建，落在的往往是主显示器，而不是光标实际所在的显示器——若不先把 HWND 挪过去，后续用光标所在显示器的 DPI 做的 DIP 换算，是在**主显示器的 DPI 上下文**里被解读的，混合缩放比例的多显示器环境下会产生一个跟缩放比不匹配成正比的位置偏移（曾经的真实 bug：菜单在正确的显示器上但整体偏移一截，`SetWindowPos` 触发 Windows 同步派发 `WM_DPICHANGED`，让 HWND 的 DPI 上下文提前更新到光标所在显示器，后面的换算才是准的）。`UpdateMenu`（原地更新，见下）同样先调用这个方法。
+  2. 物理像素 → DIP：优先 `PresentationSource.CompositionTarget.TransformFromDevice`，fallback `VisualTreeHelper.GetDpi`。
+  3. **[关键] 工作区用 `Screen.FromPoint(光标).WorkingArea`，不是 `SystemParameters.WorkArea`**：WPF 的 `SystemParameters.WorkArea` 在多显示器环境下**恒定返回主显示器**的工作区，用它 clamp 会把菜单摁回主屏，即使光标明明在副屏上。`GetWorkAreaDip()` 改用 `System.Windows.Forms.Screen.FromPoint`（物理像素），再经与步骤 2 相同的 device→DIP 换算保持跨 DPI 一致。
+  4. 放光标右上方（估算尺寸 220×44 先 clamp 到 WorkArea）。
+  5. BuildMenu + UpdateLayout 后用 `ActualWidth/ActualHeight` **二次 clamp**（动作多时估算不够宽）。
 - **延迟关闭（DeferredClose）[关键]**：点击菜单外/Deactivated 不立即关，而是启动 500ms 可取消延时（CancellationTokenSource）。期间若双击的第二次 `MouseDown` 到达（见 §5.2，不再是独立的 `MouseDoubleClick` 事件）→ `CancelDeferredClose()`，尾随的 `MouseUp` 触发 `UpdateMenu()` 原地更新（重定位+重建按钮，期间置 `IsMenuUpdating=true` 防误关）。
 - `SafeClose(int? suppressMs = AppState.ActionTakenCooldownMs)`：`_ready/_closing/IsMenuUpdating` 守卫；`suppressMs` 非 null 时把 `MenuSuppressUntil` 设到那么多毫秒之后。**[关键]** 延迟关闭路径用 `SafeClose(suppressMs: null)`——light-dismiss 不设冷却，否则点掉菜单后短时间内无法重新双击同词。按钮点击 / `ExecuteSystemAction` 用默认值（`AppState.ActionTakenCooldownMs`，见 §5.3）；键盘关闭 `CloseNow()` 改用更短的 `AppState.KeyboardDismissCooldownMs`（`SafeClose(AppState.KeyboardDismissCooldownMs)`）——三处的守卫全部收敛在 `SafeClose` 一处，调用方即使因 `_closing` 已为真而无效关闭，也不会误设一次冷却。
 - 点击 AI action：`SafeClose()` + `HotkeyService.ShowResultFor(...)`。系统 action：copy → 剪贴板写 `_selectedText`（**try/catch**，剪贴板可能被占用）；speech → `SpeechService.Speak`；google → `Process.Start` 打开 `https://www.google.com/search?q={EscapeDataString(_selectedText)}`（`UseShellExecute=true`，try/catch）。
@@ -473,7 +481,7 @@ LogService：静态类，`Enabled`+`LogPath` 控制；`Info/Error/Raw` 三个方
   - `await foreach` 流式 delta，**首个 chunk 到达时先清空再 AppendText**；持 `CancellationTokenSource`，重跑/关窗时 Cancel；`OperationCanceledException` 静默；其他异常追加 `[Error] {message}`（含 inner）。
 - 关闭行为：`Closed` → `IsResultWindowOpen=false`、`MenuSuppressUntil = now + AppState.ResultWindowClosedCooldownMs`（见 §5.3）、取消流。`Deactivated` → `SafeClose()`；`SafeClose` 受 `_closing/_editing/_pinned` 三守卫（Pin 按钮切换 `_pinned`，未 pin 时点击外部即关）。
 - **键盘 [关键]**：`PreviewKeyDown`（隧道事件，必须用 Preview——TextBox 会吞 KeyDown）：Esc 关闭；其余单字母快捷键 P(Edit)/G(Regen)/R(Replace)/C(CopyAll)/T(Pin) **仅在无修饰键且焦点不在可编辑 TextBox 时生效**——保证 Ctrl+C 隧道到 TextBox 复制选区、输入框打字不被劫持。
-- **Replace ↩️(R) [关键]**：点击时先保存 `text=ResultText.Text`、`hwnd=AppState.SourceWindowHandle`，然后**先 `Close()`**，再 `await ReplaceInSourceWindowAsync(hwnd, text)`。顺序至关重要——结果窗若仍可见时调 `SetForegroundWindow` 会与 OS 焦点管理竞争导致失败；窗口关闭后 OS 自然归还焦点给源窗口，再显式 `SetForegroundWindow` 更可靠。`ReplaceInSourceWindowAsync` 内：写剪贴板 → `SetForegroundWindow(hwnd)` → `Task.Delay(150ms)` → `keybd_event(Ctrl+V)` → 关闭（已在调用前完成）。HWND 来源：鼠标路径由 GlobalHookService 在 `Dispatcher.BeginInvoke` 前捕获；**热键路径由 `HotkeyService.FireActionAsync` 在首个 await 前捕获**。
+- **Replace ↩️(R) [关键]**：点击时先保存 `text=ResultText.Text`、`hwnd=AppState.SourceWindowHandle`，然后**先 `Close()`**，再 `await ReplaceInSourceWindowAsync(hwnd, text)`。顺序至关重要——结果窗若仍可见时调 `SetForegroundWindow` 会与 OS 焦点管理竞争导致失败；窗口关闭后 OS 自然归还焦点给源窗口，再显式 `SetForegroundWindow` 更可靠。`ReplaceInSourceWindowAsync` 内部步骤见 §5.5.1（写剪贴板→检查 `SetForegroundWindow` 返回值→`Task.Delay(150ms)`→复核前台窗口未变→`keybd_event(Ctrl+V)`）。HWND 来源：鼠标路径由 GlobalHookService 在 `Dispatcher.BeginInvoke` 前捕获；**热键路径由 `HotkeyService.FireActionAsync` 在首个 await 前捕获**。
 - Edit Prompt：内置模型 → 只读弹窗提示"内置模型不支持自定义 prompt，目标语言是 X"；AI 模型 → `PromptEditDialog` 编辑当前 prompt 文本，确认后立即重跑。弹窗期间 `_editing=true` 防 Deactivated 误关父窗。
 
 ### 7.3 InteractiveWindow（交互窗）
