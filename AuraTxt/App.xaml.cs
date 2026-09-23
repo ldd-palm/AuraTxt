@@ -138,7 +138,23 @@ public partial class App : Application
             LocalizationService.Apply(cfg.Settings.UiLanguage);
             StartupService.Apply(cfg.Settings.StartOnBoot, ExePath);
             ApplyTheme(cfg.Settings.Theme);
-            _hotkeys!.RegisterAll(cfg);
+
+            // Stop()+Start() reinstalls the low-level mouse/keyboard hook — the same recovery
+            // OnPowerModeChanged already performs after sleep/resume, now also reachable
+            // on demand from the tray. Windows can silently unhook WH_MOUSE_LL outside the
+            // sleep/resume case too (LowLevelHooksTimeout); this gives the user a lighter-weight
+            // fix than quitting and relaunching the whole app when that happens.
+            _hook!.Stop();
+            _hook!.Start();
+
+            // Start() above unconditionally re-registers hotkeys — undo that if monitoring is
+            // paused, so "Reload Settings" can't silently re-enable hotkeys the user paused.
+            // Mirrors TrayIconManager's onToggleMonitor callback.
+            if (AppState.IsMonitoringPaused)
+                _hotkeys!.UnregisterAll();
+            else
+                _hotkeys!.RegisterAll(cfg);
+
             _tray!.RefreshIcon();
             _tray!.RefreshMenuText();
         }

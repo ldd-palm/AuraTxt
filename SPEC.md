@@ -203,7 +203,7 @@ class ActionItem {
 - `KeyPress`/`KeyDown` 的关闭分支都先 `CancelTrigger()`（见上方"取消令牌"）再关菜单——即使此刻没有可见菜单，也要作废还在跑的取词，防止它稍后完成时凭空弹出一个用户已经不想要的菜单（打字场景，P3）。
 - 关闭统一走 `Dispatcher.BeginInvoke(() => { CancelTrigger(); menu.CloseNow(); })`。
 
-**[关键] 睡眠/唤醒后钩子恢复**：Windows 在系统睡眠/唤醒前后可能静默卸载低级钩子（`WH_MOUSE_LL`，本服务依赖的 `SetWindowsHookEx`）——可能是唤醒过程中回调超过 LowLevelHooksTimeout，也可能是钩子链中其他进程的钩子在挂起期间被破坏。而 `HotkeyService` 走的 `RegisterHotKey`/`WM_HOTKEY` 是完全不同的机制，不受影响，唤醒后热键仍可用但划词菜单失效，正是此故障的典型表现。修复：`App.xaml.cs` 订阅 `Microsoft.Win32.SystemEvents.PowerModeChanged`，在 `PowerModes.Resume` 时通过 `Dispatcher.BeginInvoke` 回到 UI 线程执行 `_hook.Stop()` + `_hook.Start()` 重新安装钩子（`Start()` 内部也会重新 `RegisterAll` 热键，相当于顺带恢复任何被静默丢弃的热键）。`OnExit` 必须 `-=` 取消订阅，否则 `SystemEvents` 的静态订阅会跨进程生命周期泄漏。
+**[关键] 睡眠/唤醒后钩子恢复**：Windows 在系统睡眠/唤醒前后可能静默卸载低级钩子（`WH_MOUSE_LL`，本服务依赖的 `SetWindowsHookEx`）——可能是唤醒过程中回调超过 LowLevelHooksTimeout，也可能是钩子链中其他进程的钩子在挂起期间被破坏。而 `HotkeyService` 走的 `RegisterHotKey`/`WM_HOTKEY` 是完全不同的机制，不受影响，唤醒后热键仍可用但划词菜单失效，正是此故障的典型表现。修复：`App.xaml.cs` 订阅 `Microsoft.Win32.SystemEvents.PowerModeChanged`，在 `PowerModes.Resume` 时通过 `Dispatcher.BeginInvoke` 回到 UI 线程执行 `_hook.Stop()` + `_hook.Start()` 重新安装钩子（`Start()` 内部也会重新 `RegisterAll` 热键，相当于顺带恢复任何被静默丢弃的热键）。`OnExit` 必须 `-=` 取消订阅，否则 `SystemEvents` 的静态订阅会跨进程生命周期泄漏。同一故障不止睡眠/唤醒会触发（钩子回调超时的其它场景也可能被 Windows 判定并摘除），**[关键]** 因此托盘的 Reload Settings（见 §5.7）现在也手动执行同一套 `Stop()+Start()`，给用户一个不需要等系统睡眠/唤醒事件、也不需要退出重开整个程序的恢复手段。
 
 ### 5.3 AppState（静态全局状态）
 
@@ -285,7 +285,7 @@ ActionProcessed LastProcessedText=T   SelectionActioned=true
 `TaskbarIcon` + ContextMenu，菜单项依次：
 1. **Service: Pause/Resume** —— 切换 `IsMonitoringPaused`、切换图标（`aruatxt_active.ico`/`aruatxt_paused.ico`，paused 图标本身就是灰色）、回调 App 注销/重注册热键。**[关键]** 左键单击托盘图标（`TaskbarIcon.TrayLeftMouseUp`）与点这一项走同一个 `ToggleMonitoring` 方法，效果完全一致；`TaskbarIcon.MenuActivation` 默认值是 `RightClick`，左键不会额外弹出菜单，两者互不干扰。
 2. **Hide Menu / Show Menu** —— 切换 `IsMenuHidden`。
-3. **Reload Settings** —— 重新 Load + ApplyTheme + RegisterAll + 刷新图标。
+3. **Reload Settings** —— 重新 Load + ApplyTheme；**[关键]** 也是手动的钩子恢复入口：`App.ReloadConfig()` 内 `_hook.Stop()` + `_hook.Start()`（与 §5.2 的睡眠/唤醒自动恢复同一套动作，见那里的原因说明），给用户一个比"退出重开整个程序"更轻的手段来恢复 Windows 静默卸载 `WH_MOUSE_LL` 导致的划词菜单全局失效（不限于睡眠/唤醒触发，钩子回调超时的其它场景也可能触发，根因不在 AuraTxt 控制范围内，这只是恢复手段不是修复）。`Start()` 内部会无条件重新 `RegisterAll` 热键；**若当前 `IsMonitoringPaused==true` 则紧接着 `UnregisterAll()` 撤销**，与 `TrayIconManager.ToggleMonitoring` 的语义保持一致——否则 Reload Settings 会在用户暂停状态下悄悄把热键重新启用（曾经的真实不一致，已随本次改动一并修复）。刷新图标/菜单文案。
 4. **Settings ({编辑器名})** —— `ConfigEditor` 为空：启动 `{exe}/auracfg.exe`；非空：用该编辑器打开 config.json。菜单每次 `Opened` 时动态刷新此项标题。
 5. **About / About  ⬆ v{X}** —— 动态标题，见 §5.8。点击打开 AboutWindow。
 6. **Exit** —— `Application.Shutdown()`，上方有一条分隔线（`Separator`）与 About 隔开。
