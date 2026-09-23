@@ -7,7 +7,10 @@ namespace AuraTxt.Services;
 /// GlobalHookService's low-level mouse hook shares the main WPF thread — UI Automation
 /// (cross-process COM, can take hundreds of ms in a slow/unresponsive app) or clipboard
 /// contention blocking that thread stalls WH_MOUSE_LL's message pump, which is visible
-/// system-wide as cursor/input lag. Running Dispatcher.Run() here gives this thread a
+/// system-wide as cursor/input lag. The same applies to any WPF window's own UI thread —
+/// e.g. ResultWindow's Copy button calling Clipboard.SetText directly used to be able to
+/// freeze that window for as long as a third-party clipboard manager (Ditto etc.) held the
+/// clipboard open. Running Dispatcher.Run() here gives this thread a
 /// DispatcherSynchronizationContext, so ClipboardService's existing `await Task.Delay(...)`
 /// polling loops keep resuming on this same STA thread (required for Clipboard/UIA) without
 /// any changes to that code.
@@ -35,6 +38,6 @@ internal static class ClipboardWorkerThread
         return dispatcher!;
     }
 
-    public static Task<string> InvokeAsync(Func<Task<string>> work) =>
+    public static Task<T> InvokeAsync<T>(Func<Task<T>> work) =>
         _dispatcher.InvokeAsync(work).Task.Unwrap();
 }

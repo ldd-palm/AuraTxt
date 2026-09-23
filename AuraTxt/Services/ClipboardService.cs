@@ -207,8 +207,13 @@ public static class ClipboardService
         return false;
     }
 
+    // Dispatched to ClipboardWorkerThread like GetSelectedTextAsync below — Clipboard.SetText
+    // is a blocking OLE call, not just a throw-and-retry; if a third-party clipboard manager
+    // (Ditto etc.) is slow to release its hold, this could otherwise freeze whichever UI
+    // thread called it (e.g. ResultWindow/InteractiveWindow's Copy button) for that long.
     public static Task<bool> TrySetTextAsync(string text, int maxAttempts = 8, int delayMs = 30) =>
-        RetryClipboardOpAsync(() => System.Windows.Clipboard.SetText(text), maxAttempts, delayMs);
+        ClipboardWorkerThread.InvokeAsync(() =>
+            RetryClipboardOpAsync(() => System.Windows.Clipboard.SetText(text), maxAttempts, delayMs));
 
     // ── Replace in source window ──────────────────────────────────────────────
     public static IntPtr CaptureSourceWindow() => GetForegroundWindow();
