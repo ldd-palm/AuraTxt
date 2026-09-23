@@ -4,7 +4,6 @@ using System.Windows.Media;
 using Gma.System.MouseKeyHook;
 using AuraTxt.Core.Services;
 using AuraTxt.Windows;
-using MouseEventArgs = System.Windows.Forms.MouseEventArgs;
 
 namespace AuraTxt.Services;
 
@@ -28,9 +27,12 @@ public class GlobalHookService
     /// A plain click stays under this and is ignored — no Ctrl+C, no menu.
     private const int DragThreshold = 5;
 
-    /// Set true by OnMouseDoubleClick so the trailing MouseUp of a double-click
-    /// sequence is silently skipped rather than treated as a new drag-selection.
-    private bool _skipNextMouseUp;
+    /// Set from OnMouseDown when the down is the second half of a double-click
+    /// (MouseKeyHook reports Clicks==2 on that down event only — the paired MouseUp
+    /// always reports Clicks==1, so OnMouseUp cannot detect this on its own). Consumed
+    /// and reset at the top of the next OnMouseUp to route it to the double-click path
+    /// instead of the drag/plain-click logic.
+    private bool _isDoubleClick;
 
     public GlobalHookService(ConfigService config, HotkeyService hotkeys)
     {
@@ -43,7 +45,6 @@ public class GlobalHookService
         _hook = Hook.GlobalEvents();
         _hook.MouseDownExt     += OnMouseDown;
         _hook.MouseUpExt       += OnMouseUp;
-        _hook.MouseDoubleClick += OnMouseDoubleClick;
         _hook.KeyPress         += OnKeyPress;
         _hook.KeyDown          += OnKeyDown;
         _hotkeys.RegisterAll(_config.Load());
@@ -54,7 +55,6 @@ public class GlobalHookService
         if (_hook is null) return;
         _hook.MouseDownExt     -= OnMouseDown;
         _hook.MouseUpExt       -= OnMouseUp;
-        _hook.MouseDoubleClick -= OnMouseDoubleClick;
         _hook.KeyPress         -= OnKeyPress;
         _hook.KeyDown          -= OnKeyDown;
         _hook.Dispose();
@@ -68,6 +68,12 @@ public class GlobalHookService
         {
             if (e.Button != System.Windows.Forms.MouseButtons.Left) return;
 
+            // MouseKeyHook reports Clicks==2 only on the second down of a double-click
+            // (the library's own timing/position-based detection, applied before this
+            // event fires) — the paired MouseUp always reports Clicks==1, so this is the
+            // only place double-clicks can be detected. See OnMouseUp.
+            _isDoubleClick = e.Clicks == 2;
+
             // Record press position for the click-vs-drag test on mouse-up.
             _mouseDownPoint = new System.Drawing.Point(e.X, e.Y);
 
@@ -75,6 +81,7 @@ public class GlobalHookService
 
             var clickX = e.X;
             var clickY = e.Y;
+            var isDoubleClick = _isDoubleClick;
 
             Application.Current?.Dispatcher.BeginInvoke(() =>
             {
@@ -83,24 +90,28 @@ public class GlobalHookService
                     var menu = AppState.ActiveMenu;
                     if (menu is null || !menu.IsVisible) { _mouseDownInsideMenu = false; return; }
 
-                    if (IsPointInsideMenu(menu, clickX, clickY))
-                    {
-                        // Click inside menu bounds → do nothing (let normal click handling
-                        // run) and remember it for OnMouseUp's drag-vs-selection check.
-                        _mouseDownInsideMenu = true;
-                        return;
-                    }
-                    _mouseDownInsideMenu = false;
+                    _mouseDownInsideMenu = IsPointInsideMenu(menu, clickX, clickY);
+                    if (menu is not ActionMenuWindow actionMenu) return;
 
-                    // Click outside → deferred light-dismiss.
-                    // The 500 ms delay gives a MouseDoubleClick time to arrive and
-                    // "claim" the event, updating the menu in-place instead of closing it.
-                    // Do NOT reset LastProcessedText here — the same text is still
-                    // highlighted in the source app, and clearing it would let the
-                    // very next click re-pop the menu. The dedup cache is only
-                    // re-armed when the user actually deselects (empty selection).
-                    if (menu is ActionMenuWindow actionMenu)
+                    if (isDoubleClick)
+                    {
+                        // The second down of a double-click "claims" the menu — the
+                        // trailing MouseUp will update it in place instead of closing it,
+                        // so cancel any pending light-dismiss instead of (re)starting one.
+                        actionMenu.CancelDeferredClose();
+                    }
+                    else if (!_mouseDownInsideMenu)
+                    {
+                        // Click outside → deferred light-dismiss.
+                        // The 500 ms delay gives a double-click's second down time to
+                        // arrive and cancel it above, updating the menu in-place instead
+                        // of closing it. Do NOT reset LastProcessedText here — the same
+                        // text is still highlighted in the source app, and clearing it
+                        // would let the very next click re-pop the menu. The dedup cache
+                        // is only re-armed when the user actually deselects (empty
+                        // selection).
                         actionMenu.DeferredClose();
+                    }
                 }
                 catch { }
             });
@@ -126,36 +137,6 @@ public class GlobalHookService
             menu.Top  + menu.ActualHeight));
 
         return x >= tl.X && x <= br.X && y >= tl.Y && y <= br.Y;
-    }
-
-    // ── Double-click: capture selected word and show/update the action menu ──
-    private void OnMouseDoubleClick(object? sender, MouseEventArgs e)
-    {
-        try
-        {
-            // Cancel any pending deferred light-dismiss — this double-click
-            // "claims" the event and the menu will be updated in-place instead.
-            if (AppState.ActiveMenu is ActionMenuWindow actionMenu)
-                actionMenu.CancelDeferredClose();
-
-            // Suppress the trailing MouseUp to prevent duplicate text capture
-            // or an unwanted timer restart.
-            _skipNextMouseUp = true;
-
-            if (AppState.IsMonitoringPaused || AppState.IsMenuHidden) return;
-            if (DateTime.UtcNow < AppState.MenuSuppressUntil) return;
-            if (AppState.IsResultWindowOpen) return;
-
-            var pos = new System.Drawing.Point(e.X, e.Y);
-            AppState.SourceWindowHandle = ClipboardService.CaptureSourceWindow();
-
-            Application.Current?.Dispatcher.BeginInvoke(async () =>
-            {
-                try { await CaptureAndShowMenuAsync(pos, allowInPlaceUpdate: true); }
-                catch { }
-            });
-        }
-        catch { }
     }
 
     /// Captures the current selection and shows or updates the action menu.
@@ -201,12 +182,29 @@ public class GlobalHookService
     {
         try
         {
-            // If the preceding MouseDoubleClick already handled this, skip the
-            // trailing MouseUp to avoid a duplicate text capture or menu show.
-            if (_skipNextMouseUp) { _skipNextMouseUp = false; return; }
-
             if (AppState.IsMonitoringPaused || AppState.IsMenuHidden) return;
             if (e.Button != System.Windows.Forms.MouseButtons.Left) return;
+
+            // Consume the flag OnMouseDown set for this button's second down — the
+            // paired MouseUp always reports Clicks==1 regardless (see OnMouseDown), so
+            // this is the only way this event learns it's the tail of a double-click.
+            var wasDoubleClick = _isDoubleClick;
+            _isDoubleClick = false;
+            if (wasDoubleClick)
+            {
+                if (DateTime.UtcNow < AppState.MenuSuppressUntil) return;
+                if (AppState.IsResultWindowOpen) return;
+
+                var doubleClickPos = new System.Drawing.Point(e.X, e.Y);
+                AppState.SourceWindowHandle = ClipboardService.CaptureSourceWindow();
+
+                Application.Current?.Dispatcher.BeginInvoke(async () =>
+                {
+                    try { await CaptureAndShowMenuAsync(doubleClickPos, allowInPlaceUpdate: true); }
+                    catch { }
+                });
+                return;
+            }
 
             // Physical click-vs-drag test (first line of defense): a plain click has
             // near-zero movement between down and up. Without a drag there is no text
