@@ -6,19 +6,17 @@
         Topmost="True" ShowInTaskbar="False" SizeToContent="WidthAndHeight"
         ResizeMode="NoResize" ShowActivated="False">
 
-  <!-- Double-layer shadow: outer ambient (large blur, no offset) + inner directional -->
-  <Border CornerRadius="8">
+  <!-- Single shadow approximating the old ambient+directional double layer (BlurRadius
+       24/Opacity 0.08 halo + BlurRadius 10/ShadowDepth 2/Opacity 0.14 contact shadow) —
+       two DropShadowEffects meant two offscreen blur passes on every render for a small
+       toolbar-sized window; one pass reads the same at this size. -->
+  <Border Background="{DynamicResource MenuSurfaceFill}"
+          BorderBrush="{DynamicResource SurfaceStroke}"
+          BorderThickness="1"
+          CornerRadius="8" Padding="6,4">
     <Border.Effect>
-      <DropShadowEffect BlurRadius="24" ShadowDepth="0" Opacity="0.08" Color="Black"/>
+      <DropShadowEffect BlurRadius="14" ShadowDepth="1.5" Opacity="0.16" Color="Black"/>
     </Border.Effect>
-    <Border Background="{DynamicResource MenuSurfaceFill}"
-            BorderBrush="{DynamicResource SurfaceStroke}"
-            BorderThickness="1"
-            CornerRadius="8" Padding="6,4">
-      <Border.Effect>
-        <DropShadowEffect BlurRadius="10" ShadowDepth="2" Opacity="0.14" Color="Black"/>
-      </Border.Effect>
-      <StackPanel x:Name="IconPanel" Orientation="Horizontal" VerticalAlignment="Center"/>
-    </Border>
+    <StackPanel x:Name="IconPanel" Orientation="Horizontal" VerticalAlignment="Center"/>
   </Border>
 </Window>
