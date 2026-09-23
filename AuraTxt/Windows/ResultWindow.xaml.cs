@@ -81,7 +81,7 @@ public partial class ResultWindow : Window
         Closed += (_, _) =>
         {
             AppState.IsResultWindowOpen = false;
-            AppState.MenuSuppressUntil  = DateTime.UtcNow.AddSeconds(2);
+            AppState.MenuSuppressUntil  = DateTime.UtcNow.AddMilliseconds(AppState.ResultWindowClosedCooldownMs);
             _streamCts?.Cancel();
         };
         Deactivated += (_, _) => SafeClose();

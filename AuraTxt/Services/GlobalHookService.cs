@@ -1,3 +1,4 @@
+using System.Threading;
 using System.Windows;
 using System.Windows.Forms;
 using System.Windows.Media;
@@ -34,6 +35,31 @@ public class GlobalHookService
     /// instead of the drag/plain-click logic.
     private bool _isDoubleClick;
 
+    /// Guards against a slow selection-capture (UIA + Ctrl+C fallback can take up to
+    /// ~450ms) completing after the user has already moved on — e.g. started typing, or
+    /// begun a new gesture — and popping a menu they no longer want. All access happens
+    /// on the UI thread (Dispatcher), so no locking is needed.
+    private CancellationTokenSource? _triggerCts;
+
+    /// Cancels and clears any in-flight selection-capture, without starting a new one.
+    /// Called whenever the user does something that makes a pending/about-to-appear menu
+    /// stale: any mouse-down, or a key that dismisses the menu.
+    private void CancelTrigger()
+    {
+        if (_triggerCts is null) return;
+        _triggerCts.Cancel();
+        _triggerCts.Dispose();
+        _triggerCts = null;
+    }
+
+    /// Cancels any in-flight capture and returns a token for a new one.
+    private CancellationToken NewTriggerToken()
+    {
+        CancelTrigger();
+        _triggerCts = new CancellationTokenSource();
+        return _triggerCts.Token;
+    }
+
     public GlobalHookService(ConfigService config, HotkeyService hotkeys)
     {
         _config  = config;
@@ -67,6 +93,12 @@ public class GlobalHookService
         try
         {
             if (e.Button != System.Windows.Forms.MouseButtons.Left) return;
+
+            // A new gesture is starting anywhere on screen — any selection-capture still
+            // in flight from a previous one is now stale and must not pop a menu once it
+            // finishes. Unconditional (not gated on an existing menu) since the capture
+            // this cancels may not have produced a menu yet either.
+            Application.Current?.Dispatcher.BeginInvoke(CancelTrigger);
 
             // MouseKeyHook reports Clicks==2 only on the second down of a double-click
             // (the library's own timing/position-based detection, applied before this
@@ -140,9 +172,12 @@ public class GlobalHookService
     }
 
     /// Captures the current selection and shows or updates the action menu.
-    /// Shared by the drag-selection (OnMouseUp) and double-click paths, which only
-    /// differ in whether an already-visible menu may be updated in place.
-    private async Task CaptureAndShowMenuAsync(System.Drawing.Point pos, bool allowInPlaceUpdate)
+    /// Shared by the drag-selection (OnMouseUp) and double-click paths. `allowInPlaceUpdate`
+    /// no longer gates whether an existing menu may be reused (a visible menu is always
+    /// reused now, for both paths — see below) — it only relaxes the text-match dedup
+    /// guard for double-click, letting the user re-double-click the same already-processed
+    /// word to reopen a menu that was dismissed, which a drag-reselection shouldn't do.
+    private async Task CaptureAndShowMenuAsync(System.Drawing.Point pos, bool allowInPlaceUpdate, CancellationToken token)
     {
         if (AppState.IsResultWindowOpen) return;
 
@@ -152,6 +187,12 @@ public class GlobalHookService
         if (GameDetectionService.ShouldSkip(cfg.Settings)) return;
 
         var text = await ClipboardService.GetSelectedTextAsync(cfg.Settings.MenuTriggerDelayMs);
+
+        // The user has since started a new gesture or dismissed the menu (see
+        // CancelTrigger) — this result is stale. Discard silently, without touching the
+        // selection state machine (it's already been updated, or will be, by whatever
+        // superseded this attempt).
+        if (token.IsCancellationRequested) return;
 
         // Empty selection → re-arm dedup cache.
         if (string.IsNullOrWhiteSpace(text)) { AppState.MarkDeselected(); return; }
@@ -164,14 +205,18 @@ public class GlobalHookService
 
         AppState.MarkNewSelection(text);
 
-        if (allowInPlaceUpdate && AppState.ActiveMenu is ActionMenuWindow existing && existing.IsVisible)
+        if (AppState.ActiveMenu is ActionMenuWindow existing && existing.IsVisible)
         {
-            // In-place update: reposition and rebuild content.
+            // Reuse the visible menu instead of creating a second one, regardless of which
+            // path got here — a drag-selection landing while the previous menu is still
+            // alive (e.g. mid its own DeferredClose countdown) used to always create a
+            // brand-new window here, so both were on screen at once for a moment (flicker).
+            existing.CancelDeferredClose();
             existing.UpdateMenu(text, pos);
         }
         else
         {
-            // No menu visible (or in-place update not allowed) → create new one.
+            // No menu visible → create new one.
             var menu = new ActionMenuWindow(cfg, text, pos);
             menu.Show();
         }
@@ -200,7 +245,11 @@ public class GlobalHookService
 
                 Application.Current?.Dispatcher.BeginInvoke(async () =>
                 {
-                    try { await CaptureAndShowMenuAsync(doubleClickPos, allowInPlaceUpdate: true); }
+                    try
+                    {
+                        var token = NewTriggerToken();
+                        await CaptureAndShowMenuAsync(doubleClickPos, allowInPlaceUpdate: true, token);
+                    }
                     catch { }
                 });
                 return;
@@ -259,7 +308,8 @@ public class GlobalHookService
                         IsPointInsideMenu(menu, pos.X, pos.Y))
                         return;
 
-                    await CaptureAndShowMenuAsync(pos, allowInPlaceUpdate: false);
+                    var token = NewTriggerToken();
+                    await CaptureAndShowMenuAsync(pos, allowInPlaceUpdate: false, token);
                 }
                 catch { }
             });
@@ -273,8 +323,13 @@ public class GlobalHookService
     private void OnKeyPress(object? sender, KeyPressEventArgs e)
     {
         if (char.IsControl(e.KeyChar)) return;
-        if (AppState.ActiveMenu is ActionMenuWindow menu)
-            Application.Current.Dispatcher.BeginInvoke(() => menu.CloseNow());
+        Application.Current?.Dispatcher.BeginInvoke(() =>
+        {
+            // Also cancel any capture still in flight — even if no menu exists yet, the
+            // user has moved on to typing and it shouldn't pop one up once it finishes.
+            CancelTrigger();
+            if (AppState.ActiveMenu is ActionMenuWindow menu) menu.CloseNow();
+        });
     }
 
     private static readonly HashSet<Keys> ModifierKeyCodes = new()
@@ -309,7 +364,11 @@ public class GlobalHookService
                    || e.KeyCode is Keys.Back or Keys.Delete or Keys.LWin or Keys.RWin
                    || (e.Alt && e.KeyCode is Keys.Tab or Keys.F4);
         if (!dismiss) return;
-        if (AppState.ActiveMenu is ActionMenuWindow menu)
-            Application.Current.Dispatcher.BeginInvoke(() => menu.CloseNow());
+        Application.Current?.Dispatcher.BeginInvoke(() =>
+        {
+            // Also cancel any capture still in flight — see OnKeyPress.
+            CancelTrigger();
+            if (AppState.ActiveMenu is ActionMenuWindow menu) menu.CloseNow();
+        });
     }
 }

@@ -51,15 +51,22 @@ public static class ClipboardService
     private const byte VK_C           = 0x43;
     private const uint KEYEVENTF_KEYUP = 0x0002;
 
+    // Tags every key AuraTxt injects via keybd_event with a fixed marker in dwExtraInfo.
+    // MouseKeyHook's KeyEventArgs doesn't surface this field, so GlobalHookService.OnKeyDown
+    // still tells our own synthetic Ctrl+C apart from a real one via the _syntheticCtrlCUntil
+    // time window, not this marker — this is prep for a future low-level keyboard hook
+    // (stage 3) that reads KBDLLHOOKSTRUCT.dwExtraInfo directly and can match precisely.
+    private static readonly UIntPtr AuraExtraInfo = (UIntPtr)0x41555241; // 'AURA'
+
     /// True if vKey is physically held down right now (high bit of GetAsyncKeyState).
     private static bool IsPhysicallyDown(byte vKey) => (GetAsyncKeyState(vKey) & 0x8000) != 0;
 
     private static void PressCtrlC()
     {
-        keybd_event(VK_CONTROL, 0, 0,               UIntPtr.Zero);
-        keybd_event(VK_C,       0, 0,               UIntPtr.Zero);
-        keybd_event(VK_C,       0, KEYEVENTF_KEYUP,  UIntPtr.Zero);
-        keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP,  UIntPtr.Zero);
+        keybd_event(VK_CONTROL, 0, 0,               AuraExtraInfo);
+        keybd_event(VK_C,       0, 0,               AuraExtraInfo);
+        keybd_event(VK_C,       0, KEYEVENTF_KEYUP,  AuraExtraInfo);
+        keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP,  AuraExtraInfo);
     }
 
     // Set by GlobalHookService.OnKeyDown when it observes a real, physical Ctrl+C.
@@ -224,10 +231,10 @@ public static class ClipboardService
                 LogService.Error($"Replace: foreground changed away from {hwnd} before paste");
                 return;
             }
-            keybd_event(VK_CONTROL, 0, 0,              UIntPtr.Zero);
-            keybd_event(0x56,       0, 0,              UIntPtr.Zero);  // V
-            keybd_event(0x56,       0, KEYEVENTF_KEYUP, UIntPtr.Zero);
-            keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+            keybd_event(VK_CONTROL, 0, 0,              AuraExtraInfo);
+            keybd_event(0x56,       0, 0,              AuraExtraInfo);  // V
+            keybd_event(0x56,       0, KEYEVENTF_KEYUP, AuraExtraInfo);
+            keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, AuraExtraInfo);
         }
         catch { }
     }

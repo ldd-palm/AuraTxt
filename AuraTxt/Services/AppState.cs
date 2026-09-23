@@ -2,6 +2,17 @@ namespace AuraTxt.Services;
 
 public static class AppState
 {
+    // ── Menu re-trigger cooldowns (SPEC.md §5.4) ────────────────────────────
+    // Different dismiss causes get different cooldowns: a keyboard dismiss just needs
+    // enough buffer to avoid a same-instant re-pop race while the user starts typing;
+    // an action being taken needs enough time for its ResultWindow/InteractiveWindow (or
+    // system action) to actually happen before a new selection is allowed to trigger
+    // another menu; that result window's own close needs a similar but independently
+    // timed buffer against the click that closed it.
+    public const int KeyboardDismissCooldownMs    = 150;
+    public const int ActionTakenCooldownMs        = 400;
+    public const int ResultWindowClosedCooldownMs = 300;
+
     public static bool IsMonitoringPaused { get; set; }
     public static bool IsMenuHidden       { get; set; }
 

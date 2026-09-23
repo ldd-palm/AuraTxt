@@ -160,26 +160,27 @@ class ActionItem {
 
 ### 5.2 划词触发（GlobalHookService）
 
-订阅 MouseKeyHook 全局事件：`MouseDownExt`、`MouseUpExt`、`MouseDoubleClick`、`KeyPress`、`KeyDown`。
+订阅 MouseKeyHook 全局事件：`MouseDownExt`、`MouseUpExt`、`KeyPress`、`KeyDown`（**没有** `MouseDoubleClick`——见下方"双击检测"）。
 
-**MouseDown**：记录按下坐标（物理像素）。若浮动菜单可见且点击在菜单矩形外 → `DeferredClose()`（见 §7.1）。菜单矩形比较时须把窗口 DIP 坐标经 `TransformToDevice` 转为物理像素。
+**[关键] 双击检测必须在 MouseDown 做，不能在 MouseUp 做**：MouseKeyHook 的 `MouseListener.ProcessUp` 先触发 `OnUp/OnUpExt`（即 `MouseUpExt`→`OnMouseUp`），**之后**才检查并触发 `MouseDoubleClick`；而且双击第二次 `MouseUp` 事件自身的 `e.Clicks` 恒为 1（只有配对的第二次 `MouseDown` 的 `e.Clicks` 才是 2，由库自身基于时间/位置的判定生成，与原始 `WM_LBUTTONDBLCLK` 无关）——`OnMouseUp` 完全无法凭自己的事件参数判断这是不是双击。早期实现订阅了 `MouseDoubleClick` 并用 `_skipNextMouseUp` 标志跳过尾随的 `MouseUp`，但由于上述触发顺序，标志位是在对应的 `MouseUp` 已经处理完之后才被置位的，结果残留下来吞掉了用户下一次真实的 `MouseUp`（例如双击选词后紧接着拖选另一段文字，菜单不更新）——已修复：`OnMouseDown` 把 `e.Clicks==2` 存进字段 `_isDoubleClick`，`OnMouseUp` 开头消费并清零该字段来判断这是不是双击的尾声，`MouseDoubleClick` 事件与 `_skipNextMouseUp` 字段均已移除。
 
-**MouseUp（拖拽划词）**，按序检查：
-1. `_skipNextMouseUp`（双击后的尾随 MouseUp）→ 跳过。
-2. `IsMonitoringPaused || IsMenuHidden` → 返回。
-3. 非左键 → 返回。
+**MouseDown**：
+1. **[关键] 取消任何在途的取词**：无条件 `Dispatcher.BeginInvoke(CancelTrigger)`（见下方"取消令牌"），不论此刻是否有可见菜单——上一次拖拽/双击触发的取词可能还没跑完就被新手势打断，不能让它稍后完成时弹出一个用户已经不想要的菜单。
+2. 记录 `_isDoubleClick = e.Clicks == 2`（见上）与按下坐标（物理像素）。
+3. 若浮动菜单可见：点击点落在菜单矩形内只记录 `_mouseDownInsideMenu=true`；落在外面且**不是**双击 → `DeferredClose()`（见 §7.1）；若**是**双击 → `CancelDeferredClose()`（双击的第二次按下"认领"了菜单，即将原地更新，不该被延迟关闭抢跑）。菜单矩形比较时须把窗口 DIP 坐标经 `TransformToDevice` 转为物理像素。
+
+**MouseUp**，按序检查：
+1. `IsMonitoringPaused || IsMenuHidden` → 返回。
+2. 非左键 → 返回。
+3. **消费 `_isDoubleClick`**：若为真（这是双击的尾声）→ 检查 `MenuSuppressUntil`/`IsResultWindowOpen`，记录 `SourceWindowHandle`，`Dispatcher.BeginInvoke` 异步取新取消令牌（`NewTriggerToken()`）后调用 `CaptureAndShowMenuAsync(pos, allowInPlaceUpdate: true, token)`，返回。
 4. **[关键] 位移判定**：`|dx|<5 && |dy|<5` 视为纯点击，不碰剪贴板直接处理"平点击"逻辑（见选区状态机 §5.4）后返回。
 5. `MenuSuppressUntil` 冷却中 → 返回；`IsResultWindowOpen` → 返回。
 6. **[关键] 菜单内拖拽豁免**：ActionMenuWindow 拖动 Logo 走 `DragMove()`（见 §7.1），全局钩子只看得到"按下→大位移→抬起"，和真实划词拖拽在坐标层面完全无法区分。`OnMouseDown` 记录按下点是否落在 `AppState.ActiveMenu` 范围内（`_mouseDownInsideMenu`）；`OnMouseUp` 里若该标志为真，且抬起点用 `IsPointInsideMenu` 重新按菜单**当前**位置（DragMove 期间菜单跟着光标移动，位置已变）判定仍在范围内，则直接返回，不当作划词处理——避免拖动菜单本身被误判成新选区从而把正在拖的菜单顶掉/闪烁。二者共用的 `IsPointInsideMenu` 静态方法与步骤 6 之前 MouseDown 用来判断"点击是否在菜单外"的矩形比较逻辑相同（DIP→物理像素经 `TransformToDevice`）。
-7. Dispatcher.BeginInvoke 异步调用 `CaptureAndShowMenuAsync(pos, allowInPlaceUpdate: false)`（见下）。
+7. Dispatcher.BeginInvoke 异步取新取消令牌后调用 `CaptureAndShowMenuAsync(pos, allowInPlaceUpdate: false, token)`（见下）。
 
-**MouseDoubleClick（双击选词）**：
-1. 取消挂起的 DeferredClose（双击"认领"了这次点击）。
-2. 置 `_skipNextMouseUp=true`。
-3. 同样的 Paused/Hidden/冷却/ResultWindow 检查。
-4. Dispatcher.BeginInvoke 异步调用 `CaptureAndShowMenuAsync(pos, allowInPlaceUpdate: true)`。
+**`CaptureAndShowMenuAsync(pos, allowInPlaceUpdate, token)`**（MouseUp 拖拽与双击尾声共用的取词/弹菜单逻辑，避免两份实现分叉）：`IsResultWindowOpen` 检查后，**先经 `GameDetectionService.ShouldSkip(cfg.Settings)`**（见 §5.2.1）过滤，命中则直接返回、完全不碰剪贴板 → 取文本（§5.5）→ **[关键] `token.IsCancellationRequested` 则直接丢弃结果返回**（不碰 `AppState`——用户已经开始新手势或已关闭菜单，见下方"取消令牌"，选区状态机的收尾交给那个后来居上的操作）→ 空文本则 `AppState.MarkDeselected()` 并返回 → 若文本与 `LastProcessedText` 相同且（`allowInPlaceUpdate=false` 或菜单仍可见）→ 直接返回（去重；`allowInPlaceUpdate` 现在只控制这条去重豁免——双击可以重选同一个词把已关闭的菜单重新弹出来，拖拽不行——不再控制是否可以原地更新，见下一条）→ 否则 `AppState.MarkNewSelection(text)`（重置 `SelectionActioned=false`）→ **[关键] 只要当前有可见菜单就原地更新**（`CancelDeferredClose()` + `UpdateMenu(text,pos)`），不论 `allowInPlaceUpdate` 是拖拽路径的 false 还是双击路径的 true——否则拖拽划出新选区时，若上一个菜单还没等到自己的 `DeferredClose()` 超时（见 §7.1），会被当场新建一个窗口顶在旧菜单上面，两个菜单同时闪现一瞬；无可见菜单时新建 ActionMenuWindow。**[关键]** 两条路径共用同一份实现，保证"新选区重置 SelectionActioned"这一步不会像早期分叉实现那样只在拖拽路径生效、双击路径遗漏（曾是真实 bug）。
 
-**`CaptureAndShowMenuAsync(pos, allowInPlaceUpdate)`**（MouseUp 拖拽与 MouseDoubleClick 共用的取词/弹菜单逻辑，避免两份实现分叉）：`IsResultWindowOpen` 检查后，**先经 `GameDetectionService.ShouldSkip(cfg.Settings)`**（见 §5.2.1）过滤，命中则直接返回、完全不碰剪贴板 → 取文本（§5.5）→ 空文本则 `AppState.MarkDeselected()` 并返回 → 若文本与 `LastProcessedText` 相同且（`allowInPlaceUpdate=false` 或菜单仍可见）→ 直接返回（去重）→ 否则 `AppState.MarkNewSelection(text)`（重置 `SelectionActioned=false`）→ `allowInPlaceUpdate=true` 且已有可见菜单时 `UpdateMenu(text,pos)` 原地更新，否则新建 ActionMenuWindow。**[关键]** 两条路径共用同一份实现，保证"新选区重置 SelectionActioned"这一步不会像早期分叉实现那样只在拖拽路径生效、双击路径遗漏（曾是真实 bug）。
+**[关键] 取消令牌（防止过期取词结果延迟弹出）**：`GlobalHookService` 持有 `_triggerCts`（`CancellationTokenSource?`，仅在 UI 线程读写，不加锁）。`NewTriggerToken()`（取消并释放旧的、创建新的、返回其 token）在每次即将调用 `CaptureAndShowMenuAsync` 前取用；`CancelTrigger()`（只取消不新建）在任意 `MouseDown`（见上）与键盘关闭菜单（`KeyPress` 可打印字符、`KeyDown` 的 dismiss 分支，见下）时调用——即使此刻还没有可见菜单也要取消，因为取词本身可能还在跑（UI Automation + 模拟 Ctrl+C 兜底合计可达约 450ms），用户已经开始打字或换了个操作目标，不该让这次迟到的结果凭空弹出一个菜单。
 
 ### 5.2.1 游戏/全屏应用豁免（GameDetectionService）[关键]
 
@@ -198,7 +199,8 @@ class ActionItem {
   - `Back/Delete/LWin/RWin` 或 `Alt+Tab`/`Alt+F4` 时关闭菜单。
   - **[关键]** 任意真实的 `Ctrl+<非修饰键>` 组合（Ctrl+C/V/X/Z/B/... 等标准编辑快捷键，泛化判定、不逐个枚举）或 `Shift+Insert`（老式粘贴）同样关闭菜单——按这类快捷键说明用户意图是常规剪贴板/编辑操作而非对选中文本使用 action，菜单继续悬浮没有意义（Shift+Delete 剪切已被前一条 `Keys.Delete` 无条件覆盖，无需单独判断）。
   - 该判定必须排除"自己模拟出来的 Ctrl+C"（`ClipboardService.IsSyntheticCtrlCInFlight()`，见 §5.5），否则双击切词触发的原地更新捕获过程中若命中 Ctrl+C 模拟兜底，会把仍在原地更新中的旧菜单误判为"用户手动按了 Ctrl+C"而关闭，产生闪烁。
-- 关闭统一走 `Dispatcher.BeginInvoke(() => menu.CloseNow())`。
+- `KeyPress`/`KeyDown` 的关闭分支都先 `CancelTrigger()`（见上方"取消令牌"）再关菜单——即使此刻没有可见菜单，也要作废还在跑的取词，防止它稍后完成时凭空弹出一个用户已经不想要的菜单（打字场景，P3）。
+- 关闭统一走 `Dispatcher.BeginInvoke(() => { CancelTrigger(); menu.CloseNow(); })`。
 
 **[关键] 睡眠/唤醒后钩子恢复**：Windows 在系统睡眠/唤醒前后可能静默卸载低级钩子（`WH_MOUSE_LL`，本服务依赖的 `SetWindowsHookEx`）——可能是唤醒过程中回调超过 LowLevelHooksTimeout，也可能是钩子链中其他进程的钩子在挂起期间被破坏。而 `HotkeyService` 走的 `RegisterHotKey`/`WM_HOTKEY` 是完全不同的机制，不受影响，唤醒后热键仍可用但划词菜单失效，正是此故障的典型表现。修复：`App.xaml.cs` 订阅 `Microsoft.Win32.SystemEvents.PowerModeChanged`，在 `PowerModes.Resume` 时通过 `Dispatcher.BeginInvoke` 回到 UI 线程执行 `_hook.Stop()` + `_hook.Start()` 重新安装钩子（`Start()` 内部也会重新 `RegisterAll` 热键，相当于顺带恢复任何被静默丢弃的热键）。`OnExit` 必须 `-=` 取消订阅，否则 `SystemEvents` 的静态订阅会跨进程生命周期泄漏。
 
@@ -208,7 +210,7 @@ class ActionItem {
 |------|------|
 | IsMonitoringPaused | 暂停划词监控（托盘 Pause）；同时注销全部热键 |
 | IsMenuHidden | 只隐藏弹出菜单，热键仍生效 |
-| MenuSuppressUntil (DateTime) | 冷却：动作触发/窗口关闭后 2s 内不重弹菜单 |
+| MenuSuppressUntil (DateTime) | 冷却：不同关闭原因用不同时长（见下），期间不重弹菜单 |
 | IsResultWindowOpen | 结果窗口开启期间钩子忽略 MouseUp |
 | LastProcessedText | 去重缓存：同文本不重复弹菜单 |
 | ActiveMenu (Window?) | 当前可见菜单引用，light-dismiss 用 |
@@ -219,6 +221,11 @@ class ActionItem {
 | SourceWindowHandle (IntPtr) | 触发动作前记录的源窗口句柄；Replace 按钮用此 HWND 切回源窗口并模拟 Ctrl+V |
 
 **写入约束 [关键]**：`LastProcessedText`/`SelectionActioned` 只应通过 `AppState.MarkDeselected()`/`MarkNewSelection(text)`/`MarkActionTaken()` 三个方法写入（见 §5.4），不要在别处直接赋值——早期分散赋值的实现曾导致双击路径遗漏重置 `SelectionActioned`（已修复）。
+
+**冷却时长常量 [关键]**（原先统一 2s，曾导致"关闭结果窗/打字关闭菜单后短时间内划词不弹"，已按关闭原因拆分更短的值）：
+- `KeyboardDismissCooldownMs = 150`：`ActionMenuWindow.CloseNow()`（键盘触发的关闭，见 §5.2）专用——用户是要接着打字，只需要防住同一瞬间的重弹竞态，不需要长冷却。
+- `ActionTakenCooldownMs = 400`：`ActionMenuWindow.SafeClose()` 默认值（点击 action 按钮、`ExecuteSystemAction` 执行系统动作时用，见 §7.1）。
+- `ResultWindowClosedCooldownMs = 300`：`ResultWindow`/`InteractiveWindow` 的 `Closed` 事件专用（见 §7.2）——防的是"关闭结果窗时那次点击触发划词"，平点击本来就不会触发菜单，300ms 足够。
 
 ### 5.4 选区状态机 [关键]
 
@@ -246,8 +253,8 @@ ActionProcessed LastProcessedText=T   SelectionActioned=true
 2. 未命中 → `Task.Delay(delayMs)` 后重试一次 UI Automation（给较慢的应用一点时间）。仍未命中 → 进入第 3 级。
 3. **模拟 Ctrl+C**（`TryClipboardAsync`）：
    - **[关键] 与真实 Ctrl+C 冲突规避**：若最近 600ms 内 `ClipboardService.NotifyRealCtrlC()` 被调用过（由 `GlobalHookService.OnKeyDown` 在观测到真实 `Ctrl+C` 按键时触发），说明用户刚手动按过真实 Ctrl+C——此时完全跳过下面的 Clear/模拟按键/恢复流程，只轮询剪贴板序号变化（最多 300ms）后直接读取。**原因**：若仍自行注入一次合成 Ctrl+C，会与用户真实的物理按键在系统输入流里交叠，导致前台应用的修饰键状态被合成的 `Ctrl↑` 提前"释放"，随后真实的 `C` 键被当作无 Ctrl 修饰的裸字符交付，选区被替换成字面的 "c"（曾经的真实 bug，已修复）。
-   - 否则按原逻辑：备份剪贴板现有文本 `prev`；`Clipboard.Clear()`；记录 `seqBefore = GetClipboardSequenceNumber()`（user32 P/Invoke）；**在调用 `PressCtrlC()` 前**设置 `_syntheticCtrlCUntil = now + 200ms`（对外暴露为 `IsSyntheticCtrlCInFlight()`），供 `GlobalHookService.OnKeyDown` 区分"这是自己刚模拟的按键"，避免误判成真实 Ctrl+C（见 §5.2 的菜单误关闭场景）。
-   - **[关键]** 用 `keybd_event`（P/Invoke：Ctrl down, C down, C up, Ctrl up）模拟按键。**禁止用 SendKeys**——`SendWait` 在无 WinForms 消息循环的 STA 线程必然失败且异常被吞。
+   - **在调用 `PressCtrlC()` 前**设置 `_syntheticCtrlCUntil = now + 100ms`（对外暴露为 `IsSyntheticCtrlCInFlight()`），供 `GlobalHookService.OnKeyDown` 区分"这是自己刚模拟的按键"，避免误判成真实 Ctrl+C（见 §5.2 的菜单误关闭场景）；这个窗口只需要盖住"`keybd_event` 注入 → 本地低级钩子观测到"这段同机 OS 调度延迟（实测几毫秒量级），留太长反而会让紧跟着到达的一次真实 Ctrl+C 被误判成自己模拟的、进而被静默吞掉。
+   - **[关键]** 用 `keybd_event`（P/Invoke：Ctrl down, C down, C up, Ctrl up）模拟按键，第四参数 `dwExtraInfo` 固定传 `AuraExtraInfo = 0x41555241`（'AURA'）——MouseKeyHook 的 `KeyEventArgs` 目前不暴露这个字段，所以匹配仍然靠上面的时间窗口，这个标记只是为将来自建低级键盘钩子（能直接读 `KBDLLHOOKSTRUCT.dwExtraInfo`）预留的精确匹配手段，`ClipboardPasteService`（§9.7）的按键注入用的是同一个常量。**禁止用 SendKeys**——`SendWait` 在无 WinForms 消息循环的 STA 线程必然失败且异常被吞。
    - **序号轮询**：每 25ms 检查序号是否变化，最多 300ms。
    - 读取剪贴板文本，记录 `seqAfterRead`。
    - **[关键] finally 恢复策略**：只在 `seqAfterRead==0`（读取前异常）或当前序号 == `seqAfterRead`（无人后续写入）时恢复 `prev`；序号已变说明用户/他人写了剪贴板，**不得覆盖**。
@@ -448,10 +455,9 @@ LogService：静态类，`Enabled`+`LogPath` 控制；`Info/Error/Raw` 三个方
   1. 物理像素 → DIP：优先 `PresentationSource.CompositionTarget.TransformFromDevice`，fallback `VisualTreeHelper.GetDpi`。
   2. 放光标右上方（估算尺寸 220×44 先 clamp 到 WorkArea）。
   3. BuildMenu + UpdateLayout 后用 `ActualWidth/ActualHeight` **二次 clamp**（动作多时估算不够宽）。
-- **延迟关闭（DeferredClose）[关键]**：点击菜单外/Deactivated 不立即关，而是启动 500ms 可取消延时（CancellationTokenSource）。期间若 MouseDoubleClick 到达 → 取消关闭并 `UpdateMenu()` 原地更新（重定位+重建按钮，期间置 `IsMenuUpdating=true` 防误关）。
-- `SafeClose(bool applySuppress = true)`：`_ready/_closing/IsMenuUpdating` 守卫；`applySuppress=true` 时设 2s `MenuSuppressUntil`。**[关键]** 延迟关闭路径用 `SafeClose(false)`——light-dismiss 不设冷却，否则点掉菜单后 2s 内无法重新双击同词。按钮点击与键盘关闭（CloseNow）用默认 true。
+- **延迟关闭（DeferredClose）[关键]**：点击菜单外/Deactivated 不立即关，而是启动 500ms 可取消延时（CancellationTokenSource）。期间若双击的第二次 `MouseDown` 到达（见 §5.2，不再是独立的 `MouseDoubleClick` 事件）→ `CancelDeferredClose()`，尾随的 `MouseUp` 触发 `UpdateMenu()` 原地更新（重定位+重建按钮，期间置 `IsMenuUpdating=true` 防误关）。
+- `SafeClose(int? suppressMs = AppState.ActionTakenCooldownMs)`：`_ready/_closing/IsMenuUpdating` 守卫；`suppressMs` 非 null 时把 `MenuSuppressUntil` 设到那么多毫秒之后。**[关键]** 延迟关闭路径用 `SafeClose(suppressMs: null)`——light-dismiss 不设冷却，否则点掉菜单后短时间内无法重新双击同词。按钮点击 / `ExecuteSystemAction` 用默认值（`AppState.ActionTakenCooldownMs`，见 §5.3）；键盘关闭 `CloseNow()` 改用更短的 `AppState.KeyboardDismissCooldownMs`（`SafeClose(AppState.KeyboardDismissCooldownMs)`）——三处的守卫全部收敛在 `SafeClose` 一处，调用方即使因 `_closing` 已为真而无效关闭，也不会误设一次冷却。
 - 点击 AI action：`SafeClose()` + `HotkeyService.ShowResultFor(...)`。系统 action：copy → 剪贴板写 `_selectedText`（**try/catch**，剪贴板可能被占用）；speech → `SpeechService.Speak`；google → `Process.Start` 打开 `https://www.google.com/search?q={EscapeDataString(_selectedText)}`（`UseShellExecute=true`，try/catch）。
-- `OnPreviewKeyDown`：Ctrl+C → 复制 `_selectedText`（try/catch）并 Handled（菜单被激活时——如拖动后——也能复制）。
 - Closed 时将 `AppState.ActiveMenu` 置空（仅当仍指向自己）。
 
 ### 7.2 ResultWindow（非交互结果窗）
@@ -465,7 +471,7 @@ LogService：静态类，`Enabled`+`LogPath` 控制；`Info/Error/Raw` 三个方
   - `PromptService.Resolve(action.Prompt)` 得到 prompt 文本；占位符替换：`{SelectedText}`→选中文本，`{UserInput}`→空串，`{TargetLanguage}`→`Settings.TargetLanguage`（原始代码如 `"zh-CN"`/`"de"`，不转换成语言名称，缺省回落 `"zh-CN"`）。**[关键]** system prompt 只经 `PromptService.Resolve`，不做任何占位符替换——`{SelectedText}`/`{UserInput}`/`{TargetLanguage}` 写在 system prompt 里不会被替换，会原样输出。
   - 显示 "Processing…"，调用 `AiClient.StreamAsync(providerId, provider, model, action, selectedText, "", ct)`。内置模型（Google_Translate/Deepl_Translate/Youdao_Dict/WordReference_Dict/Oxford_Dict）在 AiClient 内部拦截路由，不需要 ResultWindow 特殊处理。
   - `await foreach` 流式 delta，**首个 chunk 到达时先清空再 AppendText**；持 `CancellationTokenSource`，重跑/关窗时 Cancel；`OperationCanceledException` 静默；其他异常追加 `[Error] {message}`（含 inner）。
-- 关闭行为：`Closed` → `IsResultWindowOpen=false`、`MenuSuppressUntil=+2s`、取消流。`Deactivated` → `SafeClose()`；`SafeClose` 受 `_closing/_editing/_pinned` 三守卫（Pin 按钮切换 `_pinned`，未 pin 时点击外部即关）。
+- 关闭行为：`Closed` → `IsResultWindowOpen=false`、`MenuSuppressUntil = now + AppState.ResultWindowClosedCooldownMs`（见 §5.3）、取消流。`Deactivated` → `SafeClose()`；`SafeClose` 受 `_closing/_editing/_pinned` 三守卫（Pin 按钮切换 `_pinned`，未 pin 时点击外部即关）。
 - **键盘 [关键]**：`PreviewKeyDown`（隧道事件，必须用 Preview——TextBox 会吞 KeyDown）：Esc 关闭；其余单字母快捷键 P(Edit)/G(Regen)/R(Replace)/C(CopyAll)/T(Pin) **仅在无修饰键且焦点不在可编辑 TextBox 时生效**——保证 Ctrl+C 隧道到 TextBox 复制选区、输入框打字不被劫持。
 - **Replace ↩️(R) [关键]**：点击时先保存 `text=ResultText.Text`、`hwnd=AppState.SourceWindowHandle`，然后**先 `Close()`**，再 `await ReplaceInSourceWindowAsync(hwnd, text)`。顺序至关重要——结果窗若仍可见时调 `SetForegroundWindow` 会与 OS 焦点管理竞争导致失败；窗口关闭后 OS 自然归还焦点给源窗口，再显式 `SetForegroundWindow` 更可靠。`ReplaceInSourceWindowAsync` 内：写剪贴板 → `SetForegroundWindow(hwnd)` → `Task.Delay(150ms)` → `keybd_event(Ctrl+V)` → 关闭（已在调用前完成）。HWND 来源：鼠标路径由 GlobalHookService 在 `Dispatcher.BeginInvoke` 前捕获；**热键路径由 `HotkeyService.FireActionAsync` 在首个 await 前捕获**。
 - Edit Prompt：内置模型 → 只读弹窗提示"内置模型不支持自定义 prompt，目标语言是 X"；AI 模型 → `PromptEditDialog` 编辑当前 prompt 文本，确认后立即重跑。弹窗期间 `_editing=true` 防 Deactivated 误关父窗。

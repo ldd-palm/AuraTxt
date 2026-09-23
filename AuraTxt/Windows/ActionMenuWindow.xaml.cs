@@ -190,7 +190,7 @@ public partial class ActionMenuWindow : Window
     {
         try { await Task.Delay(500, ct); }
         catch (OperationCanceledException) { return; }
-        SafeClose(applySuppress: false);  // light-dismiss: don't block immediate re-trigger
+        SafeClose(suppressMs: null);  // light-dismiss: don't block immediate re-trigger
     }
 
     /// <summary>Cancels any pending deferred close.</summary>
@@ -223,18 +223,27 @@ public partial class ActionMenuWindow : Window
         finally { AppState.IsMenuUpdating = false; }
     }
 
-    private void SafeClose(bool applySuppress = true)
+    /// Closes the window. `suppressMs` sets AppState.MenuSuppressUntil that many ms into
+    /// the future (default: AppState.ActionTakenCooldownMs, for "an action was taken");
+    /// pass null to skip the cooldown entirely (the light-dismiss path, which must allow
+    /// an immediate re-trigger). Funnelling every caller through one guarded write avoids
+    /// a caller setting the cooldown when the close itself was a no-op (already closing).
+    private void SafeClose(int? suppressMs = AppState.ActionTakenCooldownMs)
     {
         if (!_ready || _closing) return;
         if (AppState.IsMenuUpdating) return;
         _closing = true;
-        if (applySuppress)
-            AppState.MenuSuppressUntil = DateTime.UtcNow.AddSeconds(2);
+        if (suppressMs is { } ms)
+            AppState.MenuSuppressUntil = DateTime.UtcNow.AddMilliseconds(ms);
         Close();
     }
 
-    /// Called from global keyboard hook (UI thread via Dispatcher.BeginInvoke).
-    public void CloseNow() => SafeClose();
+    /// Called from global keyboard hook (UI thread via Dispatcher.BeginInvoke) — the user
+    /// typed, deleted, or used an editing shortcut. Uses its own short cooldown rather than
+    /// SafeClose's default (meant for "an action was taken") — dismissing to keep typing
+    /// only needs enough buffer to avoid an immediate re-pop race, not a multi-hundred-ms
+    /// block on the next real selection.
+    public void CloseNow() => SafeClose(AppState.KeyboardDismissCooldownMs);
 
     private void BuildMenu()
     {
