@@ -319,17 +319,30 @@ public class GlobalHookService
 
     // ── Keyboard dismiss: close the menu when the user types or deletes ────────
 
+    /// Cancels any in-flight capture and closes the menu, synchronously — called directly
+    /// from the hook callback (which already runs on the UI thread, see App.xaml.cs
+    /// _hook.Start()), not via Dispatcher.BeginInvoke. The deferred version used to let the
+    /// real keystroke that triggered the dismiss (e.g. Delete) reach the target app *before*
+    /// the menu actually closed — the menu was still on-screen, Topmost, at the moment some
+    /// apps (observed with browser-hosted editors; native controls like Notepad were fine)
+    /// processed that keystroke, and it silently didn't take effect, needing a second press.
+    /// Closing synchronously means the menu is gone before the low-level hook returns and
+    /// Windows delivers the key onward.
+    private void DismissMenuNow()
+    {
+        try
+        {
+            CancelTrigger();
+            if (AppState.ActiveMenu is ActionMenuWindow menu) menu.CloseNow();
+        }
+        catch { }
+    }
+
     /// Fires for every printable character — close the menu so the user can type freely.
     private void OnKeyPress(object? sender, KeyPressEventArgs e)
     {
         if (char.IsControl(e.KeyChar)) return;
-        Application.Current?.Dispatcher.BeginInvoke(() =>
-        {
-            // Also cancel any capture still in flight — even if no menu exists yet, the
-            // user has moved on to typing and it shouldn't pop one up once it finishes.
-            CancelTrigger();
-            if (AppState.ActiveMenu is ActionMenuWindow menu) menu.CloseNow();
-        });
+        DismissMenuNow();
     }
 
     private static readonly HashSet<Keys> ModifierKeyCodes = new()
@@ -364,11 +377,6 @@ public class GlobalHookService
                    || e.KeyCode is Keys.Back or Keys.Delete or Keys.LWin or Keys.RWin
                    || (e.Alt && e.KeyCode is Keys.Tab or Keys.F4);
         if (!dismiss) return;
-        Application.Current?.Dispatcher.BeginInvoke(() =>
-        {
-            // Also cancel any capture still in flight — see OnKeyPress.
-            CancelTrigger();
-            if (AppState.ActiveMenu is ActionMenuWindow menu) menu.CloseNow();
-        });
+        DismissMenuNow();
     }
 }
