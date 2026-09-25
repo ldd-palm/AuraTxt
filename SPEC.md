@@ -126,6 +126,7 @@ class ActionItem {
 | IgnoredProcesses | "" | 分号分隔的进程名（带不带 `.exe` 都行），前台窗口命中则划词捕获整体跳过（见 §5.2.1） |
 | PauseOnFullscreenApp | true | 前台窗口是否"独占全屏"（铺满整块屏幕 + 无标题栏）时自动跳过划词捕获（见 §5.2.1） |
 | PasteUseClipboardHistory | true | Paste 内置模型是否弹出 Windows 剪贴板历史面板（Win+V）；关闭则直接粘贴当前剪贴板内容，跳过历史面板（见 §9.7） |
+| ForcePopupDoubleShift | false | 双击左 Shift（中间不夹杂任何其他按键）强制对当前选中文本弹出/更新 ActionMenu，绕开鼠标触发链路的全部状态判断（见 §5.2 双击 Shift 检测）；默认关闭 |
 
 ### 3.6 首次运行默认配置
 
@@ -201,7 +202,14 @@ class ActionItem {
   - **[关键]** 任意真实的 `Ctrl+<非修饰键>` 组合（Ctrl+C/V/X/Z/B/... 等标准编辑快捷键，泛化判定、不逐个枚举）或 `Shift+Insert`（老式粘贴）同样关闭菜单——按这类快捷键说明用户意图是常规剪贴板/编辑操作而非对选中文本使用 action，菜单继续悬浮没有意义（Shift+Delete 剪切已被前一条 `Keys.Delete` 无条件覆盖，无需单独判断）。
   - 该判定必须排除"自己模拟出来的 Ctrl+C"（`ClipboardService.IsSyntheticCtrlCInFlight()`，见 §5.5），否则双击切词触发的原地更新捕获过程中若命中 Ctrl+C 模拟兜底，会把仍在原地更新中的旧菜单误判为"用户手动按了 Ctrl+C"而关闭，产生闪烁。
 - `KeyPress`/`KeyDown` 的关闭分支都先 `CancelTrigger()`（见上方"取消令牌"）再关菜单——即使此刻没有可见菜单，也要作废还在跑的取词，防止它稍后完成时凭空弹出一个用户已经不想要的菜单（打字场景，P3）。
-- 关闭统一走 `Dispatcher.BeginInvoke(() => { CancelTrigger(); menu.CloseNow(); })`。
+- 关闭统一走共享私有方法 `DismissMenuNow()`。**[关键]** 直接**同步**调用，不经过 `Dispatcher.BeginInvoke`——钩子回调本身就运行在 UI 线程上（见 §5.1 `_hook.Start()` 是在 `App.OnStartup` 主线程直接调的），异步排队只会让触发这次关闭的真实按键（比如 Delete）先于菜单关闭被 Windows 投递给目标应用；部分应用（观察到浏览器托管的编辑器，Notepad 等原生控件不受影响）在按键送达那一刻菜单仍然可见（Topmost），会静默不生效，需要再按一次才能真正删除——已修复：改成同步关闭，钩子回调返回、Windows 真正投递这次按键之前菜单就已经关掉。
+
+**[关键] 双击左 Shift 强制弹出（`AppSettings.ForcePopupDoubleShift`，默认关闭）**：`RegisterHotKey`（`HotkeyService`）要求至少一个非修饰键，没法表达"单独双击一个修饰键"这种手势，因此在全局键盘钩子里自己实现一套检测，跟菜单关闭判定用的是同一个钩子。
+
+- 检测状态机（`_leftShiftIsDown`/`_leftShiftCleanPress`/`_lastCleanLeftShiftUpAt`）：`OnKeyDown` 里，左 Shift 从"没按"变"按下"（`!_leftShiftIsDown` 排除系统长按重复触发）→ 标记本次是"干净按下"；左 Shift 按住期间只要有任何别的键（含右 Shift）按下 → 标记本次"不干净"（说明是当修饰键用，比如打大写字母、Shift+方向键选区，不该算作单独一击）。`OnKeyUp` 里左 Shift 抬起：不干净则直接清空"上次干净抬起时间"、不触发；干净则跟"上次干净抬起时间"比较，间隔 ≤400ms（`DoubleShiftWindowMs`）→ 判定为双击，触发 `TriggerForcePopup()` 并清空该时间戳（防止紧跟着的第三次单击又立刻跟这次配对触发）；间隔超过则把这次抬起时间记为"上次"，等下一次。**[关键]** 整套状态机只有字段比较和时间戳运算，不读配置、不做 IO，跟检测双击/取消令牌一样遵循"钩子回调必须轻"的原则，功能关闭时也无条件照常跑，成本可忽略。
+- `TriggerForcePopup()`：先同步检查 `IsMonitoringPaused`/`IsMenuHidden`（跟其他触发路径一致），再 `Dispatcher.BeginInvoke` 到异步分支里才 `_config.Load()` 判断 `ForcePopupDoubleShift` 是否开启——配置读取同样不能留在钩子回调本身。开启的话：`System.Windows.Forms.Cursor.Position` 取当前光标物理坐标、`CaptureSourceWindow()` 记录源窗口、`NewTriggerToken()` 取新令牌，直接调用 `CaptureAndShowMenuAsync(pos, allowInPlaceUpdate: false, token)`——复用鼠标路径同一套取词/弹菜单管线，不是另起一份实现。
+- **[关键] 故意不检查 `MenuSuppressUntil`**——这是用户主动发起的手势，不是自动触发，不需要跟自己的冷却窗口打架（否则刚关完一个结果窗紧接着双击 Shift 会被冷却挡住，违背"强制"的本意）。`GameDetectionService.ShouldSkip`/`IsResultWindowOpen` 仍然生效，这两条由 `CaptureAndShowMenuAsync` 内部统一处理（见下）。
+- **设置**：auracfg General Settings 页面 "Force Popup (Double-Shift)" 项（`D` 键，Enabled/Disabled 切换）；批量命令 `auracfg settings --set --force-popup-double-shift true|false`。实时生效，原因同上（`ForcePopupDoubleShift` 每次触发都重新 `_config.Load()`，不缓存）。
 
 **[关键] 睡眠/唤醒后钩子恢复**：Windows 在系统睡眠/唤醒前后可能静默卸载低级钩子（`WH_MOUSE_LL`，本服务依赖的 `SetWindowsHookEx`）——可能是唤醒过程中回调超过 LowLevelHooksTimeout，也可能是钩子链中其他进程的钩子在挂起期间被破坏。而 `HotkeyService` 走的 `RegisterHotKey`/`WM_HOTKEY` 是完全不同的机制，不受影响，唤醒后热键仍可用但划词菜单失效，正是此故障的典型表现。修复：`App.xaml.cs` 订阅 `Microsoft.Win32.SystemEvents.PowerModeChanged`，在 `PowerModes.Resume` 时通过 `Dispatcher.BeginInvoke` 回到 UI 线程执行 `_hook.Stop()` + `_hook.Start()` 重新安装钩子（`Start()` 内部也会重新 `RegisterAll` 热键，相当于顺带恢复任何被静默丢弃的热键）。`OnExit` 必须 `-=` 取消订阅，否则 `SystemEvents` 的静态订阅会跨进程生命周期泄漏。同一故障不止睡眠/唤醒会触发（钩子回调超时的其它场景也可能被 Windows 判定并摘除），**[关键]** 因此托盘的 Reload Settings（见 §5.7）现在也手动执行同一套 `Stop()+Start()`，给用户一个不需要等系统睡眠/唤醒事件、也不需要退出重开整个程序的恢复手段。
 

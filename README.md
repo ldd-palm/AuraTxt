@@ -39,6 +39,7 @@ Inspired by Cherry Studio's selection assistant and Qtranslate, AuraTxt goes fur
 | **AI actions** | Connect any OpenAI-compatible or Gemini API; stream results in a lightweight floating window |
 | **Interactive window** | Two-pane layout: type your instruction, get AI output — ideal for email replies, grading, and drafting |
 | **Global hotkeys** | Assign a keyboard shortcut to any action; trigger without touching the mouse |
+| **Force popup** | Double-tap left Shift to force the action bar to appear for the current selection — a manual fallback for apps where automatic capture is unreliable (off by default, enable in `auracfg`'s General Settings) |
 | **Google search** | Highlight a term → open a browser Google search in one click |
 | **Text-to-speech** | Read selected text aloud using Windows SAPI5 voices |
 | **Themes** | Light & Dark built in, plus six curated accent themes; fully JSON-customizable |

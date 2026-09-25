@@ -60,6 +60,17 @@ public class GlobalHookService
         return _triggerCts.Token;
     }
 
+    // ── Double-Shift force-popup detection (AppSettings.ForcePopupDoubleShift) ─
+    // RegisterHotKey (HotkeyService) can't express a bare-modifier gesture like "tap
+    // left Shift twice" — it requires a non-modifier key. Detected here instead, off the
+    // same global keyboard hook already used for menu-dismiss. Tracking is unconditional
+    // (cheap field/timestamp bookkeeping, no config read) so it costs nothing when the
+    // feature is off; the config check happens only once a clean double-tap is detected.
+    private bool _leftShiftIsDown;
+    private bool _leftShiftCleanPress;      // true if nothing else was pressed while this Shift press was held
+    private DateTime _lastCleanLeftShiftUpAt = DateTime.MinValue;
+    private const int DoubleShiftWindowMs = 400;
+
     public GlobalHookService(ConfigService config, HotkeyService hotkeys)
     {
         _config  = config;
@@ -73,6 +84,7 @@ public class GlobalHookService
         _hook.MouseUpExt       += OnMouseUp;
         _hook.KeyPress         += OnKeyPress;
         _hook.KeyDown          += OnKeyDown;
+        _hook.KeyUp            += OnKeyUp;
         _hotkeys.RegisterAll(_config.Load());
     }
 
@@ -83,6 +95,7 @@ public class GlobalHookService
         _hook.MouseUpExt       -= OnMouseUp;
         _hook.KeyPress         -= OnKeyPress;
         _hook.KeyDown          -= OnKeyDown;
+        _hook.KeyUp            -= OnKeyUp;
         _hook.Dispose();
         _hook = null;
     }
@@ -357,6 +370,20 @@ public class GlobalHookService
     /// (Ctrl+anything, Shift+Insert) which KeyPress does not fire for.
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
+        // Double-Shift tap tracking (see OnKeyUp). A fresh left-Shift down starts a
+        // "clean" press; any other key coming down while it's held (capital letters,
+        // Shift+arrow selection, Shift+click, ...) marks it dirty so it can't be mistaken
+        // for a bare tap. !_leftShiftIsDown guards against OS key-repeat re-firing KeyDown
+        // while the key is held, which must not reset the dirty flag mid-press.
+        if (e.KeyCode == Keys.LShiftKey)
+        {
+            if (!_leftShiftIsDown) { _leftShiftIsDown = true; _leftShiftCleanPress = true; }
+        }
+        else if (_leftShiftIsDown)
+        {
+            _leftShiftCleanPress = false;
+        }
+
         // Track real Ctrl+C so ClipboardService can avoid injecting its own synthetic
         // Ctrl+C on top of a genuine one (see ClipboardService.NotifyRealCtrlC).
         var isCtrlC = e.Control && e.KeyCode == Keys.C;
@@ -378,5 +405,56 @@ public class GlobalHookService
                    || (e.Alt && e.KeyCode is Keys.Tab or Keys.F4);
         if (!dismiss) return;
         DismissMenuNow();
+    }
+
+    /// Completes the double-Shift tap detection started in OnKeyDown. Only left Shift is
+    /// tracked — right Shift going down while left Shift is held already marks the press
+    /// dirty via the `else if (_leftShiftIsDown)` branch in OnKeyDown, same as any other key.
+    private void OnKeyUp(object? sender, KeyEventArgs e)
+    {
+        if (e.KeyCode != Keys.LShiftKey) return;
+        _leftShiftIsDown = false;
+
+        if (!_leftShiftCleanPress)
+        {
+            _lastCleanLeftShiftUpAt = DateTime.MinValue; // this press doesn't count; don't let a later clean tap pair with it
+            return;
+        }
+
+        var now = DateTime.UtcNow;
+        if (now - _lastCleanLeftShiftUpAt <= TimeSpan.FromMilliseconds(DoubleShiftWindowMs))
+        {
+            _lastCleanLeftShiftUpAt = DateTime.MinValue; // consume it — a third quick tap starts a fresh pair, not an immediate re-trigger
+            TriggerForcePopup();
+        }
+        else
+        {
+            _lastCleanLeftShiftUpAt = now;
+        }
+    }
+
+    /// Manual escape hatch for whatever's currently selected, bypassing the normal
+    /// mouse-driven trigger path entirely (useful when that path is stuck in a bad state,
+    /// or in apps where automatic capture is unreliable). Deliberately does NOT check
+    /// AppState.MenuSuppressUntil — this is an explicit user gesture, not an automatic
+    /// re-trigger that needs debouncing against itself.
+    private void TriggerForcePopup()
+    {
+        if (AppState.IsMonitoringPaused || AppState.IsMenuHidden) return;
+
+        Application.Current?.Dispatcher.BeginInvoke(async () =>
+        {
+            try
+            {
+                if (!_config.Load().Settings.ForcePopupDoubleShift) return;
+
+                var cursor = System.Windows.Forms.Cursor.Position;
+                AppState.SourceWindowHandle = ClipboardService.CaptureSourceWindow();
+
+                var token = NewTriggerToken();
+                await CaptureAndShowMenuAsync(cursor, allowInPlaceUpdate: false, token);
+            }
+            catch { }
+        });
     }
 }

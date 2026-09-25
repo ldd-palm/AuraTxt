@@ -20,6 +20,7 @@ public class SettingsCommand(ConfigService config)
         Console.WriteLine($"prompt-editor:  {(string.IsNullOrEmpty(s.PromptEditor) ? "(notepad.exe)" : s.PromptEditor)}");
         Console.WriteLine($"config-editor:  {(string.IsNullOrEmpty(s.ConfigEditor) ? "(auracfg)" : s.ConfigEditor)}");
         Console.WriteLine($"terminal-console: {(s.TerminalUseConsoleWindow ? "on" : "off")}");
+        Console.WriteLine($"force-popup-double-shift: {(s.ForcePopupDoubleShift ? "on" : "off")}");
         return 0;
     }
 
@@ -45,6 +46,8 @@ public class SettingsCommand(ConfigService config)
             s.ConfigEditor = ce.Trim();
         if (opts.TryGetValue("terminal-console", out var tc) && bool.TryParse(tc, out var tcb))
             s.TerminalUseConsoleWindow = tcb;
+        if (opts.TryGetValue("force-popup-double-shift", out var fp) && bool.TryParse(fp, out var fpb))
+            s.ForcePopupDoubleShift = fpb;
         config.Save(cfg);
         Console.WriteLine("✓ Settings saved");
         return 0;
@@ -53,7 +56,7 @@ public class SettingsCommand(ConfigService config)
     private static int PrintHelp()
     {
         Console.WriteLine("auracfg settings --show");
-        Console.WriteLine("auracfg settings --set [--font-size <n>] [--opacity <0-1>] [--delay-ms <n>] [--target-lang <code>] [--theme <id>] [--voice <name>] [--prompt-editor <exe>] [--config-editor <exe>] [--terminal-console true|false]");
+        Console.WriteLine("auracfg settings --set [--font-size <n>] [--opacity <0-1>] [--delay-ms <n>] [--target-lang <code>] [--theme <id>] [--voice <name>] [--prompt-editor <exe>] [--config-editor <exe>] [--terminal-console true|false] [--force-popup-double-shift true|false]");
         return 1;
     }
 }

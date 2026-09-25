@@ -64,6 +64,7 @@ public class GeneralSettingsPage : PageBase
         new MenuItem("I", "Ignored Processes", string.IsNullOrEmpty(s.IgnoredProcesses) ? "(none)" : s.IgnoredProcesses),
         new MenuItem("F", "Pause on Fullscreen App", s.PauseOnFullscreenApp ? "Enabled" : "Disabled"),
         new MenuItem("P", "Paste Clipboard History",  s.PasteUseClipboardHistory ? "Enabled (Win+V panel)" : "Disabled (direct paste)"),
+        new MenuItem("D", "Force Popup (Double-Shift)", s.ForcePopupDoubleShift ? "Enabled" : "Disabled"),
     ];
 
     private bool HandleKey(string key, AppSettings s, TuiApp app)
@@ -128,6 +129,10 @@ public class GeneralSettingsPage : PageBase
             case "P":
                 s.PasteUseClipboardHistory = !s.PasteUseClipboardHistory; app.MarkDirty();
                 app.Renderer.SetNotice($"Paste Clipboard History → {(s.PasteUseClipboardHistory ? "Enabled (Win+V panel)" : "Disabled (direct paste)")}");
+                break;
+            case "D":
+                s.ForcePopupDoubleShift = !s.ForcePopupDoubleShift; app.MarkDirty();
+                app.Renderer.SetNotice($"Force Popup (Double-Shift) → {(s.ForcePopupDoubleShift ? "Enabled" : "Disabled")}");
                 break;
         }
         return false;

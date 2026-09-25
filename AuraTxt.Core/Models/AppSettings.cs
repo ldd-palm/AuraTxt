@@ -79,4 +79,12 @@ public class AppSettings
     /// (Win+V) or directly pastes the current clipboard content. Default true — most
     /// Windows 10/11 users already have clipboard history enabled.
     public bool PasteUseClipboardHistory { get; set; } = true;
+
+    /// When true, double-tapping the left Shift key alone (nothing else pressed in
+    /// between the two presses) force-triggers the ActionMenu for whatever text is
+    /// currently selected, bypassing the normal mouse-driven trigger path — a manual
+    /// escape hatch for apps where automatic capture is unreliable. Default false —
+    /// opt-in, since RegisterHotKey can't express a bare-modifier gesture like this and
+    /// it needs its own detection logic in the global keyboard hook.
+    public bool ForcePopupDoubleShift { get; set; } = false;
 }
