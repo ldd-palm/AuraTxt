@@ -126,8 +126,14 @@ public static class ThemeService
         Description = "Windows 11 Fluent Dark theme",
         Colors = new Dictionary<string, string>
         {
-            ["SurfaceFill"]      = "#F9F9F9",
-            ["SurfaceStroke"]    = "#E0E0E0",
+            // Elevation ladder, darkest to lightest: SurfaceFill (window base) <
+            // SurfaceElevated/MenuSurfaceFill/PickerBgFill (floating panels, read as
+            // "raised" against the base) < BtnFill < BtnFillHover < BtnFillPressed.
+            // The previous values here left several keys at their Light-theme
+            // brightness (#FFFFFF/#F9F9F9/#E0E0E0/#E5E5E5/#F3F3F3) — dark text on a
+            // near-white surface — this fills that ladder in consistently.
+            ["SurfaceFill"]      = "#18181B",
+            ["SurfaceStroke"]    = "#333333",
             ["SurfaceElevated"]  = "#1E1E1E",
             ["TitleBarFill"]     = "#2A2A2A",
             ["TextPrimary"]      = "#E2E8F0",
@@ -141,25 +147,25 @@ public static class ThemeService
             ["AccentHover"]      = "#A5B4FC",
             ["InputFill"]        = "#0F172A",
             ["InputStroke"]      = "#334155",
-            ["Divider"]          = "#E5E5E5",
+            ["Divider"]          = "#3A3A3A",
             ["CloseBtn"]         = "#FF5F57",
             ["CopyBtn"]          = "#818CF8",
             ["SendBtn"]          = "#22C55E",
             ["MenuBtnFill"]      = "#00FFFFFF",
-            ["MenuBtnFillHover"] = "#F3F3F3",
+            ["MenuBtnFillHover"] = "#3D3D3D",
             ["IconBtnFill"]      = "#2D2D2D",
             ["IconBtnFillHover"] = "#3D3D3D",
             ["IconBtnStroke"]    = "#3D3D3D",
             ["UserInputFill"]    = "#181818",
             ["UserInputStroke"]  = "#334155",
-            ["CmbFill"]          = "#FFFFFF",
+            ["CmbFill"]          = "#2D2D2D",
             ["CmbStroke"]        = "#3D3D3D",
-            ["CmbHighlight"]     = "#DBEAFE",
-            ["CmbHighlightText"] = "#1E40AF",
-            ["MenuSurfaceFill"]  = "#F3F3F3",
-            ["PickerBgFill"]     = "#FFFFFF",
-            ["PickerFgFill"]     = "#1A1A1A",
-            ["ShadowOpacity"]    = "0.08",
+            ["CmbHighlight"]     = "#3730A5",
+            ["CmbHighlightText"] = "#E0E7FF",
+            ["MenuSurfaceFill"]  = "#242424",
+            ["PickerBgFill"]     = "#242424",
+            ["PickerFgFill"]     = "#E2E8F0",
+            ["ShadowOpacity"]    = "0.36",
         }
     };
 
