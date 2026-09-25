@@ -1,5 +1,5 @@
 ====================================================================
- AuraTxt v1.7.1
+ AuraTxt v2.0
  A portable, highly customizable AI text assistant for Windows
 ====================================================================
 
@@ -17,7 +17,7 @@ WHAT YOU GET
 - Interactive window: type an instruction, get AI output (email
   replies, grading, drafting, etc.)
 - Global hotkeys for any action, no mouse needed
-- Text-to-speech, Google search, 6 built-in color themes
+- Text-to-speech, Google search, Light & Dark themes plus six accent themes
 - Fully portable: everything lives next to AuraTxt.exe
 - Game-safe: automatically skips selection-capture in fullscreen
   apps, so it won't inject Ctrl+C into a game (configurable in
