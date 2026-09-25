@@ -41,7 +41,7 @@ Inspired by Cherry Studio's selection assistant and Qtranslate, AuraTxt goes fur
 | **Global hotkeys** | Assign a keyboard shortcut to any action; trigger without touching the mouse |
 | **Google search** | Highlight a term → open a browser Google search in one click |
 | **Text-to-speech** | Read selected text aloud using Windows SAPI5 voices |
-| **Themes** | Six color themes included; fully JSON-customizable |
+| **Themes** | Light & Dark built in, plus six curated accent themes; fully JSON-customizable |
 | **Thinking mode** | Toggle reasoning/thinking on or off per action for supported models (DeepSeek, Gemini, Qwen3…) |
 | **Portable** | Everything lives next to `AuraTxt.exe` — copy the folder to any PC, it just works |
 | **Single instance** | Only one copy runs at a time; duplicate launches show a friendly tray reminder |
@@ -213,6 +213,8 @@ You can also set this from the command line: `auracfg settings --set --terminal-
 ## Themes
 
 Switch themes in **auracfg → General Settings → Theme**, then right-click the tray → **Reload Settings**.
+
+Includes **Light** and **Dark** (Windows 11 Fluent-style), plus six accent themes:
 
 <table>
 <tr>
