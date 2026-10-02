@@ -1,6 +1,8 @@
+using System.Windows.Forms;
 using AuraTxt.Cli.Tui.Flows;
 using AuraTxt.Core.Models;
 using AuraTxt.Core.Services;
+using AuraTxt.Core.Util;
 
 namespace AuraTxt.Cli.Tui.Pages;
 
@@ -64,7 +66,7 @@ public class GeneralSettingsPage : PageBase
         new MenuItem("I", "Ignored Processes", string.IsNullOrEmpty(s.IgnoredProcesses) ? "(none)" : s.IgnoredProcesses),
         new MenuItem("F", "Pause on Fullscreen App", s.PauseOnFullscreenApp ? "Enabled" : "Disabled"),
         new MenuItem("P", "Paste Clipboard History",  s.PasteUseClipboardHistory ? "Enabled (Win+V panel)" : "Disabled (direct paste)"),
-        new MenuItem("D", "Force Popup (Double-Shift)", s.ForcePopupDoubleShift ? "Enabled" : "Disabled"),
+        new MenuItem("D", "Force Popup Key", string.IsNullOrEmpty(s.ForcePopupDoubleTapKey) ? "None" : s.ForcePopupDoubleTapKey),
     ];
 
     private bool HandleKey(string key, AppSettings s, TuiApp app)
@@ -131,8 +133,21 @@ public class GeneralSettingsPage : PageBase
                 app.Renderer.SetNotice($"Paste Clipboard History → {(s.PasteUseClipboardHistory ? "Enabled (Win+V panel)" : "Disabled (direct paste)")}");
                 break;
             case "D":
-                s.ForcePopupDoubleShift = !s.ForcePopupDoubleShift; app.MarkDirty();
-                app.Renderer.SetNotice($"Force Popup (Double-Shift) → {(s.ForcePopupDoubleShift ? "Enabled" : "Disabled")}");
+                // No defaultValue passed to Ask — blank Enter must mean "None" here, not
+                // "keep the current combo", since typing nothing is the intended way to
+                // disable this without having to type the word "none" out.
+                var fk = app.Renderer.Ask("Force popup key, double-tapped (e.g. F1, Ctrl+F1; blank = none)");
+                var spec = Core.Util.KeyComboSpec.TryParse(fk);
+                if (spec is not { } parsed || (!parsed.IsEmpty && !Enum.TryParse<Keys>(parsed.Key, true, out _)))
+                {
+                    app.Renderer.SetNotice($"Invalid key combo: \"{fk}\" (e.g. F1, Ctrl+F1)", NoticeKind.Warning);
+                }
+                else
+                {
+                    s.ForcePopupDoubleTapKey = parsed.IsEmpty ? "" : parsed.ToString();
+                    app.MarkDirty();
+                    app.Renderer.SetNotice($"Force Popup Key → {(parsed.IsEmpty ? "None" : parsed.ToString())} (use Reload Settings in AuraTxt's tray menu to apply)");
+                }
                 break;
         }
         return false;

@@ -1,4 +1,6 @@
+using System.Windows.Forms;
 using AuraTxt.Core.Services;
+using AuraTxt.Core.Util;
 
 namespace AuraTxt.Cli.Commands;
 
@@ -20,7 +22,7 @@ public class SettingsCommand(ConfigService config)
         Console.WriteLine($"prompt-editor:  {(string.IsNullOrEmpty(s.PromptEditor) ? "(notepad.exe)" : s.PromptEditor)}");
         Console.WriteLine($"config-editor:  {(string.IsNullOrEmpty(s.ConfigEditor) ? "(auracfg)" : s.ConfigEditor)}");
         Console.WriteLine($"terminal-console: {(s.TerminalUseConsoleWindow ? "on" : "off")}");
-        Console.WriteLine($"force-popup-double-shift: {(s.ForcePopupDoubleShift ? "on" : "off")}");
+        Console.WriteLine($"force-popup-key: {(string.IsNullOrEmpty(s.ForcePopupDoubleTapKey) ? "none" : s.ForcePopupDoubleTapKey)}");
         return 0;
     }
 
@@ -46,8 +48,16 @@ public class SettingsCommand(ConfigService config)
             s.ConfigEditor = ce.Trim();
         if (opts.TryGetValue("terminal-console", out var tc) && bool.TryParse(tc, out var tcb))
             s.TerminalUseConsoleWindow = tcb;
-        if (opts.TryGetValue("force-popup-double-shift", out var fp) && bool.TryParse(fp, out var fpb))
-            s.ForcePopupDoubleShift = fpb;
+        if (opts.TryGetValue("force-popup-key", out var fp))
+        {
+            var spec = KeyComboSpec.TryParse(fp);
+            if (spec is not { } parsed || (!parsed.IsEmpty && !Enum.TryParse<Keys>(parsed.Key, true, out _)))
+            {
+                Console.WriteLine($"✗ Invalid --force-popup-key: \"{fp}\" (e.g. F1, Ctrl+F1, or \"none\")");
+                return 1;
+            }
+            s.ForcePopupDoubleTapKey = parsed.IsEmpty ? "" : parsed.ToString();
+        }
         config.Save(cfg);
         Console.WriteLine("✓ Settings saved");
         return 0;
@@ -56,7 +66,7 @@ public class SettingsCommand(ConfigService config)
     private static int PrintHelp()
     {
         Console.WriteLine("auracfg settings --show");
-        Console.WriteLine("auracfg settings --set [--font-size <n>] [--opacity <0-1>] [--delay-ms <n>] [--target-lang <code>] [--theme <id>] [--voice <name>] [--prompt-editor <exe>] [--config-editor <exe>] [--terminal-console true|false] [--force-popup-double-shift true|false]");
+        Console.WriteLine("auracfg settings --set [--font-size <n>] [--opacity <0-1>] [--delay-ms <n>] [--target-lang <code>] [--theme <id>] [--voice <name>] [--prompt-editor <exe>] [--config-editor <exe>] [--terminal-console true|false] [--force-popup-key <combo>|none]");
         return 1;
     }
 }

@@ -3,7 +3,9 @@ using System.Windows;
 using System.Windows.Forms;
 using System.Windows.Media;
 using Gma.System.MouseKeyHook;
+using AuraTxt.Core.Models;
 using AuraTxt.Core.Services;
+using AuraTxt.Core.Util;
 using AuraTxt.Windows;
 
 namespace AuraTxt.Services;
@@ -60,16 +62,45 @@ public class GlobalHookService
         return _triggerCts.Token;
     }
 
-    // ── Double-Shift force-popup detection (AppSettings.ForcePopupDoubleShift) ─
-    // RegisterHotKey (HotkeyService) can't express a bare-modifier gesture like "tap
-    // left Shift twice" — it requires a non-modifier key. Detected here instead, off the
-    // same global keyboard hook already used for menu-dismiss. Tracking is unconditional
-    // (cheap field/timestamp bookkeeping, no config read) so it costs nothing when the
-    // feature is off; the config check happens only once a clean double-tap is detected.
-    private bool _leftShiftIsDown;
-    private bool _leftShiftCleanPress;      // true if nothing else was pressed while this Shift press was held
-    private DateTime _lastCleanLeftShiftUpAt = DateTime.MinValue;
-    private const int DoubleShiftWindowMs = 400;
+    // ── Double-tap force-popup detection (AppSettings.ForcePopupDoubleTapKey) ──
+    // RegisterHotKey (HotkeyService) can't cleanly claim a plain function key the way apps
+    // themselves often bind it (Help, etc.) without a modifier, and a double-tap gesture
+    // isn't expressible through it at all. Detected here instead, off the same global
+    // keyboard hook already used for menu-dismiss.
+    private readonly record struct ForcePopupCombo(bool Ctrl, bool Alt, bool Shift, Keys Key);
+
+    // Parsed from config in Start() (and again on "Reload Settings") — not re-read per
+    // keystroke, since OnKeyDown/OnKeyUp fire on every key press system-wide and must stay
+    // cheap. Null = feature off (empty/invalid AppSettings.ForcePopupDoubleTapKey).
+    private ForcePopupCombo? _forcePopupCombo;
+
+    private bool _forcePopupKeyIsDown;
+    private bool _forcePopupKeyCleanPress;      // true if nothing but the combo's own modifiers were held while this press was down
+    private DateTime _lastCleanForcePopupKeyUpAt = DateTime.MinValue;
+    private const int DoubleTapWindowMs = 400;
+
+    /// Parses AppSettings.ForcePopupDoubleTapKey into _forcePopupCombo. Silently disables
+    /// the feature (null) on blank/invalid input — this runs on every Start(), including
+    /// after a fresh install where hand-edited or stale config could contain garbage.
+    private void LoadForcePopupCombo(ConfigRoot cfg)
+    {
+        _forcePopupCombo = null;
+        var spec = KeyComboSpec.TryParse(cfg.Settings.ForcePopupDoubleTapKey);
+        if (spec is { IsEmpty: false } s &&
+            Enum.TryParse<Keys>(s.Key, ignoreCase: true, out var keyVal) &&
+            Enum.IsDefined(typeof(Keys), keyVal))
+        {
+            _forcePopupCombo = new ForcePopupCombo(s.Ctrl, s.Alt, s.Shift, keyVal);
+        }
+    }
+
+    /// True if `code` is one of the modifier keys required by `combo` — lets OnKeyDown
+    /// tell "the combo's own modifier is still held" apart from "some unrelated key was
+    /// pressed", which would otherwise mark an in-progress Ctrl+F1-style press as dirty.
+    private static bool IsComboModifier(Keys code, ForcePopupCombo combo) =>
+        (combo.Ctrl  && code is Keys.ControlKey or Keys.LControlKey or Keys.RControlKey) ||
+        (combo.Alt   && code is Keys.Menu       or Keys.LMenu       or Keys.RMenu)       ||
+        (combo.Shift && code is Keys.ShiftKey   or Keys.LShiftKey   or Keys.RShiftKey);
 
     public GlobalHookService(ConfigService config, HotkeyService hotkeys)
     {
@@ -85,7 +116,9 @@ public class GlobalHookService
         _hook.KeyPress         += OnKeyPress;
         _hook.KeyDown          += OnKeyDown;
         _hook.KeyUp            += OnKeyUp;
-        _hotkeys.RegisterAll(_config.Load());
+        var cfg = _config.Load();
+        _hotkeys.RegisterAll(cfg);
+        LoadForcePopupCombo(cfg);
     }
 
     public void Stop()
@@ -370,18 +403,28 @@ public class GlobalHookService
     /// (Ctrl+anything, Shift+Insert) which KeyPress does not fire for.
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
-        // Double-Shift tap tracking (see OnKeyUp). A fresh left-Shift down starts a
-        // "clean" press; any other key coming down while it's held (capital letters,
-        // Shift+arrow selection, Shift+click, ...) marks it dirty so it can't be mistaken
-        // for a bare tap. !_leftShiftIsDown guards against OS key-repeat re-firing KeyDown
-        // while the key is held, which must not reset the dirty flag mid-press.
-        if (e.KeyCode == Keys.LShiftKey)
+        // Double-tap force-popup combo tracking (see OnKeyUp). A fresh down of the combo's
+        // base key starts a "clean" press only if the currently-held modifiers exactly
+        // match what the combo requires (e.g. plain "F1" rejects a press with Ctrl already
+        // down, "Ctrl+F1" rejects a press without it). Any other key coming down while it's
+        // held marks it dirty — except the combo's own modifier keys themselves (see
+        // IsComboModifier), which are expected to be held throughout a Ctrl+F1-style press.
+        // !_forcePopupKeyIsDown guards against OS key-repeat re-firing KeyDown while the
+        // key is held, which must not reset the dirty flag mid-press.
+        if (_forcePopupCombo is { } combo)
         {
-            if (!_leftShiftIsDown) { _leftShiftIsDown = true; _leftShiftCleanPress = true; }
-        }
-        else if (_leftShiftIsDown)
-        {
-            _leftShiftCleanPress = false;
+            if (e.KeyCode == combo.Key)
+            {
+                if (!_forcePopupKeyIsDown)
+                {
+                    _forcePopupKeyIsDown = true;
+                    _forcePopupKeyCleanPress = e.Control == combo.Ctrl && e.Alt == combo.Alt && e.Shift == combo.Shift;
+                }
+            }
+            else if (_forcePopupKeyIsDown && !IsComboModifier(e.KeyCode, combo))
+            {
+                _forcePopupKeyCleanPress = false;
+            }
         }
 
         // Track real Ctrl+C so ClipboardService can avoid injecting its own synthetic
@@ -407,29 +450,27 @@ public class GlobalHookService
         DismissMenuNow();
     }
 
-    /// Completes the double-Shift tap detection started in OnKeyDown. Only left Shift is
-    /// tracked — right Shift going down while left Shift is held already marks the press
-    /// dirty via the `else if (_leftShiftIsDown)` branch in OnKeyDown, same as any other key.
+    /// Completes the double-tap force-popup detection started in OnKeyDown.
     private void OnKeyUp(object? sender, KeyEventArgs e)
     {
-        if (e.KeyCode != Keys.LShiftKey) return;
-        _leftShiftIsDown = false;
+        if (_forcePopupCombo is not { } combo || e.KeyCode != combo.Key) return;
+        _forcePopupKeyIsDown = false;
 
-        if (!_leftShiftCleanPress)
+        if (!_forcePopupKeyCleanPress)
         {
-            _lastCleanLeftShiftUpAt = DateTime.MinValue; // this press doesn't count; don't let a later clean tap pair with it
+            _lastCleanForcePopupKeyUpAt = DateTime.MinValue; // this press doesn't count; don't let a later clean tap pair with it
             return;
         }
 
         var now = DateTime.UtcNow;
-        if (now - _lastCleanLeftShiftUpAt <= TimeSpan.FromMilliseconds(DoubleShiftWindowMs))
+        if (now - _lastCleanForcePopupKeyUpAt <= TimeSpan.FromMilliseconds(DoubleTapWindowMs))
         {
-            _lastCleanLeftShiftUpAt = DateTime.MinValue; // consume it — a third quick tap starts a fresh pair, not an immediate re-trigger
+            _lastCleanForcePopupKeyUpAt = DateTime.MinValue; // consume it — a third quick tap starts a fresh pair, not an immediate re-trigger
             TriggerForcePopup();
         }
         else
         {
-            _lastCleanLeftShiftUpAt = now;
+            _lastCleanForcePopupKeyUpAt = now;
         }
     }
 
@@ -446,8 +487,6 @@ public class GlobalHookService
         {
             try
             {
-                if (!_config.Load().Settings.ForcePopupDoubleShift) return;
-
                 var cursor = System.Windows.Forms.Cursor.Position;
                 AppState.SourceWindowHandle = ClipboardService.CaptureSourceWindow();
 

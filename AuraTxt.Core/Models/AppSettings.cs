@@ -80,11 +80,13 @@ public class AppSettings
     /// Windows 10/11 users already have clipboard history enabled.
     public bool PasteUseClipboardHistory { get; set; } = true;
 
-    /// When true, double-tapping the left Shift key alone (nothing else pressed in
-    /// between the two presses) force-triggers the ActionMenu for whatever text is
-    /// currently selected, bypassing the normal mouse-driven trigger path — a manual
-    /// escape hatch for apps where automatic capture is unreliable. Default false —
-    /// opt-in, since RegisterHotKey can't express a bare-modifier gesture like this and
-    /// it needs its own detection logic in the global keyboard hook.
-    public bool ForcePopupDoubleShift { get; set; } = false;
+    /// Key combo (e.g. "F1", "Ctrl+F1") that, double-tapped with nothing else pressed in
+    /// between the two presses, force-triggers the ActionMenu for whatever text is
+    /// currently selected — bypassing the normal mouse-driven trigger path, a manual
+    /// escape hatch for apps where automatic capture is unreliable. Empty string = off.
+    /// Parsed by AuraTxt.Core.Util.KeyComboSpec. Opt-in and user-configurable, since
+    /// RegisterHotKey can't express a double-tap gesture and any single fixed key risks
+    /// colliding with something else the user runs (e.g. double-tap Shift did). Re-parsed
+    /// only when GlobalHookService (re)starts — changing this needs "Reload Settings".
+    public string ForcePopupDoubleTapKey { get; set; } = "";
 }
