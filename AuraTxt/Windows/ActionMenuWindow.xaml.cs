@@ -8,7 +8,6 @@ using AuraTxt.Core.Services;
 using AuraTxt.Services;
 using Brushes = System.Windows.Media.Brushes;
 using Button = System.Windows.Controls.Button;
-using Clipboard = System.Windows.Clipboard;
 using Color = System.Windows.Media.Color;
 using Cursors = System.Windows.Input.Cursors;
 using Separator = System.Windows.Controls.Separator;
@@ -293,9 +292,12 @@ public partial class ActionMenuWindow : Window
         switch (id)
         {
             case "copy":
-                // Clipboard can be locked by another process (CLIPBRD_E_CANT_OPEN).
-                try { Clipboard.SetText(_selectedText); }
-                catch (Exception ex) { LogService.Error("Copy action failed", ex); }
+                // Clipboard.SetText can throw (CLIPBRD_E_CANT_OPEN — another process has
+                // it open, e.g. a clipboard manager or the source app's own post-copy
+                // handling) and a single attempt isn't enough; route through the same
+                // retrying helper ResultWindow's Copy button uses instead of a bare
+                // try-once Clipboard.SetText here.
+                _ = CopyAsync();
                 break;
             case "speech":
                 SpeechService.Speak(_selectedText, _cfg.Settings.SpeechVoice);
@@ -311,6 +313,12 @@ public partial class ActionMenuWindow : Window
                 break;
         }
         SafeClose();
+    }
+
+    private async Task CopyAsync()
+    {
+        if (!await ClipboardService.TrySetTextAsync(_selectedText))
+            LogService.Error("Copy action failed: clipboard write did not succeed after retries");
     }
 
     private static Button MakeEmojiButton(string emoji, string tooltip, Action onClick)
