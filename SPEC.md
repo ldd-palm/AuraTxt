@@ -704,17 +704,17 @@ dotnet publish AuraTxt.Cli/AuraTxt.Cli.csproj -c Release -r win-x64 --self-conta
 不要直接压缩 `publish/release/*`——先把内容拷进一层 `AuraTXT/` 子目录（如 `publish/staging/AuraTXT/`），再对该子目录整体压缩，使 zip 内容形如 `AuraTXT/AuraTxt.exe`、`AuraTXT/config.json` 等，用户解压后得到一个 `AuraTXT` 文件夹而不是散落的文件：
 
 ```powershell
-Compress-Archive -Path publish/staging/AuraTXT -DestinationPath AuraTXT_X.Y.zip
+Compress-Archive -Path publish/staging/AuraTXT -DestinationPath AuraTXT.zip
 ```
 
-传目录路径本身（而非 `目录\*` 通配符）才会保留 `AuraTXT/` 这层根目录（大小写需与 zip 文件名一致）。框架依赖版和自包含版各自独立 stage + 压缩一次（自包含版发布会覆盖 `publish/release` 里的 exe，需重新 stage）。
+**[关键] zip 文件名不带版本号**（`AuraTXT.zip`/`AuraTXT_self_contained.zip`，固定不变，从 v2.1 起如此）——好处是 README.md 的 Download 链接可以指向 `releases/latest/download/...`，每次发新版本都不用跟着改链接。传目录路径本身（而非 `目录\*` 通配符）才会保留 `AuraTXT/` 这层根目录（大小写需与 zip 文件名一致）。框架依赖版和自包含版各自独立 stage + 压缩一次（自包含版发布会覆盖 `publish/release` 里的 exe，需重新 stage）。
 
 ### 12.4 上传到 GitHub Release
 
 **给已有 tag 补发资产/修复**（同一版本号内的迭代，如打包后又发现小问题）：
 
 ```sh
-gh release upload vX.Y AuraTXT_X.Y.zip AuraTXT_X.Y_self_contained.zip --clobber
+gh release upload vX.Y AuraTXT.zip AuraTXT_self_contained.zip --clobber
 ```
 
 `--clobber` 覆盖已存在的同名资产，tag 和版本号不变。若还需要改发布说明正文（例如补一条"What's new"），用：
@@ -727,12 +727,12 @@ gh release edit vX.Y --notes-file /tmp/notes.md
 **发新版本号**：
 
 ```sh
-gh release create vX.Y AuraTXT_X.Y.zip AuraTXT_X.Y_self_contained.zip --title "AuraTxt vX.Y" --notes-file /tmp/notes.md
+gh release create vX.Y AuraTXT.zip AuraTXT_self_contained.zip --title "AuraTxt vX.Y" --notes-file /tmp/notes.md
 ```
 
 发布说明固定包含几块：What's new（本版变化，按用户能感知到的粒度写，不是 commit log）、Upgrading（涉及升级风险时提醒"解压到新目录、不要覆盖已有安装"，见 `readme.txt` 的 UPGRADING 一节）、Downloads（两个包的大小/依赖对照表）。
 
-**收尾**：`README.md` 的 Download 表格两行链接/版本号同步改成新版本号，commit + push；`publish/release` 里的 exe/dll/pdb 是可重新生成的构建产物，上传完成后可以删掉，只留 `config.json`/`prompts/`/`profiles/`/`themes/`/`icons/`/`readme.txt` 这些真实数据（见 §12.2 的目录混用说明）；`publish/staging/`、根目录下的 `AuraTXT_X.Y*.zip` 也一并清理。
+**收尾**：因为 zip 文件名不再带版本号，`README.md` 的 Download 链接指向 `releases/latest/download/AuraTXT.zip`/`AuraTXT_self_contained.zip`，不需要每次发布都改——只有版本号描述文字本身变了才需要动 README.md；`publish/release` 里的 exe/dll/pdb 是可重新生成的构建产物，上传完成后可以删掉，只留 `config.json`/`prompts/`/`profiles/`/`themes/`/`icons/`/`readme.txt` 这些真实数据（见 §12.2 的目录混用说明）；`publish/staging/`、根目录下的 `AuraTXT*.zip` 也一并清理。
 
 ## 13. 测试要求（xunit）
 

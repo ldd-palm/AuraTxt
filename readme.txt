@@ -1,5 +1,5 @@
 ====================================================================
- AuraTxt v2.0
+ AuraTxt v2.1
  A portable, highly customizable AI text assistant for Windows
 ====================================================================
 
@@ -22,8 +22,22 @@ WHAT YOU GET
 - Game-safe: automatically skips selection-capture in fullscreen
   apps, so it won't inject Ctrl+C into a game (configurable in
   auracfg's General Settings)
+- Force popup: double-tap a key combo of your choice (e.g. F1,
+  Ctrl+F1) to force the action bar for the current selection, for
+  apps where automatic capture is unreliable (off by default, set
+  in auracfg's General Settings)
 - Auto-update check on startup (toggle it off from the tray's
   About window)
+
+--------------------------------------------------------------------
+WHAT'S NEW IN v2.1
+--------------------------------------------------------------------
+- Fixed an issue where selecting text in Gmail (or other apps with a
+  slow accessibility bridge) could occasionally make the action bar
+  stop popping up everywhere, not just in that app, until it
+  mysteriously recovered on its own
+- Added the configurable force-popup key combo above (previously a
+  fixed, non-configurable shortcut)
 
 --------------------------------------------------------------------
 QUICK START
