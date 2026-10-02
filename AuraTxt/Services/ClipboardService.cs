@@ -197,12 +197,28 @@ public static class ClipboardService
     // a few ms, so a short retry loop turns an occasional silent failure (previously: the
     // Copy button doing nothing, or a restored clipboard silently staying clobbered) into
     // a reliable one.
+    //
+    // [关键] Each attempt runs through RunOnThrowawayStaThreadAsync, not directly on the
+    // caller's thread — this method (via TrySetTextAsync and the capture-restore `finally`
+    // above) runs on ClipboardWorkerThread's single shared dispatcher, the same one
+    // GetSelectedTextAsync uses. Clipboard.SetText/SetDataObject/Clear are blocking OLE
+    // calls that can hang instead of throwing (observed: clicking the ActionMenu's Copy
+    // button after selecting text in an Electron app could leave the action bar unable to
+    // pop up anywhere, for anyone, until the hang cleared on its own) — the exact same bug
+    // class as the UI Automation hang below, just on the write side. Bounding each attempt
+    // on its own throwaway thread means a hang only leaks that one thread instead of
+    // starving the shared worker every other capture/copy depends on.
     private static async Task<bool> RetryClipboardOpAsync(Action action, int maxAttempts = 8, int delayMs = 30)
     {
         for (int attempt = 0; attempt < maxAttempts; attempt++)
         {
-            try { action(); return true; }
-            catch { await Task.Delay(delayMs); }
+            var ok = await RunOnThrowawayStaThreadAsync(() =>
+            {
+                action();
+                return true;
+            }, StaCallTimeoutMs);
+            if (ok == true) return true; // null = timed out (treat like a failed attempt), false is unreachable here
+            await Task.Delay(delayMs);
         }
         return false;
     }
@@ -252,47 +268,53 @@ public static class ClipboardService
     public static Task<string> GetSelectedTextAsync(int delayMs = 100) =>
         ClipboardWorkerThread.InvokeAsync(() => CaptureCoreAsync(delayMs));
 
-    // TryUiAutomation() is a synchronous cross-process COM call (AutomationElement.FocusedElement
-    // / TextPattern.GetSelection()), and CaptureCoreAsync below runs on ClipboardWorkerThread's
-    // single shared dispatcher (see that class). Observed with Gmail in Chrome: when the target
-    // app's accessibility bridge stalls, that call doesn't throw — it just never returns — which
-    // blocks the one shared worker thread and, with it, every future capture from every app until
-    // the underlying COM call eventually times out on its own (unpredictable, can be a long time).
-    // Bounding it here with its own throwaway STA thread means a hang only leaks that one thread
-    // instead of starving the shared worker.
-    private const int UiaProbeTimeoutMs = 400;
+    // Shared by TryUiAutomationWithTimeoutAsync and RetryClipboardOpAsync above: both call
+    // blocking COM/OLE APIs (UI Automation, Clipboard.Set*/Clear) that can hang instead of
+    // throwing when the other side of the call is stuck, and both are invoked from
+    // ClipboardWorkerThread's single shared dispatcher (see that class) — if run directly
+    // there, a hang would block every future selection capture AND every future copy, in
+    // every app, until the hang resolved on its own (unpredictable, can be a long time).
+    // Running `work` on its own one-shot STA thread (OLE/UIA calls expect an STA caller,
+    // same reason ClipboardWorkerThread itself is one) and racing it against a timeout
+    // means a hang only leaks that one throwaway thread instead of starving the shared
+    // worker. The leaked thread isn't actually killed — .NET has no safe way to abort a
+    // thread — it just sits blocked until the underlying call eventually returns.
+    private const int StaCallTimeoutMs = 400;
 
-    private static async Task<string?> TryUiAutomationWithTimeoutAsync(int timeoutMs)
+    private static async Task<T?> RunOnThrowawayStaThreadAsync<T>(Func<T?> work, int timeoutMs)
     {
-        var tcs = new TaskCompletionSource<string?>();
+        var tcs = new TaskCompletionSource<T?>();
         var thread = new Thread(() =>
         {
-            string? result;
-            try { result = TryUiAutomation(); } catch { result = null; }
+            T? result;
+            try { result = work(); } catch { result = default; }
             tcs.TrySetResult(result);
         })
         {
             IsBackground = true,
-            Name = "AuraTxt-UiaProbe"
+            Name = "AuraTxt-ClipboardStaOp"
         };
         thread.SetApartmentState(ApartmentState.STA);
         thread.Start();
 
         var completed = await Task.WhenAny(tcs.Task, Task.Delay(timeoutMs));
-        return completed == tcs.Task ? await tcs.Task : null;
+        return completed == tcs.Task ? await tcs.Task : default;
     }
+
+    private static Task<string?> TryUiAutomationWithTimeoutAsync(int timeoutMs) =>
+        RunOnThrowawayStaThreadAsync(TryUiAutomation, timeoutMs);
 
     private static async Task<string> CaptureCoreAsync(int delayMs)
     {
         // Fast path: UI Automation has no side effects, so try it immediately — most apps
         // (browsers, Office, VSCode) commit the selection to the accessibility tree
         // synchronously on mouse-up, so this skips delayMs entirely in the common case.
-        var text = await TryUiAutomationWithTimeoutAsync(UiaProbeTimeoutMs);
+        var text = await TryUiAutomationWithTimeoutAsync(StaCallTimeoutMs);
         if (!string.IsNullOrWhiteSpace(text)) return text;
 
         // Slow path: give the app more time to settle, retry, then fall back to Ctrl+C simulation.
         await Task.Delay(delayMs);
-        text = await TryUiAutomationWithTimeoutAsync(UiaProbeTimeoutMs);
+        text = await TryUiAutomationWithTimeoutAsync(StaCallTimeoutMs);
         if (!string.IsNullOrWhiteSpace(text)) return text;
 
         return await TryClipboardAsync() ?? "";
