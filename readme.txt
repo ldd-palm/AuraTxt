@@ -36,6 +36,12 @@ WHAT'S NEW IN v2.1
   slow accessibility bridge) could occasionally make the action bar
   stop popping up everywhere, not just in that app, until it
   mysteriously recovered on its own
+- Fixed the action bar's Copy button silently doing nothing in some
+  apps (confirmed with Notion, ChatGPT Desktop, and Claude Desktop) --
+  it now retries if the clipboard is briefly held by another process
+- Fixed a follow-on issue from the Copy fix above: in some apps,
+  clicking Copy once could make the action bar stop popping up
+  afterward, unpredictably, until it recovered on its own
 - Added the configurable force-popup key combo above (previously a
   fixed, non-configurable shortcut)
 
