@@ -21,22 +21,33 @@ public class HotkeyValidator
             "Home","End","PageUp","PageDown","Left","Right","Up","Down"
         };
 
-    public bool IsValidFormat(string hotkey)
+    /// Modifier set for callers that can't represent "Win" as a held modifier at
+    /// detection time (e.g. a global keyboard-hook double-tap gesture, unlike an OS-level
+    /// RegisterHotKey registration) — pass to IsValidFormat/Validate's allowedModifiers.
+    public static readonly HashSet<string> CtrlAltShiftOnly =
+        new(StringComparer.OrdinalIgnoreCase) { "Ctrl", "Alt", "Shift" };
+
+    /// `requireModifier: false` allows a bare key with no modifier at all (e.g. "F1") —
+    /// action hotkeys can't do this (RegisterHotKey can't claim an unmodified key
+    /// globally), but a caller detecting its own gesture off the raw keyboard hook can.
+    public bool IsValidFormat(string hotkey, bool requireModifier = true, IReadOnlySet<string>? allowedModifiers = null)
     {
         if (string.IsNullOrWhiteSpace(hotkey)) return false;
         var parts = hotkey.Split('+');
-        if (parts.Length < 2) return false;
-        var key  = parts[^1].Trim();
-        var mods = parts[..^1].Select(p => p.Trim()).ToArray();
-        return mods.Length > 0
-            && mods.All(m => Modifiers.Contains(m))
+        if (requireModifier && parts.Length < 2) return false;
+        var key     = parts[^1].Trim();
+        var mods    = parts[..^1].Select(p => p.Trim()).ToArray();
+        var allowed = allowedModifiers ?? Modifiers;
+        return (!requireModifier || mods.Length > 0)
+            && mods.All(m => allowed.Contains(m))
             && Keys.Contains(key);
     }
 
     public (HotkeyValidationResult result, string? conflictName) Validate(
-        string hotkey, IEnumerable<ActionItem> existing, string? excludeId = null)
+        string hotkey, IEnumerable<ActionItem> existing, string? excludeId = null,
+        bool requireModifier = true, IReadOnlySet<string>? allowedModifiers = null)
     {
-        if (!IsValidFormat(hotkey))
+        if (!IsValidFormat(hotkey, requireModifier, allowedModifiers))
             return (HotkeyValidationResult.InvalidFormat, null);
 
         if (SystemKeys.Reserved.Contains(hotkey))

@@ -1,6 +1,4 @@
-using System.Windows.Forms;
 using AuraTxt.Core.Services;
-using AuraTxt.Core.Util;
 
 namespace AuraTxt.Cli.Commands;
 
@@ -50,13 +48,34 @@ public class SettingsCommand(ConfigService config)
             s.TerminalUseConsoleWindow = tcb;
         if (opts.TryGetValue("force-popup-key", out var fp))
         {
-            var spec = KeyComboSpec.TryParse(fp);
-            if (spec is not { } parsed || (!parsed.IsEmpty && !Enum.TryParse<Keys>(parsed.Key, true, out _)))
+            if (string.IsNullOrWhiteSpace(fp) || fp.Equals("none", StringComparison.OrdinalIgnoreCase))
             {
-                Console.WriteLine($"✗ Invalid --force-popup-key: \"{fp}\" (e.g. F1, Ctrl+F1, or \"none\")");
-                return 1;
+                s.ForcePopupDoubleTapKey = "";
             }
-            s.ForcePopupDoubleTapKey = parsed.IsEmpty ? "" : parsed.ToString();
+            else
+            {
+                // Same validator as action hotkeys (AuraTxt.Cli.Commands.ActionCommand),
+                // just requireModifier:false + CtrlAltShiftOnly — see
+                // GlobalHookService.LoadForcePopupCombo for why "Win" isn't allowed here.
+                var (res, conflict) = new HotkeyValidator().Validate(fp, cfg.Actions,
+                    requireModifier: false, allowedModifiers: HotkeyValidator.CtrlAltShiftOnly);
+                if (res == HotkeyValidationResult.InvalidFormat)
+                {
+                    Console.WriteLine($"✗ Invalid --force-popup-key format: \"{fp}\" (e.g. F1, Ctrl+F1, or \"none\")");
+                    return 1;
+                }
+                if (res == HotkeyValidationResult.SystemReserved)
+                {
+                    Console.WriteLine($"✗ System reserved key: {fp}");
+                    return 1;
+                }
+                if (res == HotkeyValidationResult.Conflict)
+                {
+                    Console.WriteLine($"✗ \"{fp}\" is already used as action \"{conflict}\"'s hotkey");
+                    return 1;
+                }
+                s.ForcePopupDoubleTapKey = fp;
+            }
         }
         config.Save(cfg);
         Console.WriteLine("✓ Settings saved");

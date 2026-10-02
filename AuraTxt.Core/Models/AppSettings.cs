@@ -84,7 +84,8 @@ public class AppSettings
     /// between the two presses, force-triggers the ActionMenu for whatever text is
     /// currently selected — bypassing the normal mouse-driven trigger path, a manual
     /// escape hatch for apps where automatic capture is unreliable. Empty string = off.
-    /// Parsed by AuraTxt.Core.Util.KeyComboSpec. Opt-in and user-configurable, since
+    /// Validated by the same HotkeyValidator action hotkeys use (requireModifier:false,
+    /// CtrlAltShiftOnly), via auracfg's HotkeyCapture. Opt-in and user-configurable, since
     /// RegisterHotKey can't express a double-tap gesture and any single fixed key risks
     /// colliding with something else the user runs (e.g. double-tap Shift did). Re-parsed
     /// only when GlobalHookService (re)starts — changing this needs "Reload Settings".

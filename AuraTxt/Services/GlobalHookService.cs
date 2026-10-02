@@ -5,7 +5,6 @@ using System.Windows.Media;
 using Gma.System.MouseKeyHook;
 using AuraTxt.Core.Models;
 using AuraTxt.Core.Services;
-using AuraTxt.Core.Util;
 using AuraTxt.Windows;
 
 namespace AuraTxt.Services;
@@ -79,19 +78,38 @@ public class GlobalHookService
     private DateTime _lastCleanForcePopupKeyUpAt = DateTime.MinValue;
     private const int DoubleTapWindowMs = 400;
 
-    /// Parses AppSettings.ForcePopupDoubleTapKey into _forcePopupCombo. Silently disables
-    /// the feature (null) on blank/invalid input — this runs on every Start(), including
-    /// after a fresh install where hand-edited or stale config could contain garbage.
+    /// Parses AppSettings.ForcePopupDoubleTapKey into _forcePopupCombo. The string is
+    /// already validated by AuraTxt.Core.Services.HotkeyValidator at save time (auracfg's
+    /// General Settings / batch --set), the same validator action hotkeys use — just with
+    /// requireModifier:false and HotkeyValidator.CtrlAltShiftOnly, since this is detected
+    /// off the raw keyboard hook rather than registered via RegisterHotKey. Re-parsed here
+    /// defensively (silently disables on blank/garbage rather than throwing) in case of a
+    /// hand-edited config.json.
     private void LoadForcePopupCombo(ConfigRoot cfg)
     {
         _forcePopupCombo = null;
-        var spec = KeyComboSpec.TryParse(cfg.Settings.ForcePopupDoubleTapKey);
-        if (spec is { IsEmpty: false } s &&
-            Enum.TryParse<Keys>(s.Key, ignoreCase: true, out var keyVal) &&
-            Enum.IsDefined(typeof(Keys), keyVal))
+        var hotkey = cfg.Settings.ForcePopupDoubleTapKey;
+        if (string.IsNullOrWhiteSpace(hotkey)) return;
+
+        var parts = hotkey.Split('+');
+        if (!Enum.TryParse<Keys>(parts[^1].Trim(), ignoreCase: true, out var keyVal) ||
+            !Enum.IsDefined(typeof(Keys), keyVal))
+            return;
+
+        bool ctrl = false, alt = false, shift = false;
+        foreach (var mod in parts[..^1])
         {
-            _forcePopupCombo = new ForcePopupCombo(s.Ctrl, s.Alt, s.Shift, keyVal);
+            switch (mod.Trim().ToLowerInvariant())
+            {
+                case "ctrl":  ctrl  = true; break;
+                case "alt":   alt   = true; break;
+                case "shift": shift = true; break;
+                // "win" isn't tracked (ForcePopupCombo has no such bit) — HotkeyValidator
+                // rejects it via CtrlAltShiftOnly before this can be saved through auracfg,
+                // so it only reaches here via a hand-edited config.json; harmlessly ignored.
+            }
         }
+        _forcePopupCombo = new ForcePopupCombo(ctrl, alt, shift, keyVal);
     }
 
     /// True if `code` is one of the modifier keys required by `combo` — lets OnKeyDown

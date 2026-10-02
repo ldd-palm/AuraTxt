@@ -9,14 +9,19 @@ namespace AuraTxt.Cli;
 public static class HotkeyCapture
 {
     /// Returns a normalized hotkey string like "Alt+T", "" if blank, or null if Esc was pressed.
-    public static string? Capture(IEnumerable<ActionItem> actions, string? excludeId = null)
+    /// `requireModifier: false` / a restricted `allowedModifiers` set let a caller other
+    /// than action-hotkey editing (e.g. a double-tap gesture) reuse the same capture UX
+    /// with different format rules — see HotkeyValidator.
+    public static string? Capture(IEnumerable<ActionItem> actions, string? excludeId = null,
+        bool requireModifier = true, IReadOnlySet<string>? allowedModifiers = null)
     {
         var validator  = new HotkeyValidator();
         var actionList = actions.ToList();
+        var example    = requireModifier ? "Alt+T, Ctrl+Shift+R" : "F1, Ctrl+F1";
 
         while (true)
         {
-            Console.Write("  Hotkey (e.g. Alt+T, Ctrl+Shift+R — blank to skip, Esc to cancel): ");
+            Console.Write($"  Hotkey (e.g. {example} — blank to skip, Esc to cancel): ");
             var sb      = new StringBuilder();
             bool escaped = false;
             while (true)
@@ -37,12 +42,14 @@ public static class HotkeyCapture
             }
 
             var hotkey = Normalize(input);
-            var (res, conflict) = validator.Validate(hotkey, actionList, excludeId);
+            var (res, conflict) = validator.Validate(hotkey, actionList, excludeId, requireModifier, allowedModifiers);
 
             switch (res)
             {
                 case HotkeyValidationResult.InvalidFormat:
-                    WriteError("  Invalid format. Use Modifier+Key, e.g. Alt+T, Ctrl+Shift+R.");
+                    WriteError(requireModifier
+                        ? "  Invalid format. Use Modifier+Key, e.g. Alt+T, Ctrl+Shift+R."
+                        : $"  Invalid format. Use Key or Modifier+Key, e.g. {example}.");
                     continue;
                 case HotkeyValidationResult.SystemReserved:
                     WriteError($"  \"{hotkey}\" is a system-reserved key. Try another.");

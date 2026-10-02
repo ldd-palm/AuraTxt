@@ -1,8 +1,6 @@
-using System.Windows.Forms;
 using AuraTxt.Cli.Tui.Flows;
 using AuraTxt.Core.Models;
 using AuraTxt.Core.Services;
-using AuraTxt.Core.Util;
 
 namespace AuraTxt.Cli.Tui.Pages;
 
@@ -133,21 +131,16 @@ public class GeneralSettingsPage : PageBase
                 app.Renderer.SetNotice($"Paste Clipboard History → {(s.PasteUseClipboardHistory ? "Enabled (Win+V panel)" : "Disabled (direct paste)")}");
                 break;
             case "D":
-                // No defaultValue passed to Ask — blank Enter must mean "None" here, not
-                // "keep the current combo", since typing nothing is the intended way to
-                // disable this without having to type the word "none" out.
-                var fk = app.Renderer.Ask("Force popup key, double-tapped (e.g. F1, Ctrl+F1; blank = none)");
-                var spec = Core.Util.KeyComboSpec.TryParse(fk);
-                if (spec is not { } parsed || (!parsed.IsEmpty && !Enum.TryParse<Keys>(parsed.Key, true, out _)))
-                {
-                    app.Renderer.SetNotice($"Invalid key combo: \"{fk}\" (e.g. F1, Ctrl+F1)", NoticeKind.Warning);
-                }
-                else
-                {
-                    s.ForcePopupDoubleTapKey = parsed.IsEmpty ? "" : parsed.ToString();
-                    app.MarkDirty();
-                    app.Renderer.SetNotice($"Force Popup Key → {(parsed.IsEmpty ? "None" : parsed.ToString())} (use Reload Settings in AuraTxt's tray menu to apply)");
-                }
+                // Same capture UX as an action's own hotkey (see ActionDetailPage.EditHotkey)
+                // — requireModifier:false and CtrlAltShiftOnly because this is a double-tap
+                // gesture detected off the raw keyboard hook, not a RegisterHotKey
+                // registration: it can be a bare key like "F1", but can't track "Win" held
+                // (see GlobalHookService.LoadForcePopupCombo).
+                var fk = HotkeyCapture.Capture(app.Cfg.Actions, requireModifier: false, allowedModifiers: HotkeyValidator.CtrlAltShiftOnly);
+                if (fk is null) break; // Esc — leave unchanged
+                s.ForcePopupDoubleTapKey = fk;
+                app.MarkDirty();
+                app.Renderer.SetNotice($"Force Popup Key → {(string.IsNullOrEmpty(fk) ? "None" : fk)} (use Reload Settings in AuraTxt's tray menu to apply)");
                 break;
         }
         return false;
