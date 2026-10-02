@@ -252,17 +252,47 @@ public static class ClipboardService
     public static Task<string> GetSelectedTextAsync(int delayMs = 100) =>
         ClipboardWorkerThread.InvokeAsync(() => CaptureCoreAsync(delayMs));
 
+    // TryUiAutomation() is a synchronous cross-process COM call (AutomationElement.FocusedElement
+    // / TextPattern.GetSelection()), and CaptureCoreAsync below runs on ClipboardWorkerThread's
+    // single shared dispatcher (see that class). Observed with Gmail in Chrome: when the target
+    // app's accessibility bridge stalls, that call doesn't throw — it just never returns — which
+    // blocks the one shared worker thread and, with it, every future capture from every app until
+    // the underlying COM call eventually times out on its own (unpredictable, can be a long time).
+    // Bounding it here with its own throwaway STA thread means a hang only leaks that one thread
+    // instead of starving the shared worker.
+    private const int UiaProbeTimeoutMs = 400;
+
+    private static async Task<string?> TryUiAutomationWithTimeoutAsync(int timeoutMs)
+    {
+        var tcs = new TaskCompletionSource<string?>();
+        var thread = new Thread(() =>
+        {
+            string? result;
+            try { result = TryUiAutomation(); } catch { result = null; }
+            tcs.TrySetResult(result);
+        })
+        {
+            IsBackground = true,
+            Name = "AuraTxt-UiaProbe"
+        };
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+
+        var completed = await Task.WhenAny(tcs.Task, Task.Delay(timeoutMs));
+        return completed == tcs.Task ? await tcs.Task : null;
+    }
+
     private static async Task<string> CaptureCoreAsync(int delayMs)
     {
         // Fast path: UI Automation has no side effects, so try it immediately — most apps
         // (browsers, Office, VSCode) commit the selection to the accessibility tree
         // synchronously on mouse-up, so this skips delayMs entirely in the common case.
-        var text = TryUiAutomation();
+        var text = await TryUiAutomationWithTimeoutAsync(UiaProbeTimeoutMs);
         if (!string.IsNullOrWhiteSpace(text)) return text;
 
         // Slow path: give the app more time to settle, retry, then fall back to Ctrl+C simulation.
         await Task.Delay(delayMs);
-        text = TryUiAutomation();
+        text = await TryUiAutomationWithTimeoutAsync(UiaProbeTimeoutMs);
         if (!string.IsNullOrWhiteSpace(text)) return text;
 
         return await TryClipboardAsync() ?? "";
