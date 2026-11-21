@@ -1,5 +1,5 @@
 ====================================================================
- AuraTxt v2.2
+ AuraTxt v3.0
  A portable, highly customizable AI text assistant for Windows
 ====================================================================
 
@@ -26,6 +26,11 @@ WHAT YOU GET
   Ctrl+F1) to force the action bar for the current selection, for
   apps where automatic capture is unreliable (off by default, set
   in auracfg's General Settings)
+- Clipboard history: press Ctrl+` to see your recent copies (25 by
+  default, kept in memory only); press 0-9 to paste one instantly,
+  Enter to paste with formatting, Shift+Enter as plain text, or
+  click the search box to filter (on by default; toggle it and change
+  the hotkey, size, and plain-text key in auracfg's General Settings)
 - Auto-close on unfocus: optionally close result windows as soon as
   you click anywhere else (off by default, set in auracfg's General
   Settings; pinned windows stay open)
@@ -33,16 +38,13 @@ WHAT YOU GET
   About window)
 
 --------------------------------------------------------------------
-WHAT'S NEW IN v2.2
+WHAT'S NEW IN v3.0
 --------------------------------------------------------------------
-- Fixed manual Ctrl+C sometimes failing to copy (or pasting old
-  content) when pressed right after selecting text
-- Fixed the action bar often not popping up in some apps (e.g. Total
-  Commander's Lister viewing .doc files), and made it pop up about
-  twice as fast there
-- Your previous clipboard content is now reliably restored after
-  the action bar grabs a selection
-- Added the optional auto-close-on-unfocus setting above
+- New clipboard history window (see above). Note: Ditto uses the same
+  default hotkey (Ctrl+`) -- if you run Ditto, quit it or pick a
+  different key in auracfg's General Settings
+- Fixed action hotkeys containing a digit (e.g. Ctrl+1) silently not
+  working
 
 --------------------------------------------------------------------
 QUICK START

@@ -9,7 +9,7 @@
     <AssemblyName>AuraTxt</AssemblyName>
     <ApplicationIcon>Resources\aruatxt_active.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>2.2</Version>
+    <Version>3.0</Version>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\AuraTxt.Core\AuraTxt.Core.csproj" />
