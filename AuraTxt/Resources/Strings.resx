@@ -45,4 +45,7 @@
   <data name="ClipHistory_Title" xml:space="preserve"><value>Clipboard History</value></data>
   <data name="ClipHistory_SearchHint" xml:space="preserve"><value>Click here to search…</value></data>
   <data name="ClipHistory_Empty" xml:space="preserve"><value>No clipboard history yet</value></data>
+  <data name="Tray_SaveClipboardHistory" xml:space="preserve"><value>Save Clipboard History</value></data>
+  <data name="Tray_ClipboardHistorySavedFormat" xml:space="preserve"><value>Saved {0} clipboard history items.</value></data>
+  <data name="Tray_ClipboardHistorySaveFailed" xml:space="preserve"><value>Could not save the clipboard history.</value></data>
 </root>

@@ -29,3 +29,7 @@ docs/
 
 ## Config files (contain API keys — never push)
 **/config.json.bak
+
+## Saved clipboard history (user data, encrypted — never push or ship)
+**/clipboard_history.dat
+**/clipboard_history.dat.tmp

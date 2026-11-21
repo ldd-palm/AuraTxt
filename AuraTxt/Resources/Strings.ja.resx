@@ -34,4 +34,7 @@
   <data name="ClipHistory_Title" xml:space="preserve"><value>クリップボード履歴</value></data>
   <data name="ClipHistory_SearchHint" xml:space="preserve"><value>クリックして検索…</value></data>
   <data name="ClipHistory_Empty" xml:space="preserve"><value>クリップボード履歴はまだありません</value></data>
+  <data name="Tray_SaveClipboardHistory" xml:space="preserve"><value>クリップボード履歴を保存</value></data>
+  <data name="Tray_ClipboardHistorySavedFormat" xml:space="preserve"><value>クリップボード履歴を {0} 件保存しました。</value></data>
+  <data name="Tray_ClipboardHistorySaveFailed" xml:space="preserve"><value>クリップボード履歴を保存できませんでした。</value></data>
 </root>

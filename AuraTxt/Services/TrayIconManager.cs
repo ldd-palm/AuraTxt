@@ -15,6 +15,7 @@ public class TrayIconManager : IDisposable
     private readonly ConfigService _config;
     private readonly MenuItem _toggleMonitorItem = null!;
     private readonly MenuItem _toggleMenuItem = null!;
+    private readonly MenuItem _saveClipItem = null!;
     private readonly MenuItem _settingsItem = null!;
     private readonly MenuItem _aboutItem = null!;
     private readonly MenuItem _reloadItem = null!;
@@ -26,7 +27,8 @@ public class TrayIconManager : IDisposable
     private static readonly System.Windows.Media.SolidColorBrush UpdateHintBrush =
         new(System.Windows.Media.Color.FromRgb(0x25, 0x63, 0xEB));
 
-    public TrayIconManager(ConfigService config, Action onReload, Action onExit, Action? onToggleMonitor = null)
+    public TrayIconManager(ConfigService config, Action onReload, Action onExit, Action? onToggleMonitor = null,
+        ClipboardHistoryService? clipHistory = null)
     {
         _config = config;
         _icon = new TaskbarIcon
@@ -50,6 +52,17 @@ public class TrayIconManager : IDisposable
         {
             AppState.IsMenuHidden = !AppState.IsMenuHidden;
             _toggleMenuItem.Header = AppState.IsMenuHidden ? Strings.Tray_ShowMenu : Strings.Tray_HideMenu;
+        };
+
+        // Manual save point for the clipboard history (also saved on exit/shutdown/pause).
+        // Greyed out while the feature is off — the file isn't touched then.
+        _saveClipItem = new MenuItem { Header = Strings.Tray_SaveClipboardHistory };
+        _saveClipItem.Click += (_, _) =>
+        {
+            var saved = clipHistory?.Save();
+            _icon.ShowNotification("AuraTxt",
+                saved is { } n ? string.Format(Strings.Tray_ClipboardHistorySavedFormat, n) : Strings.Tray_ClipboardHistorySaveFailed,
+                saved is null ? NotificationIcon.Warning : NotificationIcon.Info);
         };
 
         _reloadItem = new MenuItem { Header = Strings.Tray_ReloadSettings };
@@ -84,6 +97,7 @@ public class TrayIconManager : IDisposable
                 ? "auracfg"
                 : System.IO.Path.GetFileNameWithoutExtension(editor);
             _settingsItem.Header = $"{Strings.Tray_Settings} ({name})";
+            _saveClipItem.IsEnabled = clipHistory?.IsActive == true;
 
             if (_pendingUpdate is { } pending)
             {
@@ -103,6 +117,7 @@ public class TrayIconManager : IDisposable
 
         menu.Items.Add(_toggleMonitorItem);
         menu.Items.Add(_toggleMenuItem);
+        menu.Items.Add(_saveClipItem);
         menu.Items.Add(_reloadItem);
         menu.Items.Add(_settingsItem);
         menu.Items.Add(_aboutItem);
@@ -147,6 +162,7 @@ public class TrayIconManager : IDisposable
             ? Strings.Tray_ServiceResume : Strings.Tray_ServicePause;
         _toggleMenuItem.Header = AppState.IsMenuHidden
             ? Strings.Tray_ShowMenu : Strings.Tray_HideMenu;
+        _saveClipItem.Header = Strings.Tray_SaveClipboardHistory;
         _reloadItem.Header = Strings.Tray_ReloadSettings;
         _exitItem.Header = Strings.Tray_Exit;
     }

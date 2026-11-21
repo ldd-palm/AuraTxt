@@ -72,7 +72,10 @@ public partial class App : Application
                     _hotkeys!.UnregisterAll();
                 else
                     _hotkeys!.RegisterAll(_config!.Load());
-            });
+                // Pause only unregisters hotkeys (incl. the history one) — the clipboard
+                // keeps being recorded. Pause/resume is also a save point.
+                _clipHistory!.Save();
+            }, _clipHistory);
             _hook    = new GlobalHookService(_config, _hotkeys);
             _hook.Start();
             Microsoft.Win32.SystemEvents.PowerModeChanged += OnPowerModeChanged;
@@ -168,11 +171,20 @@ public partial class App : Application
         }
     }
 
+    /// Windows shutdown/logoff: OnExit isn't guaranteed to get to run in the short window
+    /// Windows allows, so save the clipboard history here first.
+    protected override void OnSessionEnding(SessionEndingCancelEventArgs e)
+    {
+        _clipHistory?.Save();
+        base.OnSessionEnding(e);
+    }
+
     protected override void OnExit(ExitEventArgs e)
     {
         Microsoft.Win32.SystemEvents.PowerModeChanged -= OnPowerModeChanged;
         _hook?.Stop();
         _hotkeys?.UnregisterAll();
+        _clipHistory?.Save();
         _clipHistory?.Dispose();
         _tray?.Dispose();
         try { _instanceMutex?.ReleaseMutex(); } catch { }

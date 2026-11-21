@@ -360,11 +360,14 @@ ActionProcessed LastProcessedText=T   SelectionActioned=true
 
 ### 5.11 剪贴板历史（ClipboardHistoryService + ClipboardHistory）[关键]
 
-- **数据**：`AuraTxt.Core.Services.ClipboardHistory`（纯内存、最新在前、非线程安全——只在 UI 线程上访问）。`ClipboardHistoryEntry(Text, Formats)`：`Text` 是纯文本（Shift+Enter 粘贴的内容、搜索匹配对象、去重键），`Formats` 是同时记录的富文本格式（`HTML Format`、`Rich Text Format`，单个超过 100 万字符则不存）。`Add`：空白文本忽略；与已有条目文本完全相同（区分大小写）则替换并移到最前，不重复；超出 `Capacity` 丢最旧。`MoveToTop`：粘贴后调用，条目已被挤出则 no-op。不持久化——重启即清空（避免把可能含密码的剪贴板内容明文落盘）；只记文本，不记图片/文件。
+- **数据**：`AuraTxt.Core.Services.ClipboardHistory`（纯内存、最新在前、非线程安全——只在 UI 线程上访问）。`ClipboardHistoryEntry(Text, Formats)`：`Text` 是纯文本（Shift+Enter 粘贴的内容、搜索匹配对象、去重键），`Formats` 是同时记录的富文本格式（`HTML Format`、`Rich Text Format`，单个超过 100 万字符则不存）。`Add`：空白文本忽略；与已有条目文本完全相同（区分大小写）则替换并移到最前，不重复；超出 `Capacity` 丢最旧。`MoveToTop`：粘贴后调用，条目已被挤出则 no-op。`AppendOlder`：把（从磁盘读回的）较旧条目接在现有条目之后，跳过空白和已有文本，再按容量截断。只记文本（附带 HTML/RTF），不记图片/文件。
+- **[关键] 存盘（`ClipboardHistoryStore`，Core）**：固定文件 `{exe 目录}/clipboard_history.dat`（便携，同 config.json）。内容＝`{Version, Items:[{Text, Formats}]}` 的 JSON，经 **DPAPI（`ProtectedData`，`CurrentUser` 作用域 + 固定 entropy）加密**后写入——剪贴板常含密码/token，绝不能明文落盘；文件被拷到其他机器/账户上无法解密，读出来就是空历史。写入走"临时文件 + `File.Move` 覆盖"，崩溃不会留下半截文件。读取：文件缺失/为空/损坏/无法解密一律返回空列表、记日志、不抛异常（下次保存直接覆盖）。
+- **存盘时机**（`ClipboardHistoryService.Save()`）：正常退出（`App.OnExit`，在释放监听之前）；Windows 关机/注销（`App.OnSessionEnding`——关机时留给进程的时间很短，`OnExit` 不一定来得及跑）；托盘 Pause/Resume 服务时；托盘菜单"保存剪贴历史"（在"隐藏菜单"下面，手动存盘，结果用托盘气泡提示条数或失败；功能未启用时该项置灰）。**异常退出（崩溃、断电、强制重启）不做任何处理**——下次启动回填最近一次保存的内容，此后复制的条目丢失，可接受。
+- **回填**：`Apply()` 中从未启用变为启用时（启动、或总开关重新打开）`Load` 文件并 `AppendOlder` 合并到内存之后（内存里的视为更新的）。**总开关关闭（或热键为空）时，文件保留但既不读也不写**；关闭那一刻内存里未保存的条目不会写入。
 - **监听**：`AuraTxt.Services.ClipboardHistoryService` 在 UI 线程上建一个 message-only 窗口（`HwndSource`，父窗 `HWND_MESSAGE`）+ `AddClipboardFormatListener`，收到 `WM_CLIPBOARDUPDATE` 后：同一序号只处理一次 → `ClipboardService.IsOwnClipboardChange(seq)` 为真则跳过 → `ClipboardService.ReadForHistoryAsync()` 读取（`RunOnThrowawayStaThreadAsync` 带超时，失败重试 3 次——变化通知那一刻其他监听者（Windows 剪贴板历史、Ditto）常常正好打开着剪贴板）→ `History.Add`。`Apply(settings)` 在启动和 Reload Settings 时调用：按 `IsClipboardHistoryActive` 启停监听、更新容量。
 - **尊重"不要记录"标记**：剪贴板含 `ExcludeClipboardContentFromMonitorProcessing` 或 `Clipboard Viewer Ignore` 格式、或 `CanIncludeInClipboardHistory` 值为 0（密码管理器等会设置）时不记录。
 - **[关键] 排除 AuraTxt 自己造成的剪贴板变化**：划词取词（目标应用响应模拟 Ctrl+C 的写入 + 我们的恢复写入）、Replace、从历史窗粘贴，都包在 `ClipboardService.BeginOwnWrite()/EndOwnWrite()` 之间。`WM_CLIPBOARDUPDATE` 是异步投递的，通知可能在写入结束后才被处理，所以除了"当前有自己的写入在进行"外，还记下最近一次自己写入覆盖的序号区间 `[_ownSeqFrom, _ownSeqTo]`，落在区间内的变化同样跳过。代价：用户恰好在这个区间内的真实复制也会被漏记，罕见、可接受。**ResultWindow/InteractiveWindow/ActionMenu 的 Copy 按钮写入不排除**——那是用户主动复制，应该进历史（与 Ditto 行为一致）。
-- 托盘 Pause 不停止记录；只有总开关关闭或热键为空才停止。
+- 托盘 Pause 注销所有热键（含剪贴板历史热键，Pause 期间打不开历史窗），但**不停止记录**；Resume 后重新注册、可以呼出。只有总开关关闭或热键为空才停止记录。
 
 ## 6. AiClient + Profile + Adapter 层（位于 Core）
 
@@ -722,7 +725,7 @@ dotnet publish AuraTxt.Cli/AuraTxt.Cli.csproj -c Release -r win-x64 --self-conta
 
 ### 12.3 打包（zip）
 
-打包前把仓库根目录的 `readme.txt` 复制进 `publish/release`。**[关键]** 若 `publish/release` 里有 `config.json.bak`（auracfg 保存时自动生成的备份，见 §11），打包前必须删除——它不是发布产物，不该出现在用户拿到的 zip 里。
+打包前把仓库根目录的 `readme.txt` 复制进 `publish/release`。**[关键]** 若 `publish/release` 里有 `config.json.bak`（auracfg 保存时自动生成的备份，见 §11），打包前必须删除——它不是发布产物，不该出现在用户拿到的 zip 里。**[关键]** 同理必须删除 `clipboard_history.dat`/`clipboard_history.dat.tmp`（保存的剪贴板历史，见 §5.11）——在 `publish/release` 里运行过程序就会生成，是个人数据（虽然加密，也绝不能随包发布）。
 
 不要直接压缩 `publish/release/*`——先把内容拷进一层 `AuraTXT/` 子目录（如 `publish/staging/AuraTXT/`），再对该子目录整体压缩，使 zip 内容形如 `AuraTXT/AuraTxt.exe`、`AuraTXT/config.json` 等，用户解压后得到一个 `AuraTXT` 文件夹而不是散落的文件：
 

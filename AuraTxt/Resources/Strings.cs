@@ -21,6 +21,9 @@ public static class Strings
     public static string Tray_Settings             => Rm.GetString(nameof(Tray_Settings))!;
     public static string Tray_About                => Rm.GetString(nameof(Tray_About))!;
     public static string Tray_Exit                 => Rm.GetString(nameof(Tray_Exit))!;
+    public static string Tray_SaveClipboardHistory => Rm.GetString(nameof(Tray_SaveClipboardHistory))!;
+    public static string Tray_ClipboardHistorySavedFormat => Rm.GetString(nameof(Tray_ClipboardHistorySavedFormat))!;
+    public static string Tray_ClipboardHistorySaveFailed  => Rm.GetString(nameof(Tray_ClipboardHistorySaveFailed))!;
     public static string About_WindowTitle         => Rm.GetString(nameof(About_WindowTitle))!;
     public static string About_RuntimeFormat       => Rm.GetString(nameof(About_RuntimeFormat))!;
     public static string About_CheckingForUpdates  => Rm.GetString(nameof(About_CheckingForUpdates))!;

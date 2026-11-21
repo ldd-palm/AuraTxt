@@ -34,4 +34,7 @@
   <data name="ClipHistory_Title" xml:space="preserve"><value>Zwischenablage-Verlauf</value></data>
   <data name="ClipHistory_SearchHint" xml:space="preserve"><value>Hier klicken zum Suchen…</value></data>
   <data name="ClipHistory_Empty" xml:space="preserve"><value>Noch kein Zwischenablage-Verlauf</value></data>
+  <data name="Tray_SaveClipboardHistory" xml:space="preserve"><value>Zwischenablage-Verlauf speichern</value></data>
+  <data name="Tray_ClipboardHistorySavedFormat" xml:space="preserve"><value>{0} Einträge des Zwischenablage-Verlaufs gespeichert.</value></data>
+  <data name="Tray_ClipboardHistorySaveFailed" xml:space="preserve"><value>Der Zwischenablage-Verlauf konnte nicht gespeichert werden.</value></data>
 </root>

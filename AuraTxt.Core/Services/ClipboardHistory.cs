@@ -39,6 +39,19 @@ public sealed class ClipboardHistory
         Trim();
     }
 
+    /// Appends `older` (newest first, e.g. loaded from disk) after the current items —
+    /// skipping blanks and texts already present — then trims to Capacity. The in-memory
+    /// items count as newer, so they keep their place at the top.
+    public void AppendOlder(IEnumerable<ClipboardHistoryEntry> older)
+    {
+        foreach (var e in older)
+        {
+            if (string.IsNullOrWhiteSpace(e.Text) || _items.Any(i => i.Text == e.Text)) continue;
+            _items.Add(e);
+        }
+        Trim();
+    }
+
     /// Moves an existing item to the top (after it was pasted). No-op if it has since
     /// been trimmed out of the history.
     public void MoveToTop(ClipboardHistoryEntry entry)

@@ -26,13 +26,49 @@ public sealed class ClipboardHistoryService : IDisposable
 
     public ClipboardHistory History { get; } = new(25);
 
-    /// Applies ClipboardHistorySize/ClipboardHistoryHotkey — at startup and on "Reload Settings".
+    /// Fixed location next to the exe (portable, like config.json). Excluded from
+    /// release zips — see SPEC.md §12.3.
+    public static string FilePath => System.IO.Path.Combine(AppContext.BaseDirectory, "clipboard_history.dat");
+
+    /// Listening/recording right now (switch on + hotkey set). While inactive the history
+    /// file is neither read nor written — it's left on disk untouched.
+    public bool IsActive => _source is not null;
+
+    /// Applies ClipboardHistorySize/ClipboardHistoryHotkey — at startup and on "Reload
+    /// Settings". Becoming active (startup, or the switch turned back on) loads the saved
+    /// file and merges it under whatever is already in memory.
     public void Apply(AppSettings settings)
     {
         History.Capacity = Math.Min(settings.ClipboardHistorySize, AppSettings.ClipboardHistoryMaxSize);
         var enabled = settings.IsClipboardHistoryActive;
-        if (enabled && _source is null) Start();
+        if (enabled && _source is null)
+        {
+            Start();
+            var saved = ClipboardHistoryStore.Load(FilePath);
+            History.AppendOlder(saved);
+            LogService.Info($"[history] loaded {saved.Count} saved entries");
+        }
         else if (!enabled && _source is not null) Stop();
+    }
+
+    /// Writes the in-memory history to FilePath. Called on normal exit, Windows
+    /// shutdown/logoff, service pause/resume, and the tray's "Save Clipboard History".
+    /// Returns the number of entries saved, or null if inactive (nothing written) or the
+    /// write failed. A crash loses only what was copied since the last save.
+    public int? Save()
+    {
+        if (!IsActive) return null;
+        try
+        {
+            ClipboardHistoryStore.Save(FilePath, History.Items);
+            LogService.Info($"[history] saved {History.Items.Count} entries");
+            return History.Items.Count;
+        }
+        catch (Exception ex)
+        {
+            LogService.Error("Clipboard history save failed", ex);
+            return null;
+        }
     }
 
     private void Start()
