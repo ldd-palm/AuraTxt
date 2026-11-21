@@ -31,4 +31,7 @@
   <data name="PromptEdit_Title" xml:space="preserve"><value>프롬프트 편집</value></data>
   <data name="PromptEdit_BuiltinTitle" xml:space="preserve"><value>내장 모델</value></data>
   <data name="PromptEdit_GenerateButton" xml:space="preserve"><value>생성</value></data>
+  <data name="ClipHistory_Title" xml:space="preserve"><value>클립보드 기록</value></data>
+  <data name="ClipHistory_SearchHint" xml:space="preserve"><value>클릭하여 검색…</value></data>
+  <data name="ClipHistory_Empty" xml:space="preserve"><value>클립보드 기록이 없습니다</value></data>
 </root>

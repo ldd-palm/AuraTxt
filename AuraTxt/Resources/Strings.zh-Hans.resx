@@ -31,4 +31,7 @@
   <data name="PromptEdit_Title" xml:space="preserve"><value>编辑提示词</value></data>
   <data name="PromptEdit_BuiltinTitle" xml:space="preserve"><value>内置模型</value></data>
   <data name="PromptEdit_GenerateButton" xml:space="preserve"><value>生成</value></data>
+  <data name="ClipHistory_Title" xml:space="preserve"><value>剪贴板历史</value></data>
+  <data name="ClipHistory_SearchHint" xml:space="preserve"><value>点击此处搜索…</value></data>
+  <data name="ClipHistory_Empty" xml:space="preserve"><value>暂无剪贴板历史</value></data>
 </root>

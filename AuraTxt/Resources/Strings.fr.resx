@@ -31,4 +31,7 @@
   <data name="PromptEdit_Title" xml:space="preserve"><value>Modifier le prompt</value></data>
   <data name="PromptEdit_BuiltinTitle" xml:space="preserve"><value>Modèle intégré</value></data>
   <data name="PromptEdit_GenerateButton" xml:space="preserve"><value>Générer</value></data>
+  <data name="ClipHistory_Title" xml:space="preserve"><value>Historique du presse-papiers</value></data>
+  <data name="ClipHistory_SearchHint" xml:space="preserve"><value>Cliquez ici pour rechercher…</value></data>
+  <data name="ClipHistory_Empty" xml:space="preserve"><value>Aucun historique du presse-papiers</value></data>
 </root>

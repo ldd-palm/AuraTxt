@@ -31,4 +31,7 @@
   <data name="PromptEdit_Title" xml:space="preserve"><value>プロンプトを編集</value></data>
   <data name="PromptEdit_BuiltinTitle" xml:space="preserve"><value>組み込みモデル</value></data>
   <data name="PromptEdit_GenerateButton" xml:space="preserve"><value>生成</value></data>
+  <data name="ClipHistory_Title" xml:space="preserve"><value>クリップボード履歴</value></data>
+  <data name="ClipHistory_SearchHint" xml:space="preserve"><value>クリックして検索…</value></data>
+  <data name="ClipHistory_Empty" xml:space="preserve"><value>クリップボード履歴はまだありません</value></data>
 </root>

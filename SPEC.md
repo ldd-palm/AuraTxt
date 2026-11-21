@@ -127,7 +127,11 @@ class ActionItem {
 | PauseOnFullscreenApp | true | 前台窗口是否"独占全屏"（铺满整块屏幕 + 无标题栏）时自动跳过划词捕获（见 §5.2.1） |
 | PasteUseClipboardHistory | true | Paste 内置模型是否弹出 Windows 剪贴板历史面板（Win+V）；关闭则直接粘贴当前剪贴板内容，跳过历史面板（见 §9.7） |
 | ForcePopupDoubleTapKey | "" | 用户自定义的双击组合键字符串（如 `"F1"`、`"Ctrl+F1"`，复用 `HotkeyValidator`/`HotkeyCapture` 校验，见 §5.2），双击（中间不夹杂其他按键）强制对当前选中文本弹出/更新 ActionMenu，绕开鼠标触发链路的全部状态判断；空字符串＝关闭，默认关闭 |
-| AutoCloseOnUnfocus | false | ResultWindow/InteractiveWindow 失焦自动关闭：开启后点击 AuraTxt 自身窗口以外的任何地方（或窗口被切走）即关闭（pin/编辑 prompt 中除外）；关闭＝只能通过标题栏按钮/Esc 关闭（见 §8） |
+| AutoCloseOnUnfocus | false | ResultWindow/InteractiveWindow 失焦自动关闭：开启后点击 AuraTxt 自身窗口以外的任何地方（或窗口被切走）即关闭（pin/编辑 prompt 中除外）；关闭＝只能通过标题栏按钮/Esc 关闭（见 §7.2） |
+| ClipboardHistoryEnabled | true | 剪贴板历史总开关；关闭＝不监听剪贴板、不记录、不注册热键。实际是否运行看 `IsClipboardHistoryActive`（`[JsonIgnore]` 计算属性＝本开关开 **且** `ClipboardHistoryHotkey` 非空）。改后需 Reload Settings（见 §5.11） |
+| ClipboardHistoryHotkey | "Ctrl+`" | 呼出剪贴板历史窗口的全局热键（RegisterHotKey，与 action 热键同一校验器，额外支持 `` ` `` 键）；空字符串同样使功能不运行。改后需 Reload Settings。**注意**：Ditto 的默认热键同为 Ctrl+`，两者同时运行时后启动者注册失败（记日志） |
+| ClipboardHistorySize | 25 | 内存中保留的剪贴板历史条数（1–100），改后需 Reload Settings |
+| ClipboardHistoryPlainTextKey | "Shift+Enter" | 剪贴板历史窗口内"以纯文本粘贴"的按键，限 `AppSettings.ClipboardPlainTextKeys`（Shift/Ctrl/Alt+Enter）之一——必须是 Enter 的变体，不能与数字键/方向键/Esc 冲突 |
 
 ### 3.6 首次运行默认配置
 
@@ -288,7 +292,8 @@ ActionProcessed LastProcessedText=T   SelectionActioned=true
 ### 5.6 全局热键（HotkeyService）
 
 - `RegisterAll(cfg)`：遍历 Hotkey 非空的 action，解析为 `Key`+`ModifierKeys` 后 `HotkeyManager.Current.AddOrReplace(action.Id, ...)`；被其他程序占用时静默跳过。先 `UnregisterAll()` 再注册（幂等）。
-- 解析规则 [关键]：`"Ctrl+Alt+T"` 按 `+` 切分，至少 2 段；修饰符限 ctrl/alt/shift/win（大小写不敏感）；**未知修饰符必须整体拒绝**（否则 `"Foo+T"` 会注册裸 T 为系统级热键）；尾段用 `Enum.TryParse<Key>`。
+- 解析规则 [关键]：`"Ctrl+Alt+T"` 按 `+` 切分，至少 2 段；修饰符限 ctrl/alt/shift/win（大小写不敏感）；**未知修饰符必须整体拒绝**（否则 `"Foo+T"` 会注册裸 T 为系统级热键）；尾段用 `Enum.TryParse<Key>`。**[关键] 数字和 `` ` `` 必须显式映射**：`Enum.TryParse` 会把纯数字串当成枚举的**数值**解析（`"1"` → `(Key)1` = `Key.Cancel`；WinForms 的 `(Keys)1` = `LButton`），`"Ctrl+1"` 曾经静默注册成了错误的键（曾经的真实 bug，已修复）——`"0"`–`"9"` 映射为 `Key.D0`–`D9`、`` "`" `` 映射为 `Key.OemTilde`；`GlobalHookService.LoadForcePopupCombo` 对 WinForms `Keys` 做同样的映射（`Keys.D0`–`D9`、`Keys.Oemtilde`）。
+- 剪贴板历史热键也在 `RegisterAll` 里注册（固定 id `__clipboard_history`，仅当 `Settings.IsClipboardHistoryActive`），因此自动继承 Pause/Resume、Reload Settings 的注销/重注册逻辑；回调：历史窗已开则关闭（再按一次＝关闭），否则 `CaptureSourceWindow()` 记下前台窗口后打开 `ClipboardHistoryWindow`（§7.5）。注册失败（被其他程序或 action 热键占用）记 `LogService.Error`。
 - 热键回调 `FireActionAsync`：**[关键]** 第一行立即 `AppState.SourceWindowHandle = ClipboardService.CaptureSourceWindow()`（在任何 await 之前捕获 HWND；热键路径不经过 GlobalHookService，若不在此捕获则 Replace 时 hwnd=Zero，`ReplaceInSourceWindowAsync` early return，无任何反应）→ 取文本（delay 50ms）→ 空则返回 → 置 `SelectionActioned=true` → 系统 action 内联处理（speech/copy/google），AI action 经 Dispatcher 调 `ShowResultFor`。
 - `ShowResultFor(action, text, cfg)`（static）：`IsInteractive` ? InteractiveWindow : ResultWindow，`.Show()`。**[关键]** 鼠标路径（ActionMenuWindow 按钮点击）与热键路径（`FireActionAsync`）都调用这同一个静态方法——这是唯一的分支点。当 `action.ModelId=="default/Terminal"` 且 `Settings.TerminalUseConsoleWindow=true` 时短路：**不**打开 ResultWindow/InteractiveWindow 中的任何一个，而是 `cfg.ResolveModel` 解析出 `(provider, model)` 后以 `Task.Run` 方式不等待地调用 `AiClient.CompleteAsync("default", provider, model, action, selectedText, "", CancellationToken.None)`（异常经 try/catch 走 `LogService.Error`，避免 unobserved task exception），随后直接返回。同理，`action.ModelId=="default/Clipboard_Paste"` 时也短路：不开任何窗口，`Task.Run` 调用 `ClipboardPasteService.RunAsync(AppState.SourceWindowHandle, cfg.Settings.PasteUseClipboardHistory)`（同样 try/catch → `LogService.Error`，避免 unobserved task exception），随后直接返回——见 §9.7。
 
@@ -352,6 +357,14 @@ ActionProcessed LastProcessedText=T   SelectionActioned=true
 **[关键]** 这是 AuraTxt 唯一一处写到自身便携目录之外的持久化状态（README 的"no hidden AppData folders, no registry entries"这条描述因此不再 100% 成立，需要同步说明）。如果用户把整个程序文件夹搬到别的路径/改名，注册表里记录的还是旧路径，直到下次 `Apply` 被调用（AuraTxt 启动，或 Reload Settings）才会用当前 `AppContext.BaseDirectory` 算出的新路径覆盖修正——不会自动跟着文件夹移动实时更新。
 
 **生效时机**：`App.OnStartup`（`ExePath` 用 `Path.Combine(AppContext.BaseDirectory, "AuraTxt.exe")` 算出，不是 `auracfg.exe`）和 `ReloadConfig()` 里各调用一次，和 `LocalizationService.Apply`/`ApplyTheme` 同一批"用配置同步实际系统状态"的调用。`OpenSubKey` 找不到 Run 键本身（HKCU 下该键理论上恒存在，但防御性处理）时直接 return，不让开机自启动的注册表操作阻断正常启动流程。
+
+### 5.11 剪贴板历史（ClipboardHistoryService + ClipboardHistory）[关键]
+
+- **数据**：`AuraTxt.Core.Services.ClipboardHistory`（纯内存、最新在前、非线程安全——只在 UI 线程上访问）。`ClipboardHistoryEntry(Text, Formats)`：`Text` 是纯文本（Shift+Enter 粘贴的内容、搜索匹配对象、去重键），`Formats` 是同时记录的富文本格式（`HTML Format`、`Rich Text Format`，单个超过 100 万字符则不存）。`Add`：空白文本忽略；与已有条目文本完全相同（区分大小写）则替换并移到最前，不重复；超出 `Capacity` 丢最旧。`MoveToTop`：粘贴后调用，条目已被挤出则 no-op。不持久化——重启即清空（避免把可能含密码的剪贴板内容明文落盘）；只记文本，不记图片/文件。
+- **监听**：`AuraTxt.Services.ClipboardHistoryService` 在 UI 线程上建一个 message-only 窗口（`HwndSource`，父窗 `HWND_MESSAGE`）+ `AddClipboardFormatListener`，收到 `WM_CLIPBOARDUPDATE` 后：同一序号只处理一次 → `ClipboardService.IsOwnClipboardChange(seq)` 为真则跳过 → `ClipboardService.ReadForHistoryAsync()` 读取（`RunOnThrowawayStaThreadAsync` 带超时，失败重试 3 次——变化通知那一刻其他监听者（Windows 剪贴板历史、Ditto）常常正好打开着剪贴板）→ `History.Add`。`Apply(settings)` 在启动和 Reload Settings 时调用：按 `IsClipboardHistoryActive` 启停监听、更新容量。
+- **尊重"不要记录"标记**：剪贴板含 `ExcludeClipboardContentFromMonitorProcessing` 或 `Clipboard Viewer Ignore` 格式、或 `CanIncludeInClipboardHistory` 值为 0（密码管理器等会设置）时不记录。
+- **[关键] 排除 AuraTxt 自己造成的剪贴板变化**：划词取词（目标应用响应模拟 Ctrl+C 的写入 + 我们的恢复写入）、Replace、从历史窗粘贴，都包在 `ClipboardService.BeginOwnWrite()/EndOwnWrite()` 之间。`WM_CLIPBOARDUPDATE` 是异步投递的，通知可能在写入结束后才被处理，所以除了"当前有自己的写入在进行"外，还记下最近一次自己写入覆盖的序号区间 `[_ownSeqFrom, _ownSeqTo]`，落在区间内的变化同样跳过。代价：用户恰好在这个区间内的真实复制也会被漏记，罕见、可接受。**ResultWindow/InteractiveWindow/ActionMenu 的 Copy 按钮写入不排除**——那是用户主动复制，应该进历史（与 Ditto 行为一致）。
+- 托盘 Pause 不停止记录；只有总开关关闭或热键为空才停止。
 
 ## 6. AiClient + Profile + Adapter 层（位于 Core）
 
@@ -510,6 +523,15 @@ LogService：静态类，`Enabled`+`LogPath` 控制；`Info/Error/Raw` 三个方
 ### 7.4 PromptEditDialog
 
 简单模态：多行 TextBox + OK/Cancel；支持 readOnly 模式（内置模型提示用）。`Owner` 设为父窗。
+
+### 7.5 ClipboardHistoryWindow（剪贴板历史窗）
+
+- 由 `Settings.ClipboardHistoryHotkey`（默认 Ctrl+`）呼出，屏幕居中、Topmost、**会激活**（与不抢焦点的 ActionMenu 相反——需要接收键盘；WM_HOTKEY 赋予了前台权限）。Ditto 风格：无标题栏，右上角小 ✕（自定义模板，hover 走主题色而非系统蓝）；行号是每行左上角的小号灰字；交替行底色（`TitleBarFill`）；选中行 `CmbHighlight` + 左侧 `Accent` 竖条；底部搜索框。全部颜色走主题 DynamicResource。
+- 列表：最新在前；**只有前 10 行显示 0–9 行号**（0＝最新），其余无行号；一次显示 10 行（`MaxHeight` 300 = 10×30），更多的用方向键滚动。
+- 按键（`PreviewKeyDown`）：**0–9（含小键盘）直接粘贴对应行，不需要 Enter**；↑/↓ 移动选中；Enter 粘贴选中行（带格式）；`Settings.ClipboardHistoryPlainTextKey`（默认 Shift+Enter）以纯文本粘贴；双击行＝Enter。
+- **[关键] 搜索框只能点击进入**（`IsTabStop=False`，打开时焦点在列表）——避免数字键误输入；焦点在搜索框时数字键是输入字符、不触发粘贴，↑/↓/Enter 仍作用于列表。输入即筛选（`ClipboardHistory.Search`，对纯文本做大小写不敏感的子串匹配），行号对应筛选后的行。Esc：搜索框有字→清空并回到列表；搜索框空但有焦点→回到列表；否则关闭窗口。
+- 失焦（`Deactivated`）即关闭——与 `AutoCloseOnUnfocus` 设置无关。
+- 粘贴：**[关键] 先 `Close()` 再粘贴**（同 Replace，见 CLAUDE.md "Window closing race"）→ `History.MoveToTop(entry)` → `ClipboardService.PasteHistoryEntryAsync(sourceHwnd, entry, plainText)`：写入 UnicodeText（非纯文本时附带记录下来的 HTML/RTF）→ `SetForegroundWindow(source)` → 150ms 后复核前台 → 模拟 Ctrl+V（与 `ReplaceInSourceWindowAsync` 共用 `PasteIntoWindowAsync`）。这次写入是 AuraTxt 自己的，不会被历史重复记录（§5.11）。
 
 ## 8. Prompt 系统（PromptService，static）
 
@@ -750,6 +772,7 @@ gh release create vX.Y AuraTXT.zip AuraTXT_self_contained.zip --title "AuraTxt v
 - TagStripFilter（internal）：无标签直通、单 chunk 剥除、标签跨 chunk 切断、多块、未闭合丢弃。
 - GlobMatcher：精确匹配、* 通配、区分大小写选项。
 - JsonPathSetter：顶层注入、点路径深层注入、多次调用不覆盖。
+- ClipboardHistory：最新在前、空白忽略、重复文本移到最前不增长且保留新格式、去重区分大小写、超容量丢最旧、缩容裁剪、容量下限 1、MoveToTop（含已被挤出时 no-op）、Search（空查询返回全部、大小写不敏感子串、保持顺序、不匹配富文本格式）；`AppSettings.IsClipboardHistoryActive`（开关×热键组合）且不被序列化进 config.json。`ClipboardHistoryService` 的真实剪贴板监听、`ClipboardHistoryWindow` 的按键/粘贴不纳入常规 xunit 套件，改由手动验证覆盖（见 §14）。
 - ConfigRoot：AllEnabledModel* 过滤 disabled、内置恒在（含第三个内置模型，验证不再依赖硬编码的 Google_Translate/Youdao_Dict 查找）、ResolveModel 边界。
 - PromptService.IsFileRef：单行路径 true、多行含 `/` 的内联 false（回归）、Resolve 文件/内联/空。
 - PromptService.ResolveFullPath/ToRelativeIfInsideBase：相对路径锚定 BaseDirectory 解析、绝对路径原样透传；BaseDirectory 内绝对路径转相对、目录外/已相对/内联文本/文件不存在均不变；`Resolve()` 经相对路径读取真实文件内容（回归——曾经相对路径会被错误地当作相对于进程当前工作目录解析）。
@@ -776,3 +799,4 @@ gh release create vX.Y AuraTXT.zip AuraTXT_self_contained.zip --title "AuraTxt v
 13. 菜单弹出期间按 Ctrl+C/Ctrl+V/Ctrl+X/Ctrl+Z/Ctrl+B 等编辑快捷键或 Shift+Insert：菜单立即消失，对应的复制/粘贴/剪切/撤销/加粗等操作在源应用中正常生效；点击菜单里的 action 按钮不受此逻辑影响。
 14. 菜单已弹出时双击另一个词（原地更新路径，命中 Ctrl+C 模拟兜底的应用）：菜单不因内部模拟按键而闪烁关闭，正常原地更新为新词的菜单内容。
 15. 选中一段文本 → 点击 Paste（或热键）：`PasteUseClipboardHistory=true` 时源窗口获得焦点后弹出 Windows 剪贴板历史面板，选中一项后正确粘贴；设为 `false` 时选区被当前剪贴板内容直接替换，不弹面板。`auracfg` 对 Paste 执行 Test Connection 显示固定的"不支持"提示，不报错、不挂起。ResultWindow/InteractiveWindow 的模型下拉列表中不出现 Paste。
+16. 剪贴板历史：依次复制 A、B、C → Ctrl+` 显示 0=C、1=B、2=A；按 2 → A 粘贴进原窗口且下次打开排在第一行；网页富文本 Enter 粘贴保留格式、Shift+Enter 只粘贴纯文本；点击搜索框后输入可筛选，此时数字键输入文字不粘贴；在走 Ctrl+C 模拟兜底的应用（如 TC Lister 的 .doc）里划词不产生历史记录（`--log` 中为 `[history] skip own clipboard change`）；复制超过 `ClipboardHistorySize` 条后最旧的被挤掉；General Settings 关闭 Clipboard History + Reload Settings 后热键失效且不再记录。

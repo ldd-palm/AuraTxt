@@ -42,4 +42,7 @@
   <data name="PromptEdit_Title" xml:space="preserve"><value>Edit Prompt</value></data>
   <data name="PromptEdit_BuiltinTitle" xml:space="preserve"><value>Built-in Model</value></data>
   <data name="PromptEdit_GenerateButton" xml:space="preserve"><value>Generate</value></data>
+  <data name="ClipHistory_Title" xml:space="preserve"><value>Clipboard History</value></data>
+  <data name="ClipHistory_SearchHint" xml:space="preserve"><value>Click here to search…</value></data>
+  <data name="ClipHistory_Empty" xml:space="preserve"><value>No clipboard history yet</value></data>
 </root>

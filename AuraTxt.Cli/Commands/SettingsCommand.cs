@@ -1,3 +1,4 @@
+using AuraTxt.Core.Models;
 using AuraTxt.Core.Services;
 
 namespace AuraTxt.Cli.Commands;
@@ -22,6 +23,10 @@ public class SettingsCommand(ConfigService config)
         Console.WriteLine($"terminal-console: {(s.TerminalUseConsoleWindow ? "on" : "off")}");
         Console.WriteLine($"force-popup-key: {(string.IsNullOrEmpty(s.ForcePopupDoubleTapKey) ? "none" : s.ForcePopupDoubleTapKey)}");
         Console.WriteLine($"auto-close:     {(s.AutoCloseOnUnfocus ? "on" : "off")}");
+        Console.WriteLine($"clipboard-history: {(s.ClipboardHistoryEnabled ? "on" : "off")}");
+        Console.WriteLine($"clipboard-hotkey:{(string.IsNullOrEmpty(s.ClipboardHistoryHotkey) ? "none" : s.ClipboardHistoryHotkey)}");
+        Console.WriteLine($"clipboard-size: {s.ClipboardHistorySize}");
+        Console.WriteLine($"clipboard-plain-key: {s.ClipboardHistoryPlainTextKey}");
         return 0;
     }
 
@@ -49,6 +54,40 @@ public class SettingsCommand(ConfigService config)
             s.TerminalUseConsoleWindow = tcb;
         if (opts.TryGetValue("auto-close", out var ac) && bool.TryParse(ac, out var acb))
             s.AutoCloseOnUnfocus = acb;
+        if (opts.TryGetValue("clipboard-history", out var chv) && bool.TryParse(chv, out var chb))
+            s.ClipboardHistoryEnabled = chb;
+        if (opts.TryGetValue("clipboard-size", out var cs) && int.TryParse(cs, out var csi))
+            s.ClipboardHistorySize = Math.Clamp(csi, 1, AppSettings.ClipboardHistoryMaxSize);
+        if (opts.TryGetValue("clipboard-plain-key", out var cp))
+        {
+            var match = AppSettings.ClipboardPlainTextKeys.FirstOrDefault(k => k.Equals(cp.Trim(), StringComparison.OrdinalIgnoreCase));
+            if (match is null)
+            {
+                Console.WriteLine($"✗ Invalid --clipboard-plain-key: \"{cp}\" (one of {string.Join(", ", AppSettings.ClipboardPlainTextKeys)})");
+                return 1;
+            }
+            s.ClipboardHistoryPlainTextKey = match;
+        }
+        if (opts.TryGetValue("clipboard-hotkey", out var ch))
+        {
+            if (string.IsNullOrWhiteSpace(ch) || ch.Equals("none", StringComparison.OrdinalIgnoreCase))
+            {
+                s.ClipboardHistoryHotkey = "";
+            }
+            else
+            {
+                // RegisterHotKey-backed like action hotkeys → same validator and defaults.
+                var (res, conflict) = new HotkeyValidator().Validate(ch, cfg.Actions);
+                if (res != HotkeyValidationResult.Valid)
+                {
+                    Console.WriteLine(res == HotkeyValidationResult.Conflict
+                        ? $"✗ \"{ch}\" is already used as action \"{conflict}\"'s hotkey"
+                        : $"✗ Invalid --clipboard-hotkey: \"{ch}\" (e.g. Ctrl+`, Alt+V, or \"none\")");
+                    return 1;
+                }
+                s.ClipboardHistoryHotkey = ch;
+            }
+        }
         if (opts.TryGetValue("force-popup-key", out var fp))
         {
             if (string.IsNullOrWhiteSpace(fp) || fp.Equals("none", StringComparison.OrdinalIgnoreCase))
@@ -88,7 +127,7 @@ public class SettingsCommand(ConfigService config)
     private static int PrintHelp()
     {
         Console.WriteLine("auracfg settings --show");
-        Console.WriteLine("auracfg settings --set [--font-size <n>] [--opacity <0-1>] [--delay-ms <n>] [--target-lang <code>] [--theme <id>] [--voice <name>] [--prompt-editor <exe>] [--config-editor <exe>] [--terminal-console true|false] [--force-popup-key <combo>|none] [--auto-close true|false]");
+        Console.WriteLine("auracfg settings --set [--font-size <n>] [--opacity <0-1>] [--delay-ms <n>] [--target-lang <code>] [--theme <id>] [--voice <name>] [--prompt-editor <exe>] [--config-editor <exe>] [--terminal-console true|false] [--force-popup-key <combo>|none] [--auto-close true|false] [--clipboard-history true|false] [--clipboard-hotkey <combo>|none] [--clipboard-size <1-100>] [--clipboard-plain-key Shift+Enter|Ctrl+Enter|Alt+Enter]");
         return 1;
     }
 }

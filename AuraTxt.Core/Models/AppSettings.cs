@@ -95,4 +95,30 @@ public class AppSettings
     /// outside them (or switches away from them) — pinned windows and windows with the
     /// prompt editor open stay. Default false = close only via the title-bar button / Esc.
     public bool AutoCloseOnUnfocus { get; set; } = false;
+
+    /// Master switch for the clipboard-history feature. Off = no clipboard listener (nothing
+    /// recorded) and no hotkey. Applied on "Reload Settings".
+    public bool ClipboardHistoryEnabled { get; set; } = true;
+
+    /// Global hotkey that opens the clipboard-history window (RegisterHotKey format, same
+    /// validator as action hotkeys, plus "`"). Empty string = no hotkey, which also turns
+    /// the feature off (no way to open the window, so nothing is recorded either).
+    /// Re-registered on "Reload Settings".
+    public string ClipboardHistoryHotkey { get; set; } = "Ctrl+`";
+
+    /// How many clipboard-history entries to keep in memory (1–100). Applied on
+    /// "Reload Settings".
+    public int ClipboardHistorySize { get; set; } = 25;
+
+    /// Key in the clipboard-history window that pastes the selected entry as plain text
+    /// (Enter pastes with formatting). One of ClipboardPlainTextKeys.
+    public string ClipboardHistoryPlainTextKey { get; set; } = "Shift+Enter";
+
+    public static readonly string[] ClipboardPlainTextKeys = ["Shift+Enter", "Ctrl+Enter", "Alt+Enter"];
+
+    /// True when the clipboard history should run: switched on and a hotkey is set.
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsClipboardHistoryActive =>
+        ClipboardHistoryEnabled && !string.IsNullOrWhiteSpace(ClipboardHistoryHotkey);
+    public const int ClipboardHistoryMaxSize = 100;
 }

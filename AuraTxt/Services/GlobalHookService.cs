@@ -92,8 +92,13 @@ public class GlobalHookService
         if (string.IsNullOrWhiteSpace(hotkey)) return;
 
         var parts = hotkey.Split('+');
-        if (!Enum.TryParse<Keys>(parts[^1].Trim(), ignoreCase: true, out var keyVal) ||
-            !Enum.IsDefined(typeof(Keys), keyVal))
+        var keyName = parts[^1].Trim();
+        Keys keyVal;
+        // "0"–"9" and "`" need explicit mapping: Enum.TryParse reads a bare digit as the
+        // enum's numeric value ("1" → (Keys)1 = Keys.LButton), and "`" has no enum name.
+        if (keyName.Length == 1 && char.IsAsciiDigit(keyName[0])) keyVal = Keys.D0 + (keyName[0] - '0');
+        else if (keyName == "`") keyVal = Keys.Oemtilde;
+        else if (!Enum.TryParse(keyName, ignoreCase: true, out keyVal) || !Enum.IsDefined(typeof(Keys), keyVal))
             return;
 
         bool ctrl = false, alt = false, shift = false;

@@ -13,6 +13,7 @@ public partial class App : Application
     private GlobalHookService? _hook;
     private HotkeyService? _hotkeys;
     private ConfigService? _config;
+    private ClipboardHistoryService? _clipHistory;
     private System.Threading.Mutex? _instanceMutex;
 
     private static string ExePath =>
@@ -62,7 +63,9 @@ public partial class App : Application
             LocalizationService.Apply(_config.Load().Settings.UiLanguage);
             StartupService.Apply(_config.Load().Settings.StartOnBoot, ExePath);
             ApplyTheme(_config.Load().Settings.Theme);
-            _hotkeys = new HotkeyService(_config);
+            _clipHistory = new ClipboardHistoryService();
+            _clipHistory.Apply(_config.Load().Settings);
+            _hotkeys = new HotkeyService(_config, _clipHistory);
             _tray    = new TrayIconManager(_config, ReloadConfig, () => Shutdown(), () =>
             {
                 if (AppState.IsMonitoringPaused)
@@ -138,6 +141,7 @@ public partial class App : Application
             LocalizationService.Apply(cfg.Settings.UiLanguage);
             StartupService.Apply(cfg.Settings.StartOnBoot, ExePath);
             ApplyTheme(cfg.Settings.Theme);
+            _clipHistory!.Apply(cfg.Settings);
 
             // Stop()+Start() reinstalls the low-level mouse/keyboard hook — the same recovery
             // OnPowerModeChanged already performs after sleep/resume, now also reachable
@@ -169,6 +173,7 @@ public partial class App : Application
         Microsoft.Win32.SystemEvents.PowerModeChanged -= OnPowerModeChanged;
         _hook?.Stop();
         _hotkeys?.UnregisterAll();
+        _clipHistory?.Dispose();
         _tray?.Dispose();
         try { _instanceMutex?.ReleaseMutex(); } catch { }
         _instanceMutex?.Dispose();

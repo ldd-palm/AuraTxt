@@ -66,6 +66,10 @@ public class GeneralSettingsPage : PageBase
         new MenuItem("P", "Paste Clipboard History",  s.PasteUseClipboardHistory ? "Enabled (Win+V panel)" : "Disabled (direct paste)"),
         new MenuItem("D", "Force Popup Key", string.IsNullOrEmpty(s.ForcePopupDoubleTapKey) ? "None" : s.ForcePopupDoubleTapKey),
         new MenuItem("A", "Auto-close on Unfocus", s.AutoCloseOnUnfocus ? "Enabled" : "Disabled"),
+        new MenuItem("C", "Clipboard History", s.ClipboardHistoryEnabled ? "Enabled" : "Disabled"),
+        new MenuItem("H", "Clipboard History Key", string.IsNullOrEmpty(s.ClipboardHistoryHotkey) ? "None (off)" : s.ClipboardHistoryHotkey),
+        new MenuItem("N", "Clipboard History Size", $"{s.ClipboardHistorySize}"),
+        new MenuItem("E", "Plain-text Paste Key", s.ClipboardHistoryPlainTextKey),
     ];
 
     private bool HandleKey(string key, AppSettings s, TuiApp app)
@@ -146,6 +150,35 @@ public class GeneralSettingsPage : PageBase
             case "A":
                 s.AutoCloseOnUnfocus = !s.AutoCloseOnUnfocus; app.MarkDirty();
                 app.Renderer.SetNotice($"Auto-close on Unfocus → {(s.AutoCloseOnUnfocus ? "Enabled" : "Disabled")}");
+                break;
+            case "C":
+                s.ClipboardHistoryEnabled = !s.ClipboardHistoryEnabled; app.MarkDirty();
+                app.Renderer.SetNotice($"Clipboard History → {(s.ClipboardHistoryEnabled ? "Enabled" : "Disabled")} (use Reload Settings in AuraTxt's tray menu to apply)");
+                break;
+            case "H":
+                // Registered via RegisterHotKey like action hotkeys, so same rules (modifier
+                // required) and must not collide with one of them.
+                var hk = HotkeyCapture.Capture(app.Cfg.Actions);
+                if (hk is null) break; // Esc — leave unchanged
+                s.ClipboardHistoryHotkey = hk;
+                app.MarkDirty();
+                app.Renderer.SetNotice($"Clipboard History Key → {(string.IsNullOrEmpty(hk) ? "None (off)" : hk)} (use Reload Settings in AuraTxt's tray menu to apply)");
+                break;
+            case "N":
+                var hs = app.Renderer.Ask($"Clipboard history size (1–{AppSettings.ClipboardHistoryMaxSize})", s.ClipboardHistorySize.ToString());
+                if (int.TryParse(hs, out var hv) && hv > 0)
+                {
+                    s.ClipboardHistorySize = Math.Min(hv, AppSettings.ClipboardHistoryMaxSize); app.MarkDirty();
+                    app.Renderer.SetNotice($"Clipboard History Size → {s.ClipboardHistorySize} (use Reload Settings in AuraTxt's tray menu to apply)");
+                }
+                break;
+            case "E":
+                // Cycle through the fixed set — it's a key inside the history window, so it
+                // must stay an Enter variant that can't collide with digits/arrows/Esc.
+                var keys = AppSettings.ClipboardPlainTextKeys;
+                var idx  = Array.IndexOf(keys, s.ClipboardHistoryPlainTextKey);
+                s.ClipboardHistoryPlainTextKey = keys[(idx + 1) % keys.Length]; app.MarkDirty();
+                app.Renderer.SetNotice($"Plain-text Paste Key → {s.ClipboardHistoryPlainTextKey}");
                 break;
         }
         return false;

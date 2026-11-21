@@ -11,13 +11,20 @@ namespace AuraTxt.Services;
 public class HotkeyService
 {
     private readonly ConfigService _config;
+    private readonly ClipboardHistoryService _clipHistory;
     private readonly List<string> _registered = new();
+    private const string ClipboardHistoryHotkeyId = "__clipboard_history";
 
-    public HotkeyService(ConfigService config) => _config = config;
+    public HotkeyService(ConfigService config, ClipboardHistoryService clipHistory)
+    {
+        _config      = config;
+        _clipHistory = clipHistory;
+    }
 
     public void RegisterAll(ConfigRoot cfg)
     {
         UnregisterAll();
+        RegisterClipboardHistory(cfg.Settings);
         foreach (var action in cfg.Actions.Where(a => !string.IsNullOrEmpty(a.Hotkey)))
         {
             if (!TryParseHotkey(action.Hotkey, out var key, out var mods)) continue;
@@ -32,6 +39,29 @@ public class HotkeyService
             {
                 // Another app owns this hotkey — silently skip (tray notification not implemented yet)
             }
+        }
+    }
+
+    /// Same RegisterHotKey mechanism (and pause/reload handling) as action hotkeys.
+    /// Pressing it again while the window is open closes it.
+    private void RegisterClipboardHistory(AppSettings settings)
+    {
+        if (!settings.IsClipboardHistoryActive) return;
+        if (!TryParseHotkey(settings.ClipboardHistoryHotkey, out var key, out var mods)) return;
+        try
+        {
+            HotkeyManager.Current.AddOrReplace(ClipboardHistoryHotkeyId, key, mods, (_, _) =>
+            {
+                if (ClipboardHistoryWindow.Current is { } open) { open.Close(); return; }
+                var source = ClipboardService.CaptureSourceWindow();
+                new ClipboardHistoryWindow(_clipHistory.History, settings, source).Show();
+            });
+            _registered.Add(ClipboardHistoryHotkeyId);
+        }
+        catch (Exception ex)
+        {
+            // Another app (or one of our own action hotkeys) already owns this combo.
+            LogService.Error($"Clipboard history hotkey {settings.ClipboardHistoryHotkey} could not be registered", ex);
         }
     }
 
@@ -142,6 +172,11 @@ public class HotkeyService
             mods |= m.Value;
         }
 
-        return Enum.TryParse(parts[^1].Trim(), true, out key) && key != Key.None;
+        var keyName = parts[^1].Trim();
+        if (keyName == "`") { key = Key.OemTilde; return true; } // no Key enum name for it
+        // "0"–"9": Enum.TryParse would read a bare digit as the enum's numeric value
+        // ("1" → (Key)1 = Key.Cancel), not the digit key — the enum names are D0–D9.
+        if (keyName.Length == 1 && char.IsAsciiDigit(keyName[0])) { key = Key.D0 + (keyName[0] - '0'); return true; }
+        return Enum.TryParse(keyName, true, out key) && key != Key.None;
     }
 }

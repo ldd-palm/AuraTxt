@@ -155,6 +155,10 @@ public static class ClipboardService
 
         uint seqAfterRead = 0;
         bool gotText = false;
+        // Everything the clipboard goes through from here on — the target app's copy of the
+        // selection, our restore — is AuraTxt's doing, not the user's: keep it out of the
+        // clipboard history (see IsOwnClipboardChange).
+        BeginOwnWrite();
         try
         {
             var seqBefore = GetClipboardSequenceNumber();
@@ -196,14 +200,99 @@ public static class ClipboardService
             // attempt, right before writing: retries can span seconds, and a check done
             // only once up front would let a later attempt clobber a copy made meanwhile.
             bool StillOurs() => GetClipboardSequenceNumber() == seqAfterRead && _lastRealCtrlC < captureStart;
-            if (gotText && prevData is not null && StillOurs())
+            try
             {
-                if (prevData.GetFormats(false).Length > 0)
-                    await RetryClipboardOpAsync(() => { if (StillOurs()) System.Windows.Clipboard.SetDataObject(prevData, true); });
-                else
-                    await RetryClipboardOpAsync(() => { if (StillOurs()) System.Windows.Clipboard.Clear(); });
+                if (gotText && prevData is not null && StillOurs())
+                {
+                    if (prevData.GetFormats(false).Length > 0)
+                        await RetryClipboardOpAsync(() => { if (StillOurs()) System.Windows.Clipboard.SetDataObject(prevData, true); });
+                    else
+                        await RetryClipboardOpAsync(() => { if (StillOurs()) System.Windows.Clipboard.Clear(); });
+                }
             }
+            finally { EndOwnWrite(); }
         }
+    }
+
+    // ── Own-write tracking (for ClipboardHistoryService) ────────────────────────
+    // Clipboard changes AuraTxt itself causes — selection capture (the target app's copy
+    // plus our restore), Replace, pasting from the history window — must not land in the
+    // clipboard history. WM_CLIPBOARDUPDATE is posted asynchronously, so a change can be
+    // handled after the write that caused it has finished: besides "a write is in flight
+    // right now", remember the sequence-number range our last writes covered. A genuine
+    // user copy that happens to land inside that window is skipped too — rare, acceptable.
+    private static readonly object _ownWriteLock = new();
+    private static int  _ownWriteDepth;
+    private static uint _ownSeqFrom = 1, _ownSeqTo; // empty range until the first own write
+
+    private static void BeginOwnWrite()
+    {
+        lock (_ownWriteLock)
+            if (_ownWriteDepth++ == 0) _ownSeqFrom = GetClipboardSequenceNumber() + 1;
+    }
+
+    private static void EndOwnWrite()
+    {
+        lock (_ownWriteLock)
+            if (--_ownWriteDepth == 0) _ownSeqTo = GetClipboardSequenceNumber();
+    }
+
+    /// True if the clipboard change with sequence number `seq` was caused by AuraTxt.
+    public static bool IsOwnClipboardChange(uint seq)
+    {
+        lock (_ownWriteLock)
+            return _ownWriteDepth > 0 || (seq >= _ownSeqFrom && seq <= _ownSeqTo);
+    }
+
+    public static uint ClipboardSequenceNumber() => GetClipboardSequenceNumber();
+
+    // ── Reading for the clipboard history ───────────────────────────────────────
+    private sealed record HistoryRead(ClipboardHistoryEntry? Entry);
+
+    private const string ExcludeFromMonitorFormat = "ExcludeClipboardContentFromMonitorProcessing";
+    private const string ViewerIgnoreFormat       = "Clipboard Viewer Ignore";
+    private const string CanIncludeInHistoryFormat = "CanIncludeInClipboardHistory";
+    private const int    MaxRichFormatChars       = 1_000_000;
+
+    /// Reads the current clipboard as a history entry: null if it holds no text, or the
+    /// owner asked clipboard monitors to skip it (password managers set these formats).
+    /// Bounded and retried like every other clipboard access here (another listener —
+    /// Windows' own clipboard history, Ditto — often opens the clipboard at this very
+    /// moment, right after the change notification).
+    public static async Task<ClipboardHistoryEntry?> ReadForHistoryAsync()
+    {
+        for (int attempt = 0; attempt < 3; attempt++)
+        {
+            var read = await RunOnThrowawayStaThreadAsync(ReadHistoryEntry, StaCallTimeoutMs);
+            if (read is not null) return read.Entry; // null = threw or timed out → retry
+            await Task.Delay(50);
+        }
+        return null;
+    }
+
+    private static HistoryRead ReadHistoryEntry()
+    {
+        var data = System.Windows.Clipboard.GetDataObject();
+        if (data is null) return new(null);
+        var formats = data.GetFormats(false);
+        if (formats.Contains(ExcludeFromMonitorFormat) || formats.Contains(ViewerIgnoreFormat)) return new(null);
+        if (formats.Contains(CanIncludeInHistoryFormat) &&
+            data.GetData(CanIncludeInHistoryFormat, false) is System.IO.MemoryStream ms &&
+            ms.Length >= 4 && BitConverter.ToInt32(ms.ToArray(), 0) == 0)
+            return new(null);
+
+        if (data.GetData(System.Windows.DataFormats.UnicodeText, true) is not string text ||
+            string.IsNullOrWhiteSpace(text))
+            return new(null);
+
+        var rich = new Dictionary<string, string>();
+        foreach (var f in new[] { System.Windows.DataFormats.Html, System.Windows.DataFormats.Rtf })
+        {
+            if (formats.Contains(f) && data.GetData(f, false) is string s &&
+                s.Length > 0 && s.Length <= MaxRichFormatChars)
+                rich[f] = s;
+        }
+        return new(new ClipboardHistoryEntry(text, rich));
     }
 
     // [关键] Eager copy, NOT Clipboard.GetDataObject() kept as-is. GetDataObject() returns a
@@ -279,22 +368,43 @@ public static class ClipboardService
     // ── Replace in source window ──────────────────────────────────────────────
     public static IntPtr CaptureSourceWindow() => GetForegroundWindow();
 
-    public static async Task ReplaceInSourceWindowAsync(IntPtr hwnd, string text)
+    public static Task ReplaceInSourceWindowAsync(IntPtr hwnd, string text)
     {
-        if (string.IsNullOrWhiteSpace(text) || hwnd == IntPtr.Zero) return;
+        if (string.IsNullOrWhiteSpace(text)) return Task.CompletedTask;
+        return PasteIntoWindowAsync(hwnd, () => TrySetTextAsync(text), "Replace");
+    }
+
+    /// Clipboard-history paste: the entry's text plus its rich formats, or (plainText) the
+    /// text alone.
+    public static Task PasteHistoryEntryAsync(IntPtr hwnd, ClipboardHistoryEntry entry, bool plainText) =>
+        PasteIntoWindowAsync(hwnd, () => ClipboardWorkerThread.InvokeAsync(() => RetryClipboardOpAsync(() =>
+        {
+            var obj = new System.Windows.DataObject();
+            obj.SetData(System.Windows.DataFormats.UnicodeText, entry.Text, false);
+            if (!plainText)
+                foreach (var (format, value) in entry.Formats) obj.SetData(format, value, false);
+            System.Windows.Clipboard.SetDataObject(obj, true);
+        })), "History paste");
+
+    /// Puts content on the clipboard (`setClipboard`), brings `hwnd` back to the foreground
+    /// and sends it Ctrl+V. The write is AuraTxt's own, so it's kept out of the history.
+    private static async Task PasteIntoWindowAsync(IntPtr hwnd, Func<Task<bool>> setClipboard, string what)
+    {
+        if (hwnd == IntPtr.Zero) return;
+        BeginOwnWrite();
         try
         {
-            if (!await TrySetTextAsync(text)) return; // couldn't set clipboard — don't paste stale content
+            if (!await setClipboard()) return; // couldn't set clipboard — don't paste stale content
 
             if (!SetForegroundWindow(hwnd))
             {
-                LogService.Error($"Replace: SetForegroundWindow denied for {hwnd}");
+                LogService.Error($"{what}: SetForegroundWindow denied for {hwnd}");
                 return; // foreground-lock denied it — firing Ctrl+V now would hit whatever window has focus instead
             }
             await Task.Delay(150);
             if (GetForegroundWindow() != hwnd)
             {
-                LogService.Error($"Replace: foreground changed away from {hwnd} before paste");
+                LogService.Error($"{what}: foreground changed away from {hwnd} before paste");
                 return;
             }
             keybd_event(VK_CONTROL, 0, 0,              AuraExtraInfo);
@@ -303,6 +413,7 @@ public static class ClipboardService
             keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, AuraExtraInfo);
         }
         catch { }
+        finally { EndOwnWrite(); }
     }
 
     // ── Public entry point ────────────────────────────────────────────────────

@@ -38,6 +38,9 @@ public static class Strings
     public static string Common_ReplaceTooltip     => Rm.GetString(nameof(Common_ReplaceTooltip))!;
     public static string Common_CopyTooltip        => Rm.GetString(nameof(Common_CopyTooltip))!;
     public static string Common_PinTooltip         => Rm.GetString(nameof(Common_PinTooltip))!;
+    public static string ClipHistory_Title         => Rm.GetString(nameof(ClipHistory_Title))!;
+    public static string ClipHistory_SearchHint    => Rm.GetString(nameof(ClipHistory_SearchHint))!;
+    public static string ClipHistory_Empty         => Rm.GetString(nameof(ClipHistory_Empty))!;
     public static string Interactive_InputLabel    => Rm.GetString(nameof(Interactive_InputLabel))!;
     public static string Interactive_ResultLabel   => Rm.GetString(nameof(Interactive_ResultLabel))!;
     public static string PromptEdit_Title          => Rm.GetString(nameof(PromptEdit_Title))!;

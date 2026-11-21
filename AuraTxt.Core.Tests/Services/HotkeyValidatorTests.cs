@@ -17,6 +17,8 @@ public class HotkeyValidatorTests
     [InlineData("Alt",          false)]
     [InlineData("",             false)]
     [InlineData("Ctrl+",        false)]
+    [InlineData("Ctrl+`",       true)]
+    [InlineData("`",            false)]
     public void IsValidFormat(string hotkey, bool expected) =>
         Assert.Equal(expected, _v.IsValidFormat(hotkey));
 

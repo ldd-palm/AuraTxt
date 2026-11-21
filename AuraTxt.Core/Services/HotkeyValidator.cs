@@ -18,7 +18,8 @@ public class HotkeyValidator
             "F1","F2","F3","F4","F5","F6","F7","F8","F9","F10","F11","F12",
             "0","1","2","3","4","5","6","7","8","9",
             "Space","Tab","Enter","Escape","Delete","Insert",
-            "Home","End","PageUp","PageDown","Left","Right","Up","Down"
+            "Home","End","PageUp","PageDown","Left","Right","Up","Down",
+            "`" // backtick/tilde key (VK_OEM_3) — e.g. the clipboard-history default Ctrl+`
         };
 
     /// Modifier set for callers that can't represent "Win" as a held modifier at
