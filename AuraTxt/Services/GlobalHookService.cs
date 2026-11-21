@@ -448,7 +448,7 @@ public class GlobalHookService
         // Track real Ctrl+C so ClipboardService can avoid injecting its own synthetic
         // Ctrl+C on top of a genuine one (see ClipboardService.NotifyRealCtrlC).
         var isCtrlC = e.Control && e.KeyCode == Keys.C;
-        var isOwnSyntheticCtrlC = isCtrlC && ClipboardService.IsSyntheticCtrlCInFlight();
+        var isOwnSyntheticCtrlC = isCtrlC && ClipboardService.ConsumeSyntheticCtrlC();
 
         if (isCtrlC && !isOwnSyntheticCtrlC)
             ClipboardService.NotifyRealCtrlC();
@@ -457,7 +457,7 @@ public class GlobalHookService
         // shortcuts) or a legacy Shift+Insert paste means the user wants to do something
         // else entirely, not act on the selection via the menu — dismiss it immediately.
         // Our own synthetic capture Ctrl+C is excluded so it doesn't prematurely close a
-        // menu that's mid in-place-update (see ClipboardService.IsSyntheticCtrlCInFlight).
+        // menu that's mid in-place-update (see ClipboardService.ConsumeSyntheticCtrlC).
         var isShortcut = (e.Control && !ModifierKeyCodes.Contains(e.KeyCode) && !isOwnSyntheticCtrlC)
                        || (e.Shift && e.KeyCode == Keys.Insert);
 

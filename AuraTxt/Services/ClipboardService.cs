@@ -82,8 +82,17 @@ public static class ClipboardService
     // bridge keybd_event → the low-level hook observing it (same-machine OS dispatch, a
     // few ms in practice) — kept short so a genuine Ctrl+C landing shortly after ours
     // isn't misclassified as our own and silently dropped.
+    // One-shot: the first Ctrl+C observed inside the window is ours and consumes it — a
+    // second one landing inside the same window can only be the user's real keypress, and
+    // must still reach NotifyRealCtrlC (otherwise the finally-restore below would overwrite
+    // the user's fresh copy with the pre-capture clipboard).
     private static DateTime _syntheticCtrlCUntil = DateTime.MinValue;
-    public static bool IsSyntheticCtrlCInFlight() => DateTime.UtcNow < _syntheticCtrlCUntil;
+    public static bool ConsumeSyntheticCtrlC()
+    {
+        if (DateTime.UtcNow >= _syntheticCtrlCUntil) return false;
+        _syntheticCtrlCUntil = DateTime.MinValue;
+        return true;
+    }
 
     // Serializes TryClipboardAsync so two overlapping calls (e.g. two selections captured
     // in quick succession) can never have their PressCtrlC() keybd_event sequences
@@ -132,13 +141,17 @@ public static class ClipboardService
         if (IsPhysicallyDown(VK_CONTROL) || IsPhysicallyDown(VK_SHIFT) || IsPhysicallyDown(VK_MENU))
             return null;
 
+        // Any real Ctrl+C observed after this point means the user copied mid-capture —
+        // the clipboard is theirs now, so the finally-restore below must not touch it.
+        var captureStart = DateTime.UtcNow;
+
         // Snapshot whatever's on the clipboard now — any format (text, files, images,
         // custom) — so a speculative Ctrl+C that doesn't pan out can be restored exactly,
         // not just wiped. (Previously this only remembered plain text via ContainsText()/
         // GetText(), so a non-text clipboard — e.g. files copied in Explorer — read as
         // "nothing", and got Clear()'d instead of restored below.)
-        System.Windows.IDataObject? prevData = null;
-        try { prevData = System.Windows.Clipboard.GetDataObject(); } catch { }
+        // null = snapshot failed/timed out → don't restore at all (see SnapshotClipboard).
+        var prevData = await RunOnThrowawayStaThreadAsync(SnapshotClipboard, StaCallTimeoutMs);
 
         uint seqAfterRead = 0;
         bool gotText = false;
@@ -178,15 +191,47 @@ public static class ClipboardService
         finally
         {
             // Only restore if we actually returned text AND nobody else has written to
-            // the clipboard since (another app, or the user) — otherwise leave it alone.
-            if (gotText && GetClipboardSequenceNumber() == seqAfterRead)
+            // the clipboard since (another app, or the user) AND no real Ctrl+C was seen
+            // during this capture — otherwise leave it alone. Re-checked inside each retry
+            // attempt, right before writing: retries can span seconds, and a check done
+            // only once up front would let a later attempt clobber a copy made meanwhile.
+            bool StillOurs() => GetClipboardSequenceNumber() == seqAfterRead && _lastRealCtrlC < captureStart;
+            if (gotText && prevData is not null && StillOurs())
             {
-                if (prevData is not null)
-                    await RetryClipboardOpAsync(() => System.Windows.Clipboard.SetDataObject(prevData, true));
+                if (prevData.GetFormats(false).Length > 0)
+                    await RetryClipboardOpAsync(() => { if (StillOurs()) System.Windows.Clipboard.SetDataObject(prevData, true); });
                 else
-                    await RetryClipboardOpAsync(() => System.Windows.Clipboard.Clear());
+                    await RetryClipboardOpAsync(() => { if (StillOurs()) System.Windows.Clipboard.Clear(); });
             }
         }
+    }
+
+    // [关键] Eager copy, NOT Clipboard.GetDataObject() kept as-is. GetDataObject() returns a
+    // live OLE proxy onto *whatever is on the clipboard when it's read*, not a snapshot —
+    // after our synthetic Ctrl+C it reads back the captured selection, so restoring it
+    // could never bring the old content back. Worse, SetDataObject(proxy, copy:true) makes
+    // OleFlushClipboard render the proxy from the clipboard it is itself replacing: WPF's
+    // internal retry loop then blocks ~1s and fails with CLIPBRD_E_CANT_OPEN, leaving the
+    // clipboard unusable for other apps meanwhile (their copies silently fail — observed as
+    // manual Ctrl+C not copying, and Lister's next capture getting no clipboard change).
+    // Copying each native format's data into an independent DataObject fixes both. Runs
+    // via RunOnThrowawayStaThreadAsync: GetData calls into the owning app (delayed
+    // rendering) and can hang. An empty DataObject means "clipboard was empty".
+    private static System.Windows.DataObject SnapshotClipboard()
+    {
+        var snap = new System.Windows.DataObject();
+        var live = System.Windows.Clipboard.GetDataObject();
+        if (live is null) return snap;
+        foreach (var format in live.GetFormats(false))
+        {
+            try
+            {
+                var value = live.GetData(format, false);
+                if (value is not null) snap.SetData(format, value, false);
+            }
+            catch { } // a format that can't be rendered is just not restored
+        }
+        return snap;
     }
 
     // ── Writing to the clipboard, with retry ───────────────────────────────────
