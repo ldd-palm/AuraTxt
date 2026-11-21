@@ -65,6 +65,7 @@ public class GeneralSettingsPage : PageBase
         new MenuItem("F", "Pause on Fullscreen App", s.PauseOnFullscreenApp ? "Enabled" : "Disabled"),
         new MenuItem("P", "Paste Clipboard History",  s.PasteUseClipboardHistory ? "Enabled (Win+V panel)" : "Disabled (direct paste)"),
         new MenuItem("D", "Force Popup Key", string.IsNullOrEmpty(s.ForcePopupDoubleTapKey) ? "None" : s.ForcePopupDoubleTapKey),
+        new MenuItem("A", "Auto-close on Unfocus", s.AutoCloseOnUnfocus ? "Enabled" : "Disabled"),
     ];
 
     private bool HandleKey(string key, AppSettings s, TuiApp app)
@@ -141,6 +142,10 @@ public class GeneralSettingsPage : PageBase
                 s.ForcePopupDoubleTapKey = fk;
                 app.MarkDirty();
                 app.Renderer.SetNotice($"Force Popup Key → {(string.IsNullOrEmpty(fk) ? "None" : fk)} (use Reload Settings in AuraTxt's tray menu to apply)");
+                break;
+            case "A":
+                s.AutoCloseOnUnfocus = !s.AutoCloseOnUnfocus; app.MarkDirty();
+                app.Renderer.SetNotice($"Auto-close on Unfocus → {(s.AutoCloseOnUnfocus ? "Enabled" : "Disabled")}");
                 break;
         }
         return false;

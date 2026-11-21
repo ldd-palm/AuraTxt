@@ -90,4 +90,9 @@ public class AppSettings
     /// colliding with something else the user runs (e.g. double-tap Shift did). Re-parsed
     /// only when GlobalHookService (re)starts — changing this needs "Reload Settings".
     public string ForcePopupDoubleTapKey { get; set; } = "";
+
+    /// When true, ResultWindow/InteractiveWindow close as soon as the user clicks anywhere
+    /// outside them (or switches away from them) — pinned windows and windows with the
+    /// prompt editor open stay. Default false = close only via the title-bar button / Esc.
+    public bool AutoCloseOnUnfocus { get; set; } = false;
 }

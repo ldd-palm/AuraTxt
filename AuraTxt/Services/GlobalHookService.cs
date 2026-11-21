@@ -156,6 +156,13 @@ public class GlobalHookService
     {
         try
         {
+            // Any button — a right-click elsewhere is still "clicking somewhere else".
+            if (AppState.IsResultWindowOpen)
+            {
+                var pt = new System.Drawing.Point(e.X, e.Y);
+                Application.Current?.Dispatcher.BeginInvoke(() => CloseResultWindowsOnOutsideClick(pt));
+            }
+
             if (e.Button != System.Windows.Forms.MouseButtons.Left) return;
 
             // A new gesture is starting anywhere on screen — any selection-capture still
@@ -213,6 +220,36 @@ public class GlobalHookService
             });
         }
         catch { }
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr WindowFromPoint(System.Drawing.Point pt);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid);
+
+    private const uint GA_ROOT = 2;
+
+    /// Settings.AutoCloseOnUnfocus (checked by each window's CloseOnUnfocus). A click that
+    /// lands on any of AuraTxt's own top-level windows — the result window itself, its
+    /// model-picker dropdown popup, the prompt editor dialog, a TextBox context menu,
+    /// another pinned result window — is not "somewhere else", so it's ignored. The hook
+    /// reports physical pixels, which is what WindowFromPoint expects here (the app is
+    /// PerMonitorV2-aware, see app.manifest).
+    private static void CloseResultWindowsOnOutsideClick(System.Drawing.Point pt)
+    {
+        var root = GetAncestor(WindowFromPoint(pt), GA_ROOT);
+        GetWindowThreadProcessId(root, out var pid);
+        if (pid == (uint)Environment.ProcessId) return;
+
+        foreach (var w in Application.Current.Windows.OfType<Window>().ToList())
+        {
+            if (w is ResultWindow r) r.CloseOnUnfocus();
+            else if (w is InteractiveWindow i) i.CloseOnUnfocus();
+        }
     }
 
     /// True if (x,y) in physical screen pixels falls within menu's current on-screen

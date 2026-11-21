@@ -71,7 +71,13 @@ public partial class InteractiveWindow : Window
             AppState.MenuSuppressUntil  = DateTime.UtcNow.AddMilliseconds(AppState.ResultWindowClosedCooldownMs);
             _streamCts?.Cancel();
         };
-        Deactivated += (_, _) => SafeClose();
+        Deactivated += (_, _) => CloseOnUnfocus();
+    }
+
+    /// Settings.AutoCloseOnUnfocus — see ResultWindow.CloseOnUnfocus.
+    public void CloseOnUnfocus()
+    {
+        if (_cfg.Settings.AutoCloseOnUnfocus) SafeClose();
     }
 
     private void ModelPicker_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)

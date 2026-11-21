@@ -127,6 +127,7 @@ class ActionItem {
 | PauseOnFullscreenApp | true | 前台窗口是否"独占全屏"（铺满整块屏幕 + 无标题栏）时自动跳过划词捕获（见 §5.2.1） |
 | PasteUseClipboardHistory | true | Paste 内置模型是否弹出 Windows 剪贴板历史面板（Win+V）；关闭则直接粘贴当前剪贴板内容，跳过历史面板（见 §9.7） |
 | ForcePopupDoubleTapKey | "" | 用户自定义的双击组合键字符串（如 `"F1"`、`"Ctrl+F1"`，复用 `HotkeyValidator`/`HotkeyCapture` 校验，见 §5.2），双击（中间不夹杂其他按键）强制对当前选中文本弹出/更新 ActionMenu，绕开鼠标触发链路的全部状态判断；空字符串＝关闭，默认关闭 |
+| AutoCloseOnUnfocus | false | ResultWindow/InteractiveWindow 失焦自动关闭：开启后点击 AuraTxt 自身窗口以外的任何地方（或窗口被切走）即关闭（pin/编辑 prompt 中除外）；关闭＝只能通过标题栏按钮/Esc 关闭（见 §8） |
 
 ### 3.6 首次运行默认配置
 
@@ -490,7 +491,7 @@ LogService：静态类，`Enabled`+`LogPath` 控制；`Info/Error/Raw` 三个方
   - `PromptService.Resolve(action.Prompt)` 得到 prompt 文本；占位符替换：`{SelectedText}`→选中文本，`{UserInput}`→空串，`{TargetLanguage}`→`Settings.TargetLanguage`（原始代码如 `"zh-CN"`/`"de"`，不转换成语言名称，缺省回落 `"zh-CN"`）。**[关键]** system prompt 只经 `PromptService.Resolve`，不做任何占位符替换——`{SelectedText}`/`{UserInput}`/`{TargetLanguage}` 写在 system prompt 里不会被替换，会原样输出。
   - 显示 "Processing…"，调用 `AiClient.StreamAsync(providerId, provider, model, action, selectedText, "", ct)`。内置模型（Google_Translate/Deepl_Translate/Youdao_Dict/WordReference_Dict/Oxford_Dict）在 AiClient 内部拦截路由，不需要 ResultWindow 特殊处理。
   - `await foreach` 流式 delta，**首个 chunk 到达时先清空再 AppendText**；持 `CancellationTokenSource`，重跑/关窗时 Cancel；`OperationCanceledException` 静默；其他异常追加 `[Error] {message}`（含 inner）。
-- 关闭行为：`Closed` → `IsResultWindowOpen=false`、`MenuSuppressUntil = now + AppState.ResultWindowClosedCooldownMs`（见 §5.3）、取消流。`Deactivated` → `SafeClose()`；`SafeClose` 受 `_closing/_editing/_pinned` 三守卫（Pin 按钮切换 `_pinned`，未 pin 时点击外部即关）。
+- 关闭行为：`Closed` → `IsResultWindowOpen=false`、`MenuSuppressUntil = now + AppState.ResultWindowClosedCooldownMs`（见 §5.3）、取消流。**失焦自动关闭仅在 `Settings.AutoCloseOnUnfocus=true` 时生效（默认关）**：`Deactivated` 和 `GlobalHookService.OnMouseDown`（任意鼠标键）都调用窗口的 `CloseOnUnfocus()` → `SafeClose()`；`SafeClose` 受 `_closing/_editing/_pinned` 三守卫（Pin 按钮切换 `_pinned`，pin 住的窗口不会自动关）。**[关键] 不能只靠 `Deactivated`**：窗口从不激活的 ActionMenu 或热键弹出时，前台通常仍是源应用，窗口根本没被激活过，`Deactivated` 永远不会触发——所以由全局鼠标钩子兜底：`WindowFromPoint`+`GetAncestor(GA_ROOT)` 取点击处的顶层窗口，属于 AuraTxt 自身进程（窗口本身、模型下拉框弹出层、PromptEditDialog、右键菜单、其他 pin 住的结果窗口）则忽略，否则关闭所有未 pin 的结果窗口。
 - **键盘 [关键]**：`PreviewKeyDown`（隧道事件，必须用 Preview——TextBox 会吞 KeyDown）：Esc 关闭；其余单字母快捷键 P(Edit)/G(Regen)/R(Replace)/C(CopyAll)/T(Pin) **仅在无修饰键且焦点不在可编辑 TextBox 时生效**——保证 Ctrl+C 隧道到 TextBox 复制选区、输入框打字不被劫持。
 - **Replace ↩️(R) [关键]**：点击时先保存 `text=ResultText.Text`、`hwnd=AppState.SourceWindowHandle`，然后**先 `Close()`**，再 `await ReplaceInSourceWindowAsync(hwnd, text)`。顺序至关重要——结果窗若仍可见时调 `SetForegroundWindow` 会与 OS 焦点管理竞争导致失败；窗口关闭后 OS 自然归还焦点给源窗口，再显式 `SetForegroundWindow` 更可靠。`ReplaceInSourceWindowAsync` 内部步骤见 §5.5.1（写剪贴板→检查 `SetForegroundWindow` 返回值→`Task.Delay(150ms)`→复核前台窗口未变→`keybd_event(Ctrl+V)`）。HWND 来源：鼠标路径由 GlobalHookService 在 `Dispatcher.BeginInvoke` 前捕获；**热键路径由 `HotkeyService.FireActionAsync` 在首个 await 前捕获**。
 - Edit Prompt：内置模型 → 只读弹窗提示"内置模型不支持自定义 prompt，目标语言是 X"；AI 模型 → `PromptEditDialog` 编辑当前 prompt 文本，确认后立即重跑。弹窗期间 `_editing=true` 防 Deactivated 误关父窗。

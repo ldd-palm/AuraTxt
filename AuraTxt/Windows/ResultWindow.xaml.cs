@@ -84,9 +84,18 @@ public partial class ResultWindow : Window
             AppState.MenuSuppressUntil  = DateTime.UtcNow.AddMilliseconds(AppState.ResultWindowClosedCooldownMs);
             _streamCts?.Cancel();
         };
-        Deactivated += (_, _) => SafeClose();
+        Deactivated += (_, _) => CloseOnUnfocus();
 
         Loaded += async (_, _) => await RunAsync();
+    }
+
+    /// Settings.AutoCloseOnUnfocus: called on Deactivated, and by GlobalHookService on any
+    /// click outside AuraTxt's own windows — the window often never gets activated in the
+    /// first place (opened from the non-activating action menu / a hotkey while another
+    /// app holds the foreground), so Deactivated alone can't be relied on.
+    public void CloseOnUnfocus()
+    {
+        if (_cfg.Settings.AutoCloseOnUnfocus) SafeClose();
     }
 
     private void ModelPicker_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)

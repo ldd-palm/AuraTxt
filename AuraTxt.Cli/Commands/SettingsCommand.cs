@@ -21,6 +21,7 @@ public class SettingsCommand(ConfigService config)
         Console.WriteLine($"config-editor:  {(string.IsNullOrEmpty(s.ConfigEditor) ? "(auracfg)" : s.ConfigEditor)}");
         Console.WriteLine($"terminal-console: {(s.TerminalUseConsoleWindow ? "on" : "off")}");
         Console.WriteLine($"force-popup-key: {(string.IsNullOrEmpty(s.ForcePopupDoubleTapKey) ? "none" : s.ForcePopupDoubleTapKey)}");
+        Console.WriteLine($"auto-close:     {(s.AutoCloseOnUnfocus ? "on" : "off")}");
         return 0;
     }
 
@@ -46,6 +47,8 @@ public class SettingsCommand(ConfigService config)
             s.ConfigEditor = ce.Trim();
         if (opts.TryGetValue("terminal-console", out var tc) && bool.TryParse(tc, out var tcb))
             s.TerminalUseConsoleWindow = tcb;
+        if (opts.TryGetValue("auto-close", out var ac) && bool.TryParse(ac, out var acb))
+            s.AutoCloseOnUnfocus = acb;
         if (opts.TryGetValue("force-popup-key", out var fp))
         {
             if (string.IsNullOrWhiteSpace(fp) || fp.Equals("none", StringComparison.OrdinalIgnoreCase))
@@ -85,7 +88,7 @@ public class SettingsCommand(ConfigService config)
     private static int PrintHelp()
     {
         Console.WriteLine("auracfg settings --show");
-        Console.WriteLine("auracfg settings --set [--font-size <n>] [--opacity <0-1>] [--delay-ms <n>] [--target-lang <code>] [--theme <id>] [--voice <name>] [--prompt-editor <exe>] [--config-editor <exe>] [--terminal-console true|false] [--force-popup-key <combo>|none]");
+        Console.WriteLine("auracfg settings --set [--font-size <n>] [--opacity <0-1>] [--delay-ms <n>] [--target-lang <code>] [--theme <id>] [--voice <name>] [--prompt-editor <exe>] [--config-editor <exe>] [--terminal-console true|false] [--force-popup-key <combo>|none] [--auto-close true|false]");
         return 1;
     }
 }
