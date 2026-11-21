@@ -1,5 +1,5 @@
 ====================================================================
- AuraTxt v2.1
+ AuraTxt v2.2
  A portable, highly customizable AI text assistant for Windows
 ====================================================================
 
@@ -26,24 +26,23 @@ WHAT YOU GET
   Ctrl+F1) to force the action bar for the current selection, for
   apps where automatic capture is unreliable (off by default, set
   in auracfg's General Settings)
+- Auto-close on unfocus: optionally close result windows as soon as
+  you click anywhere else (off by default, set in auracfg's General
+  Settings; pinned windows stay open)
 - Auto-update check on startup (toggle it off from the tray's
   About window)
 
 --------------------------------------------------------------------
-WHAT'S NEW IN v2.1
+WHAT'S NEW IN v2.2
 --------------------------------------------------------------------
-- Fixed an issue where selecting text in Gmail (or other apps with a
-  slow accessibility bridge) could occasionally make the action bar
-  stop popping up everywhere, not just in that app, until it
-  mysteriously recovered on its own
-- Fixed the action bar's Copy button silently doing nothing in some
-  apps (confirmed with Notion, ChatGPT Desktop, and Claude Desktop) --
-  it now retries if the clipboard is briefly held by another process
-- Fixed a follow-on issue from the Copy fix above: in some apps,
-  clicking Copy once could make the action bar stop popping up
-  afterward, unpredictably, until it recovered on its own
-- Added the configurable force-popup key combo above (previously a
-  fixed, non-configurable shortcut)
+- Fixed manual Ctrl+C sometimes failing to copy (or pasting old
+  content) when pressed right after selecting text
+- Fixed the action bar often not popping up in some apps (e.g. Total
+  Commander's Lister viewing .doc files), and made it pop up about
+  twice as fast there
+- Your previous clipboard content is now reliably restored after
+  the action bar grabs a selection
+- Added the optional auto-close-on-unfocus setting above
 
 --------------------------------------------------------------------
 QUICK START
