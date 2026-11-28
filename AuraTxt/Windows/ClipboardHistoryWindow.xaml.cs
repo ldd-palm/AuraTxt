@@ -54,6 +54,24 @@ public partial class ClipboardHistoryWindow : Window
         HistoryList.FontSize = settings.FontSize;
         Opacity = settings.ResultWindowOpacity;
 
+        // Borderless window (WindowStyle=None + AllowsTransparency) has no native resize
+        // border — WindowChrome restores edge-drag resizing, matching ResultWindow.
+        System.Windows.Shell.WindowChrome.SetWindowChrome(this, new System.Windows.Shell.WindowChrome
+        {
+            ResizeBorderThickness = new Thickness(6),
+            CaptionHeight = 0,
+            GlassFrameThickness = new Thickness(0),
+            CornerRadius = new CornerRadius(4),
+            UseAeroCaptionButtons = false
+        });
+        if (AppState.SessionClipboardWindowWidth is { } w)  Width  = w;
+        if (AppState.SessionClipboardWindowHeight is { } h) Height = h;
+        SizeChanged += (_, _) =>
+        {
+            AppState.SessionClipboardWindowWidth  = Width;
+            AppState.SessionClipboardWindowHeight = Height;
+        };
+
         BuildVersionLabel();
         Refresh();
         Current = this;

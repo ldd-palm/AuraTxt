@@ -38,6 +38,11 @@ public static class AppState
     public static double? SessionResultWindowWidth      { get; set; }
     public static double? SessionInteractiveWindowWidth { get; set; }
 
+    // Clipboard-history window is recreated on each Ctrl+` press; remember the user's
+    // resized size for the rest of the session (reset on restart) so it doesn't snap back.
+    public static double? SessionClipboardWindowWidth  { get; set; }
+    public static double? SessionClipboardWindowHeight { get; set; }
+
     public static IntPtr SourceWindowHandle { get; set; }
 
     /// True after an action was triggered for LastProcessedText (silence shield).

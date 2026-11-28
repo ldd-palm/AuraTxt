@@ -6,7 +6,8 @@
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         WindowStartupLocation="CenterScreen"
         Topmost="True" ShowInTaskbar="False"
-        SizeToContent="Height" Width="460" ResizeMode="NoResize"
+        Width="460" Height="420" MinWidth="320" MinHeight="200"
+        ResizeMode="CanResize"
         PreviewKeyDown="Window_PreviewKeyDown">
   <!-- Ditto-style: no title bar (Esc / clicking away closes it), a small × in the corner,
        row numbers as a faint gutter label, alternating rows, accent bar on the selection. -->
@@ -19,7 +20,7 @@
     </Border.Effect>
     <Grid>
       <Grid.RowDefinitions>
-        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="*"/>
         <RowDefinition Height="Auto"/>
       </Grid.RowDefinitions>
       <Grid.ColumnDefinitions>
@@ -28,8 +29,8 @@
       </Grid.ColumnDefinitions>
 
       <Grid Grid.Row="0" Grid.Column="0">
-        <!-- MaxHeight = 10 rows × 30: 10 rows visible, the rest scroll. -->
-        <ListBox x:Name="HistoryList" MaxHeight="300" AlternationCount="2"
+        <!-- Fills the resizable window; rows beyond what fits scroll. -->
+        <ListBox x:Name="HistoryList" AlternationCount="2"
                  Background="Transparent" BorderThickness="0" Padding="0"
                  ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                  ScrollViewer.VerticalScrollBarVisibility="Auto"
