@@ -37,4 +37,8 @@
   <data name="Tray_SaveClipboardHistory" xml:space="preserve"><value>Guardar historial del portapapeles</value></data>
   <data name="Tray_ClipboardHistorySavedFormat" xml:space="preserve"><value>Se guardaron {0} elementos del historial del portapapeles.</value></data>
   <data name="Tray_ClipboardHistorySaveFailed" xml:space="preserve"><value>No se pudo guardar el historial del portapapeles.</value></data>
+  <data name="PromptEdit_SaveButton" xml:space="preserve"><value>Guardar</value></data>
+  <data name="PromptEdit_SaveConfirmFormat" xml:space="preserve"><value>Guardar sobrescribirá permanentemente {0}. ¿Continuar?</value></data>
+  <data name="PromptEdit_SaveFailedFormat" xml:space="preserve"><value>Error al guardar: {0}</value></data>
+  <data name="PromptEdit_InlineNoFile" xml:space="preserve"><value>(prompt en línea — sin archivo)</value></data>
 </root>

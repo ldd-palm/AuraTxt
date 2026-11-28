@@ -13,6 +13,26 @@ public class PromptServiceTests
     public void IsFileRef_TrueForSingleLinePaths(string value)
         => Assert.True(PromptService.IsFileRef(value));
 
+    [Fact]
+    public void Save_WritesFile_Atomically_NoTempLeft()
+    {
+        var full = Path.Combine(Path.GetTempPath(), $"auratxt_prompt_{Guid.NewGuid()}.md");
+        try
+        {
+            PromptService.Save(full, "edited prompt {SelectedText}");
+            Assert.Equal("edited prompt {SelectedText}", File.ReadAllText(full));
+            PromptService.Save(full, "second version"); // overwrite
+            Assert.Equal("second version", File.ReadAllText(full));
+            Assert.False(File.Exists(full + ".tmp"));
+            Assert.Equal("second version", PromptService.Resolve(full)); // round-trips through Resolve
+        }
+        finally { File.Delete(full); File.Delete(full + ".tmp"); }
+    }
+
+    [Fact]
+    public void Save_InlinePrompt_Throws()
+        => Assert.Throws<InvalidOperationException>(() => PromptService.Save("inline multi\nline text", "x"));
+
     [Theory]
     [InlineData("")]
     [InlineData(null)]

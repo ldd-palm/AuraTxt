@@ -44,6 +44,10 @@ public static class Strings
     public static string ClipHistory_Title         => Rm.GetString(nameof(ClipHistory_Title))!;
     public static string ClipHistory_SearchHint    => Rm.GetString(nameof(ClipHistory_SearchHint))!;
     public static string ClipHistory_Empty         => Rm.GetString(nameof(ClipHistory_Empty))!;
+    public static string PromptEdit_SaveButton     => Rm.GetString(nameof(PromptEdit_SaveButton))!;
+    public static string PromptEdit_SaveConfirmFormat => Rm.GetString(nameof(PromptEdit_SaveConfirmFormat))!;
+    public static string PromptEdit_SaveFailedFormat  => Rm.GetString(nameof(PromptEdit_SaveFailedFormat))!;
+    public static string PromptEdit_InlineNoFile   => Rm.GetString(nameof(PromptEdit_InlineNoFile))!;
     public static string Interactive_InputLabel    => Rm.GetString(nameof(Interactive_InputLabel))!;
     public static string Interactive_ResultLabel   => Rm.GetString(nameof(Interactive_ResultLabel))!;
     public static string PromptEdit_Title          => Rm.GetString(nameof(PromptEdit_Title))!;

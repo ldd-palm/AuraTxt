@@ -37,4 +37,8 @@
   <data name="Tray_SaveClipboardHistory" xml:space="preserve"><value>保存剪贴历史</value></data>
   <data name="Tray_ClipboardHistorySavedFormat" xml:space="preserve"><value>已保存 {0} 条剪贴历史。</value></data>
   <data name="Tray_ClipboardHistorySaveFailed" xml:space="preserve"><value>剪贴历史保存失败。</value></data>
+  <data name="PromptEdit_SaveButton" xml:space="preserve"><value>保存</value></data>
+  <data name="PromptEdit_SaveConfirmFormat" xml:space="preserve"><value>保存后会永久覆盖 {0}，确定吗？</value></data>
+  <data name="PromptEdit_SaveFailedFormat" xml:space="preserve"><value>保存失败：{0}</value></data>
+  <data name="PromptEdit_InlineNoFile" xml:space="preserve"><value>(内联 prompt，无文件)</value></data>
 </root>

@@ -37,4 +37,8 @@
   <data name="Tray_SaveClipboardHistory" xml:space="preserve"><value>클립보드 기록 저장</value></data>
   <data name="Tray_ClipboardHistorySavedFormat" xml:space="preserve"><value>클립보드 기록 {0}개를 저장했습니다.</value></data>
   <data name="Tray_ClipboardHistorySaveFailed" xml:space="preserve"><value>클립보드 기록을 저장하지 못했습니다.</value></data>
+  <data name="PromptEdit_SaveButton" xml:space="preserve"><value>저장</value></data>
+  <data name="PromptEdit_SaveConfirmFormat" xml:space="preserve"><value>저장하면 {0} 파일을 영구적으로 덮어씁니다. 계속할까요?</value></data>
+  <data name="PromptEdit_SaveFailedFormat" xml:space="preserve"><value>저장 실패: {0}</value></data>
+  <data name="PromptEdit_InlineNoFile" xml:space="preserve"><value>(인라인 프롬프트 — 파일 없음)</value></data>
 </root>

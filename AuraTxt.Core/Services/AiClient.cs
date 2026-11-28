@@ -29,6 +29,7 @@ public class AiClient
     public async IAsyncEnumerable<string> StreamAsync(
         string providerId, ProviderConfig provider, ModelEntry model,
         ActionItem action, string selectedText, string userInput = "",
+        string? promptOverride = null,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
         if (providerId == "default")
@@ -37,7 +38,7 @@ public class AiClient
             yield break;
         }
 
-        var (req, stripPatterns) = BuildRequest(provider, model, action, selectedText, userInput);
+        var (req, stripPatterns) = BuildRequest(provider, model, action, selectedText, userInput, promptOverride);
         var rawStream = _getAdapter(provider.AdapterType).StreamAsync(req, ct);
 
         if (stripPatterns.Count == 0)
@@ -60,13 +61,16 @@ public class AiClient
 
     internal (AdapterRequest Req, List<string> StripPatterns) BuildRequest(
         ProviderConfig provider, ModelEntry model, ActionItem action,
-        string selectedText, string userInput)
+        string selectedText, string userInput, string? promptOverride = null)
     {
         var adapterType = NormaliseAdapterType(provider.AdapterType);
         var profile = ProfileService.Resolve(model, adapterType);
 
+        // promptOverride lets a window run a one-off edited prompt (ResultWindow/
+        // InteractiveWindow Edit Prompt) without touching the stored file; null = use the
+        // action's own prompt (resolving a file ref to its content).
         var systemPrompt = PromptService.Resolve(ConfigService.DefaultSettings?.SystemPrompt ?? "");
-        var userPrompt   = PromptService.Resolve(action.Prompt)
+        var userPrompt   = (promptOverride ?? PromptService.Resolve(action.Prompt))
             .Replace("{SelectedText}",   selectedText)
             .Replace("{UserInput}",      userInput)
             .Replace("{TargetLanguage}", ConfigService.DefaultSettings?.TargetLanguage ?? "zh-CN");

@@ -160,4 +160,28 @@ public class AiClientTests
         }
         finally { File.Delete(tmpPath); }
     }
+
+    [Fact]
+    public void BuildRequest_PromptOverride_UsedInsteadOfActionPrompt_WithPlaceholders()
+    {
+        var client = MakeClient(out _, out _);
+        var model  = new ModelEntry { TargetModel = "gpt-4o" };
+        var action = new ActionItem { ThinkingMode = "disable", Prompt = "ORIGINAL {SelectedText}" };
+
+        var (req, _) = client.BuildRequest(OaiProvider(), model, action, "world", "", promptOverride: "EDITED {SelectedText}");
+
+        Assert.Equal("EDITED world", req.UserPrompt);
+    }
+
+    [Fact]
+    public void BuildRequest_NullOverride_FallsBackToActionPrompt()
+    {
+        var client = MakeClient(out _, out _);
+        var model  = new ModelEntry { TargetModel = "gpt-4o" };
+        var action = new ActionItem { ThinkingMode = "disable", Prompt = "ORIGINAL {SelectedText}" };
+
+        var (req, _) = client.BuildRequest(OaiProvider(), model, action, "world", "", promptOverride: null);
+
+        Assert.Equal("ORIGINAL world", req.UserPrompt);
+    }
 }

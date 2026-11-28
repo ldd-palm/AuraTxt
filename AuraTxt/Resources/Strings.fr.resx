@@ -37,4 +37,8 @@
   <data name="Tray_SaveClipboardHistory" xml:space="preserve"><value>Enregistrer l&apos;historique du presse-papiers</value></data>
   <data name="Tray_ClipboardHistorySavedFormat" xml:space="preserve"><value>{0} éléments de l&apos;historique du presse-papiers enregistrés.</value></data>
   <data name="Tray_ClipboardHistorySaveFailed" xml:space="preserve"><value>Impossible d&apos;enregistrer l&apos;historique du presse-papiers.</value></data>
+  <data name="PromptEdit_SaveButton" xml:space="preserve"><value>Enregistrer</value></data>
+  <data name="PromptEdit_SaveConfirmFormat" xml:space="preserve"><value>L&apos;enregistrement écrasera définitivement {0}. Continuer ?</value></data>
+  <data name="PromptEdit_SaveFailedFormat" xml:space="preserve"><value>Échec de l&apos;enregistrement : {0}</value></data>
+  <data name="PromptEdit_InlineNoFile" xml:space="preserve"><value>(prompt en ligne — aucun fichier)</value></data>
 </root>

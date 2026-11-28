@@ -32,6 +32,20 @@ public static class PromptService
         return promptRef;
     }
 
+    /// Writes `text` to the file that `promptRef` points at (overwriting it), atomically
+    /// via a temp file + move so a crash can't leave a truncated prompt. Only valid for a
+    /// file reference (see IsFileRef) — throws otherwise, since an inline prompt has no file.
+    public static void Save(string promptRef, string text)
+    {
+        if (!IsFileRef(promptRef))
+            throw new InvalidOperationException("Prompt is inline text, not a file reference — nothing to overwrite.");
+        var full = ResolveFullPath(promptRef);
+        Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+        var tmp = full + ".tmp";
+        File.WriteAllText(tmp, text);
+        File.Move(tmp, full, overwrite: true);
+    }
+
     /// Resolves a (possibly relative) prompt file reference to an absolute path, anchored
     /// at AppContext.BaseDirectory — the same portable-folder convention config.json,
     /// profiles/, and prompts/ already resolve against, not the process's current

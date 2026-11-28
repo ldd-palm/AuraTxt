@@ -136,7 +136,8 @@ public partial class ResultWindow : Window
         try
         {
             await foreach (var delta in new AiClient().StreamAsync(
-                providerId, resolved.Value.provider, resolved.Value.model, _action, _selectedText, "", ct))
+                providerId, resolved.Value.provider, resolved.Value.model, _action, _selectedText, "",
+                promptOverride: _currentPrompt, ct: ct))
             {
                 if (firstChunk) { ResultText.Text = ""; firstChunk = false; }
                 ResultText.AppendText(delta);
@@ -206,7 +207,7 @@ public partial class ResultWindow : Window
         _editing = true;
         try
         {
-            var dlg = new PromptEditDialog(_currentPrompt) { Owner = this };
+            var dlg = new PromptEditDialog(_currentPrompt, _action.Prompt) { Owner = this };
             if (dlg.ShowDialog() == true) { _currentPrompt = dlg.Result; _ = RunAsync(); }
         }
         finally { _editing = false; }

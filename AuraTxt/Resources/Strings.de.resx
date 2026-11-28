@@ -37,4 +37,8 @@
   <data name="Tray_SaveClipboardHistory" xml:space="preserve"><value>Zwischenablage-Verlauf speichern</value></data>
   <data name="Tray_ClipboardHistorySavedFormat" xml:space="preserve"><value>{0} Einträge des Zwischenablage-Verlaufs gespeichert.</value></data>
   <data name="Tray_ClipboardHistorySaveFailed" xml:space="preserve"><value>Der Zwischenablage-Verlauf konnte nicht gespeichert werden.</value></data>
+  <data name="PromptEdit_SaveButton" xml:space="preserve"><value>Speichern</value></data>
+  <data name="PromptEdit_SaveConfirmFormat" xml:space="preserve"><value>Das Speichern überschreibt {0} dauerhaft. Fortfahren?</value></data>
+  <data name="PromptEdit_SaveFailedFormat" xml:space="preserve"><value>Speichern fehlgeschlagen: {0}</value></data>
+  <data name="PromptEdit_InlineNoFile" xml:space="preserve"><value>(Inline-Prompt — keine Datei)</value></data>
 </root>

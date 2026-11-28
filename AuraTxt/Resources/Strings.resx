@@ -48,4 +48,8 @@
   <data name="Tray_SaveClipboardHistory" xml:space="preserve"><value>Save Clipboard History</value></data>
   <data name="Tray_ClipboardHistorySavedFormat" xml:space="preserve"><value>Saved {0} clipboard history items.</value></data>
   <data name="Tray_ClipboardHistorySaveFailed" xml:space="preserve"><value>Could not save the clipboard history.</value></data>
+  <data name="PromptEdit_SaveButton" xml:space="preserve"><value>Save</value></data>
+  <data name="PromptEdit_SaveConfirmFormat" xml:space="preserve"><value>Saving will permanently overwrite {0}. Continue?</value></data>
+  <data name="PromptEdit_SaveFailedFormat" xml:space="preserve"><value>Failed to save: {0}</value></data>
+  <data name="PromptEdit_InlineNoFile" xml:space="preserve"><value>(inline prompt — no file)</value></data>
 </root>

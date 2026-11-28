@@ -113,16 +113,6 @@ public partial class InteractiveWindow : Window
         _streamCts = new CancellationTokenSource();
         var ct = _streamCts.Token;
 
-        var userPrompt = _currentPrompt
-            .Replace("{SelectedText}", _selectedText)
-            .Replace("{UserInput}", UserInput.Text);
-        var sysText = PromptService.Resolve(_cfg.Settings.SystemPrompt);
-        var systemPrompt = string.IsNullOrWhiteSpace(sysText)
-            ? null
-            : sysText
-                .Replace("{SelectedText}", _selectedText)
-                .Replace("{UserInput}", UserInput.Text);
-
         LogService.Info($"ACTION [{_action.Id}] model={_action.ModelId} text_len={_selectedText.Length} user_input_len={UserInput.Text.Length}");
 
         ResultText.Text = "Processing…";
@@ -133,7 +123,7 @@ public partial class InteractiveWindow : Window
         {
             await foreach (var delta in new AiClient().StreamAsync(
                 providerId, _activeModel.Value.provider, _activeModel.Value.model,
-                _action, _selectedText, UserInput.Text, ct))
+                _action, _selectedText, UserInput.Text, promptOverride: _currentPrompt, ct: ct))
             {
                 if (firstChunk) { ResultText.Text = ""; firstChunk = false; }
                 ResultText.AppendText(delta);
@@ -175,7 +165,7 @@ public partial class InteractiveWindow : Window
         _editing = true;
         try
         {
-            var dlg = new PromptEditDialog(_currentPrompt) { Owner = this };
+            var dlg = new PromptEditDialog(_currentPrompt, _action.Prompt) { Owner = this };
             if (dlg.ShowDialog() == true) _currentPrompt = dlg.Result;
         }
         finally { _editing = false; }

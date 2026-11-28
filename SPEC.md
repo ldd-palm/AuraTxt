@@ -510,7 +510,7 @@ LogService：静态类，`Enabled`+`LogPath` 控制；`Info/Error/Raw` 三个方
 - 关闭行为：`Closed` → `IsResultWindowOpen=false`、`MenuSuppressUntil = now + AppState.ResultWindowClosedCooldownMs`（见 §5.3）、取消流。**失焦自动关闭仅在 `Settings.AutoCloseOnUnfocus=true` 时生效（默认关）**：`Deactivated` 和 `GlobalHookService.OnMouseDown`（任意鼠标键）都调用窗口的 `CloseOnUnfocus()` → `SafeClose()`；`SafeClose` 受 `_closing/_editing/_pinned` 三守卫（Pin 按钮切换 `_pinned`，pin 住的窗口不会自动关）。**[关键] 不能只靠 `Deactivated`**：窗口从不激活的 ActionMenu 或热键弹出时，前台通常仍是源应用，窗口根本没被激活过，`Deactivated` 永远不会触发——所以由全局鼠标钩子兜底：`WindowFromPoint`+`GetAncestor(GA_ROOT)` 取点击处的顶层窗口，属于 AuraTxt 自身进程（窗口本身、模型下拉框弹出层、PromptEditDialog、右键菜单、其他 pin 住的结果窗口）则忽略，否则关闭所有未 pin 的结果窗口。
 - **键盘 [关键]**：`PreviewKeyDown`（隧道事件，必须用 Preview——TextBox 会吞 KeyDown）：Esc 关闭；其余单字母快捷键 P(Edit)/G(Regen)/R(Replace)/C(CopyAll)/T(Pin) **仅在无修饰键且焦点不在可编辑 TextBox 时生效**——保证 Ctrl+C 隧道到 TextBox 复制选区、输入框打字不被劫持。
 - **Replace ↩️(R) [关键]**：点击时先保存 `text=ResultText.Text`、`hwnd=AppState.SourceWindowHandle`，然后**先 `Close()`**，再 `await ReplaceInSourceWindowAsync(hwnd, text)`。顺序至关重要——结果窗若仍可见时调 `SetForegroundWindow` 会与 OS 焦点管理竞争导致失败；窗口关闭后 OS 自然归还焦点给源窗口，再显式 `SetForegroundWindow` 更可靠。`ReplaceInSourceWindowAsync` 内部步骤见 §5.5.1（写剪贴板→检查 `SetForegroundWindow` 返回值→`Task.Delay(150ms)`→复核前台窗口未变→`keybd_event(Ctrl+V)`）。HWND 来源：鼠标路径由 GlobalHookService 在 `Dispatcher.BeginInvoke` 前捕获；**热键路径由 `HotkeyService.FireActionAsync` 在首个 await 前捕获**。
-- Edit Prompt：内置模型 → 只读弹窗提示"内置模型不支持自定义 prompt，目标语言是 X"；AI 模型 → `PromptEditDialog` 编辑当前 prompt 文本，确认后立即重跑。弹窗期间 `_editing=true` 防 Deactivated 误关父窗。
+- Edit Prompt：内置模型 → 只读弹窗提示"内置模型不支持自定义 prompt，目标语言是 X"；AI 模型 → `PromptEditDialog` 编辑当前 prompt 文本（见 §7.4）。Generate → 用编辑后的文本重跑（临时，不写文件）；Save → 确认后覆盖 prompt 文件再重跑。弹窗期间 `_editing=true` 防 Deactivated 误关父窗。**[关键] 编辑后的 prompt 必须经 `promptOverride` 传入 `AiClient.StreamAsync`**（`RunAsync` 传 `_currentPrompt`）——`BuildRequest` 默认重新 `PromptService.Resolve(action.Prompt)` 读原文件，不传 override 的话编辑内容会被静默忽略（曾经的真实 bug：Edit Prompt 改了没反应，已修复）。InteractiveWindow 同理（`GenerateAsync` 传 `_currentPrompt`）。
 
 ### 7.3 InteractiveWindow（交互窗）
 
@@ -525,7 +525,12 @@ LogService：静态类，`Enabled`+`LogPath` 控制；`Info/Error/Raw` 三个方
 
 ### 7.4 PromptEditDialog
 
-简单模态：多行 TextBox + OK/Cancel；支持 readOnly 模式（内置模型提示用）。`Owner` 设为父窗。
+模态：多行 TextBox + 三个按钮 `Cancel | Save | Generate`。构造参数 `(text, promptRef?, readOnly?)`。
+- **窗口标题**显示正在编辑的 prompt 文件相对路径，如 `Edit Prompt (prompts/local-mt.md)`；内联 prompt 显示 `Edit Prompt (内联 prompt，无文件)`。
+- **Generate**（`OkBtn`）：返回编辑文本，`DialogResult=true`；调用方据此临时重跑，不写文件。
+- **Save**：仅当 `promptRef` 是文件引用时可见；点击弹确认框"保存后会永久覆盖 {相对路径}，确定吗？"，确认后 `PromptService.Save`（临时文件+`File.Move` 原子写）覆盖该文件，再按 Generate 一样返回文本。内联 prompt 时 Save 隐藏（无文件可覆盖）。
+- **readOnly 模式**（内置模型提示用）：TextBox 只读，标题为"内置模型"，隐藏 Cancel/Save、路径，Generate 按钮变"关闭"。
+`Owner` 设为父窗。
 
 ### 7.5 ClipboardHistoryWindow（剪贴板历史窗）
 

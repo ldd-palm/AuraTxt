@@ -37,4 +37,8 @@
   <data name="Tray_SaveClipboardHistory" xml:space="preserve"><value>クリップボード履歴を保存</value></data>
   <data name="Tray_ClipboardHistorySavedFormat" xml:space="preserve"><value>クリップボード履歴を {0} 件保存しました。</value></data>
   <data name="Tray_ClipboardHistorySaveFailed" xml:space="preserve"><value>クリップボード履歴を保存できませんでした。</value></data>
+  <data name="PromptEdit_SaveButton" xml:space="preserve"><value>保存</value></data>
+  <data name="PromptEdit_SaveConfirmFormat" xml:space="preserve"><value>保存すると {0} が完全に上書きされます。続行しますか？</value></data>
+  <data name="PromptEdit_SaveFailedFormat" xml:space="preserve"><value>保存に失敗しました：{0}</value></data>
+  <data name="PromptEdit_InlineNoFile" xml:space="preserve"><value>(インラインのプロンプト — ファイルなし)</value></data>
 </root>
