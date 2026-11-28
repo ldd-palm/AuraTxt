@@ -81,7 +81,7 @@
                    Visibility="Collapsed"/>
       </Grid>
 
-      <Button Grid.Row="0" Grid.Column="1" VerticalAlignment="Top" Margin="0,4,0,0"
+      <Button Grid.Row="0" Grid.Column="1" VerticalAlignment="Top" HorizontalAlignment="Center" Margin="0,4,0,0"
               Width="18" Height="18" Content="✕" FontSize="11"
               Foreground="{DynamicResource TextTertiary}" Cursor="Hand" Click="CloseBtn_Click">
         <!-- Own template: the default Button chrome shows the system (blue) hover, not the theme. -->
@@ -99,6 +99,27 @@
           </ControlTemplate>
         </Button.Template>
       </Button>
+
+      <!-- Decorative vertical label under the close button: "AuraTxt - Ver3.0", rotated 90°,
+           engraved (a 1px light highlight behind a dim front layer), version in italic.
+           Inlines (with the italic version) are filled in code-behind. -->
+      <Grid Grid.Row="0" Grid.Column="1" Margin="0,26,0,8"
+            HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False">
+        <!-- FontSize is larger than the 22px column; LineHeight + BlockLineHeight clamp the
+             rotated line box to 18px so the glyphs grow without the strip overflowing. -->
+        <TextBlock x:Name="VerLabelBack" FontFamily="Bahnschrift, Segoe UI" FontSize="16" FontWeight="SemiBold"
+                   LineHeight="18" LineStackingStrategy="BlockLineHeight"
+                   HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="#73FFFFFF">
+          <TextBlock.LayoutTransform><RotateTransform Angle="90"/></TextBlock.LayoutTransform>
+          <TextBlock.RenderTransform><TranslateTransform X="1" Y="1"/></TextBlock.RenderTransform>
+        </TextBlock>
+        <TextBlock x:Name="VerLabelFront" FontFamily="Bahnschrift, Segoe UI" FontSize="16" FontWeight="SemiBold"
+                   LineHeight="18" LineStackingStrategy="BlockLineHeight"
+                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                   Foreground="{DynamicResource TextTertiary}">
+          <TextBlock.LayoutTransform><RotateTransform Angle="90"/></TextBlock.LayoutTransform>
+        </TextBlock>
+      </Grid>
 
       <Border Grid.Row="1" Grid.ColumnSpan="2" BorderBrush="{DynamicResource Divider}" BorderThickness="0,1,0,0"
               Background="{DynamicResource TitleBarFill}">

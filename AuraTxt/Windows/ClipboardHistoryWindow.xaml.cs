@@ -26,6 +26,20 @@ public partial class ClipboardHistoryWindow : Window
 
     private sealed record Row(string Number, string Preview, ClipboardHistoryEntry Entry);
 
+    /// Fills the engraved vertical label: "AuraTxt - " + an italic "VerX.Y" (from the
+    /// assembly version). Both the highlight (back) and front layers get the same inlines.
+    private void BuildVersionLabel()
+    {
+        var v = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+        var version = $"Ver{v?.Major ?? 3}.{v?.Minor ?? 0}";
+        foreach (var tb in new[] { VerLabelBack, VerLabelFront })
+        {
+            tb.Inlines.Clear();
+            tb.Inlines.Add(new System.Windows.Documents.Run("AuraTxt - "));
+            tb.Inlines.Add(new System.Windows.Documents.Run(version) { FontStyle = FontStyles.Italic });
+        }
+    }
+
     public ClipboardHistoryWindow(ClipboardHistory history, AppSettings settings, IntPtr sourceHwnd)
     {
         InitializeComponent();
@@ -40,6 +54,7 @@ public partial class ClipboardHistoryWindow : Window
         HistoryList.FontSize = settings.FontSize;
         Opacity = settings.ResultWindowOpacity;
 
+        BuildVersionLabel();
         Refresh();
         Current = this;
         Closed += (_, _) => { if (Current == this) Current = null; };
