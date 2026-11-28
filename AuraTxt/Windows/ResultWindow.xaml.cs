@@ -95,7 +95,15 @@ public partial class ResultWindow : Window
     /// app holds the foreground), so Deactivated alone can't be relied on.
     public void CloseOnUnfocus()
     {
-        if (_cfg.Settings.AutoCloseOnUnfocus) SafeClose();
+        if (!_cfg.Settings.AutoCloseOnUnfocus) return;
+        if (_closing || _editing || _pinned) return;
+        // Clicking outside this borderless, transparent, topmost window makes Windows play
+        // its default "ding" while resolving the click's activation change (closing via the
+        // title-bar button does not, since the click lands inside the window). Hiding the
+        // window out of the z-order immediately — before that resolution — avoids the sound;
+        // the real Close() then runs on the next dispatcher cycle.
+        Visibility = Visibility.Hidden;
+        Dispatcher.BeginInvoke(new Action(SafeClose));
     }
 
     private void ModelPicker_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)

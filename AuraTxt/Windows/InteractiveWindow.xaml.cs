@@ -77,7 +77,12 @@ public partial class InteractiveWindow : Window
     /// Settings.AutoCloseOnUnfocus — see ResultWindow.CloseOnUnfocus.
     public void CloseOnUnfocus()
     {
-        if (_cfg.Settings.AutoCloseOnUnfocus) SafeClose();
+        if (!_cfg.Settings.AutoCloseOnUnfocus) return;
+        if (_closing || _editing || _pinned) return;
+        // See ResultWindow.CloseOnUnfocus: hide out of the z-order immediately so Windows
+        // doesn't "ding" when resolving the outside click, then close next cycle.
+        Visibility = Visibility.Hidden;
+        Dispatcher.BeginInvoke(new Action(SafeClose));
     }
 
     private void ModelPicker_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
