@@ -40,7 +40,7 @@ Inspired by Cherry Studio's selection assistant and Qtranslate, AuraTxt goes fur
 | **Interactive window** | Two-pane layout: type your instruction, get AI output — ideal for email replies, grading, and drafting |
 | **Global hotkeys** | Assign a keyboard shortcut to any action; trigger without touching the mouse |
 | **Force popup** | Double-tap a key combo of your choice (e.g. `F1`, `Ctrl+F1`) to force the action bar to appear for the current selection — a manual fallback for apps where automatic capture is unreliable (off by default, set in `auracfg`'s General Settings) |
-| **Clipboard history** | Press `` Ctrl+` `` to open a Ditto-style list of your recent copies (25 by default, in memory only); press `0`–`9` to paste one instantly, `Enter` to paste with formatting or `Shift+Enter` as plain text, and click the search box to filter. Toggle it, and change the hotkey, size, and plain-text key, in `auracfg`'s General Settings |
+| **Clipboard history** | Press `` Ctrl+` `` to open a Ditto-style list of your recent copies (25 by default); press `0`–`9` to paste one instantly, `Enter` to paste with formatting or `Shift+Enter` as plain text, and click the search box to filter. History is restored on the next launch (saved encrypted, next to the exe). Toggle it, and change the hotkey, size, and plain-text key, in `auracfg`'s General Settings |
 | **Auto-close on unfocus** | Optionally close result windows as soon as you click anywhere else (pinned windows stay open) — off by default, set in `auracfg`'s General Settings |
 | **Google search** | Highlight a term → open a browser Google search in one click |
 | **Text-to-speech** | Read selected text aloud using Windows SAPI5 voices |

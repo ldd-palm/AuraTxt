@@ -1,5 +1,5 @@
 ====================================================================
- AuraTxt v3.0
+ AuraTxt v3.1
  A portable, highly customizable AI text assistant for Windows
 ====================================================================
 
@@ -27,10 +27,11 @@ WHAT YOU GET
   apps where automatic capture is unreliable (off by default, set
   in auracfg's General Settings)
 - Clipboard history: press Ctrl+` to see your recent copies (25 by
-  default, kept in memory only); press 0-9 to paste one instantly,
-  Enter to paste with formatting, Shift+Enter as plain text, or
-  click the search box to filter (on by default; toggle it and change
-  the hotkey, size, and plain-text key in auracfg's General Settings)
+  default); press 0-9 to paste one instantly, Enter to paste with
+  formatting, Shift+Enter as plain text, or click the search box to
+  filter. History is restored on the next launch (saved encrypted,
+  next to the exe). On by default; toggle it and change the hotkey,
+  size, and plain-text key in auracfg's General Settings
 - Auto-close on unfocus: optionally close result windows as soon as
   you click anywhere else (off by default, set in auracfg's General
   Settings; pinned windows stay open)
@@ -38,13 +39,17 @@ WHAT YOU GET
   About window)
 
 --------------------------------------------------------------------
-WHAT'S NEW IN v3.0
+WHAT'S NEW IN v3.1
 --------------------------------------------------------------------
-- New clipboard history window (see above). Note: Ditto uses the same
-  default hotkey (Ctrl+`) -- if you run Ditto, quit it or pick a
-  different key in auracfg's General Settings
-- Fixed action hotkeys containing a digit (e.g. Ctrl+1) silently not
-  working
+- Clipboard history now survives a restart: it is saved (encrypted,
+  per Windows user) when you exit, shut down, or pause the service,
+  and restored on the next launch. A new tray item "Save Clipboard
+  History" saves it on demand
+- Edit Prompt (in a result window) now works and does more: it shows
+  which prompt file you're editing in the title bar; "Generate" uses
+  your edited prompt for just that run without changing the file; a
+  new "Save" button permanently overwrites the prompt file after you
+  confirm (previously, edits were silently ignored)
 
 --------------------------------------------------------------------
 QUICK START
